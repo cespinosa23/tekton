@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\Personal\\\\TestProject\\\\tekton\" -Recurse)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(tree /F \"d:\\\\Personal\\\\TestProject\\\\tekton\" -L 3 2>$null)",
+      "PowerShell(head -200)",
+      "Bash(pip install *)"
+    ]
+  }
+}

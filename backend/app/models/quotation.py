@@ -1,0 +1,37 @@
+from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, JSON
+from app.db.database import Base
+
+class Quotation(Base):
+    __tablename__ = "quotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    quote_number = Column(String(100), nullable=True)
+    status = Column(String(50), default="Draft")
+    template_type = Column(String(50), default="Traditional")
+    company_name = Column(String(255), nullable=True)
+    company_logo_url = Column(String(500), nullable=True)
+    company_address = Column(String(255), nullable=True)
+    company_contact = Column(String(100), nullable=True)
+    company_footer = Column(String(500), nullable=True)
+    addressee_name = Column(String(255), nullable=True)
+    addressee_address = Column(String(255), nullable=True)
+    subject = Column(String(500), nullable=True)
+    quotation_date = Column(Date, nullable=True)
+    signatory_name = Column(String(100), nullable=True)
+    signatory_title = Column(String(100), nullable=True)
+    project_cost = Column(Numeric(12, 2), default=0)
+    estimated_savings = Column(Numeric(12, 2), default=0)
+    roi = Column(String(100), nullable=True)
+    system_size_kwp = Column(Numeric(10, 2), default=0)
+    inverter_brand = Column(String(100), nullable=True)
+    battery_brand = Column(String(100), nullable=True)
+    panel_brand = Column(String(100), nullable=True)
+    scope_of_works = Column(String(2000), nullable=True)
+    terms_of_payment = Column(String(2000), nullable=True)
+    bill_of_materials = Column(JSON, nullable=True)
+    other_scope_costs = Column(JSON, nullable=True)
+    mode_of_payment = Column(String(255), nullable=True)
+    notes = Column(String(2000), nullable=True)
+    exclusions = Column(String(2000), nullable=True)
+    total_contract_cost = Column(Numeric(12, 2), default=0)
+    archived = Column(Boolean, default=False)
