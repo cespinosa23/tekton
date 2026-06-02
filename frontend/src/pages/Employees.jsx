@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
-import { inviteEmployee as inviteEmployeeApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers } from '../api/employees'
-import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus } from 'lucide-react'
+import { inviteEmployee as inviteEmployeeApi, resendInvite as resendInviteApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers } from '../api/employees'
+import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus, RefreshCw, CheckCircle } from 'lucide-react'
 
 
 const statusColors = {
@@ -53,7 +53,9 @@ export default function Employees() {
       setFormData(emptyForm)
       toast.success('Employee added')
 
-      if (variables.email && variables.role !== 'Others') {
+      // Only auto-invite if this employee has no account yet
+      const alreadyHasAccount = !!employeeRoles[data.id]
+      if (variables.email && variables.role !== 'Others' && !alreadyHasAccount) {
         inviteMutation.mutate({ email: variables.email, roles: [variables.role || 'Engineer'] })
       }
     },
@@ -93,6 +95,18 @@ export default function Employees() {
     },
     onError: (err) => {
       const msg = err?.response?.data?.detail || 'Failed to send invite'
+      toast.error(msg)
+    },
+  })
+
+  const resendMutation = useMutation({
+    mutationFn: resendInviteApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employeeRoles'] })
+      toast.success('Invite resent — new link valid for 48 hours')
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.detail || 'Failed to resend invite'
       toast.error(msg)
     },
   })
@@ -208,9 +222,9 @@ export default function Employees() {
                         <p className="font-medium text-gray-900">{emp.first_name} {emp.middle_name} {emp.last_name}</p>
                         {emp.email && <p className="text-xs text-gray-400">{emp.email}</p>}
                         {/* Role badges */}
-                        {employeeRoles[emp.id] && employeeRoles[emp.id].length > 0 && (
+                        {employeeRoles[emp.id]?.roles?.length > 0 && (
                           <div className="flex gap-1 mt-1 flex-wrap">
-                            {employeeRoles[emp.id].map(role => (
+                            {employeeRoles[emp.id].roles.map(role => (
                               <span key={role} className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                                 role === 'Admin' ? 'bg-red-100 text-red-700' :
                                 role === 'HR' ? 'bg-purple-100 text-purple-700' :
@@ -244,15 +258,37 @@ export default function Employees() {
                       <button onClick={() => handleEdit(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
                         <Pencil size={15} />
                       </button>
-                      {emp.email && (
-                        <button
-                          onClick={() => { setSelectedInvite(emp); setInviteRole('Engineer') }}
-                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
-                          title="Invite / Assign Role"
-                        >
-                          <UserPlus size={15} />
-                        </button>
-                      )}
+                      {emp.email && (() => {
+                        const account = employeeRoles[emp.id]
+                        if (account?.is_active) {
+                          return (
+                            <span className="p-1.5 text-emerald-500" title="Account active">
+                              <CheckCircle size={15} />
+                            </span>
+                          )
+                        }
+                        if (account && !account.is_active) {
+                          return (
+                            <button
+                              onClick={() => resendMutation.mutate(emp.email)}
+                              disabled={resendMutation.isPending}
+                              className="p-1.5 rounded hover:bg-amber-50 text-amber-400 hover:text-amber-600 disabled:opacity-50"
+                              title="Resend registration invite"
+                            >
+                              <RefreshCw size={15} />
+                            </button>
+                          )
+                        }
+                        return (
+                          <button
+                            onClick={() => { setSelectedInvite(emp); setInviteRole('Engineer') }}
+                            className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
+                            title="Send registration invite"
+                          >
+                            <UserPlus size={15} />
+                          </button>
+                        )
+                      })()}
                       <button onClick={() => setDeleteEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
                         <Trash2 size={15} />
                       </button>

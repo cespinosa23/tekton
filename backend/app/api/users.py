@@ -166,6 +166,31 @@ def get_employee_roles(
 ):
     users = db.query(User).filter(User.employee_id != None).all()
     return {
-        u.employee_id: [ur.role.name for ur in u.roles]
+        u.employee_id: {
+            "roles": [ur.role.name for ur in u.roles],
+            "is_active": u.is_active,
+        }
         for u in users
     }
+
+
+@router.post("/resend-invite")
+async def resend_invite(
+    email: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin", "HR"])),
+):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found for this email")
+    if user.is_active:
+        raise HTTPException(status_code=400, detail="This user has already completed registration")
+
+    # Generate a fresh token with a new 48-hour window
+    user.invite_token = secrets.token_urlsafe(32)
+    user.invite_token_expires = datetime.now(timezone.utc) + timedelta(hours=48)
+    db.commit()
+
+    background_tasks.add_task(send_invite_email, email, user.invite_token)
+    return {"message": "Invite resent successfully"}

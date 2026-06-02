@@ -24,6 +24,11 @@ export const inviteEmployee = async ({ email, roles }) => {
   return data
 }
 
+export const resendInvite = async (email) => {
+  const { data } = await client.post(`/users/resend-invite?email=${encodeURIComponent(email)}`)
+  return data
+}
+
 export const getEmployeeUsers = async () => {
   const { data } = await client.get('/users/employee-roles')
   return data

@@ -91,7 +91,7 @@ Inside MySQL, run these commands (replace `STRONG_PASSWORD` with a real password
 
 ```sql
 CREATE DATABASE tekton CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'tekton_user'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+CREATE USER 'tekton_user'@'localhost' IDENTIFIED BY 'T3kt0n2026!';
 GRANT ALL PRIVILEGES ON tekton.* TO 'tekton_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
