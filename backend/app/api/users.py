@@ -13,6 +13,10 @@ from app.schemas.user import UserInvite, CompleteRegistration, UserRead
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+# MySQL DATETIME has no timezone — always store/compare as naive UTC
+def _utcnow():
+    return _utcnow().replace(tzinfo=None)
+
 
 @router.post("/invite", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def invite_user(
@@ -30,7 +34,7 @@ async def invite_user(
     employee = db.query(Employee).filter(Employee.email == payload.email).first()
     
     token = secrets.token_urlsafe(32)
-    expires = datetime.now(timezone.utc) + timedelta(hours=48)
+    expires = _utcnow() + timedelta(hours=48)
 
     user = User(
         email=payload.email,
@@ -63,7 +67,7 @@ def complete_registration(
     user = db.query(User).filter(User.invite_token == payload.token).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    if user.invite_token_expires < datetime.now(timezone.utc):
+    if user.invite_token_expires < _utcnow():
         raise HTTPException(status_code=400, detail="Invite token has expired")
     if user.is_active:
         raise HTTPException(status_code=400, detail="Registration already completed")
@@ -97,7 +101,7 @@ async def forgot_password(
         return {"message": "If that email exists, a reset link has been sent"}
 
     token = secrets.token_urlsafe(32)
-    expires = datetime.now(timezone.utc) + timedelta(hours=24)
+    expires = _utcnow() + timedelta(hours=24)
 
     user.invite_token = token
     user.invite_token_expires = expires
@@ -116,7 +120,7 @@ def reset_password(
     user = db.query(User).filter(User.invite_token == token).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    if user.invite_token_expires < datetime.now(timezone.utc):
+    if user.invite_token_expires < _utcnow():
         raise HTTPException(status_code=400, detail="Reset token has expired")
 
     user.hashed_password = hash_password(new_password)
@@ -150,7 +154,7 @@ def get_registration_info(token: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.invite_token == token).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    if user.invite_token_expires < datetime.now(timezone.utc):
+    if user.invite_token_expires < _utcnow():
         raise HTTPException(status_code=400, detail="Token has expired")
     return {
         "email": user.email,
@@ -189,7 +193,7 @@ async def resend_invite(
 
     # Generate a fresh token with a new 48-hour window
     user.invite_token = secrets.token_urlsafe(32)
-    user.invite_token_expires = datetime.now(timezone.utc) + timedelta(hours=48)
+    user.invite_token_expires = _utcnow() + timedelta(hours=48)
     db.commit()
 
     background_tasks.add_task(send_invite_email, email, user.invite_token)
