@@ -85,3 +85,39 @@ def archive_employee(
 
     employee.archived = True
     db.commit()
+
+
+@router.get("/archived", response_model=List[EmployeeRead])
+def list_archived_employees(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(Employee).filter(Employee.archived == True).all()
+
+
+@router.post("/{employee_id}/restore", response_model=EmployeeRead)
+def restore_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin"])),
+):
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    employee.archived = False
+    db.commit()
+    db.refresh(employee)
+    return employee
+
+
+@router.delete("/{employee_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def permanent_delete_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin"])),
+):
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    db.delete(employee)
+    db.commit()

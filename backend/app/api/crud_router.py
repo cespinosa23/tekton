@@ -56,4 +56,27 @@ def make_crud_router(
             db.delete(item)
             db.commit()
 
+    if allow_archive and hasattr(Model, "archived"):
+        @router.get("/archived", response_model=list[ReadSchema])
+        def list_archived(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
+            return db.query(Model).filter(Model.archived == True).offset(skip).limit(limit).all()
+
+        @router.post("/{item_id}/restore", response_model=ReadSchema)
+        def restore_item(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
+            item = db.query(Model).filter(Model.id == item_id).first()
+            if not item:
+                raise HTTPException(status_code=404, detail=f"{tag} not found")
+            item.archived = False
+            db.commit()
+            db.refresh(item)
+            return item
+
+        @router.delete("/{item_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+        def permanent_delete(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
+            item = db.query(Model).filter(Model.id == item_id).first()
+            if not item:
+                raise HTTPException(status_code=404, detail=f"{tag} not found")
+            db.delete(item)
+            db.commit()
+
     return router

@@ -13,6 +13,7 @@ import Inventory from './pages/Inventory'
 import Projects from './pages/Projects'
 import ProjectView from './pages/ProjectView'
 import Transactions from './pages/transactions/index'
+import Archive from './pages/Archive'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -44,7 +45,7 @@ export default function App() {
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
       <Route path="/quotations" element={<ProtectedRoute><Placeholder title="Quotations" /></ProtectedRoute>} />
-      <Route path="/archive" element={<ProtectedRoute><Placeholder title="Archive" /></ProtectedRoute>} />
+      <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
       <Route path="/reset-password" element={<ResetPassword />} />

@@ -80,6 +80,36 @@ def archive_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(_
     for mid in material_ids:
         sync_inventory(db, mid)
         
+@router.get("/archived", response_model=list[TransactionRead])
+def list_archived_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Transaction).filter(Transaction.archived == True).offset(skip).limit(limit).all()
+
+
+@router.post("/{item_id}/restore", response_model=TransactionRead)
+def restore_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
+    tx = db.query(Transaction).filter(Transaction.id == item_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx.archived = False
+    db.commit()
+    db.refresh(tx)
+    for mid in get_material_ids(tx.materials or []):
+        sync_inventory(db, mid)
+    return tx
+
+
+@router.delete("/{item_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def permanent_delete_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
+    tx = db.query(Transaction).filter(Transaction.id == item_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    material_ids = get_material_ids(tx.materials or [])
+    db.delete(tx)
+    db.commit()
+    for mid in material_ids:
+        sync_inventory(db, mid)
+
+
 @router.post("/admin/sync-inventory")
 def sync_all_inventory(db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
     """One-time sync of all inventory from transactions."""
