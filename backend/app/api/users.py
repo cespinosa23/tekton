@@ -15,7 +15,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 # MySQL DATETIME has no timezone — always store/compare as naive UTC
 def _utcnow():
-    return _utcnow().replace(tzinfo=None)
+    return datetime.utcnow().replace(tzinfo=None)
 
 
 @router.post("/invite", response_model=UserRead, status_code=status.HTTP_201_CREATED)
