@@ -24,6 +24,11 @@ def get_material_ids(materials):
 def list_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(Transaction).filter(Transaction.archived == False).offset(skip).limit(limit).all()
 
+# Must be before /{item_id} — otherwise "archived" is captured as the id
+@router.get("/archived", response_model=list[TransactionRead])
+def list_archived_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Transaction).filter(Transaction.archived == True).offset(skip).limit(limit).all()
+
 @router.get("/{item_id}", response_model=TransactionRead)
 def get_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
@@ -80,11 +85,6 @@ def archive_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(_
     for mid in material_ids:
         sync_inventory(db, mid)
         
-@router.get("/archived", response_model=list[TransactionRead])
-def list_archived_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Transaction).filter(Transaction.archived == True).offset(skip).limit(limit).all()
-
-
 @router.post("/{item_id}/restore", response_model=TransactionRead)
 def restore_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()

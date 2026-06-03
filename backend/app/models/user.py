@@ -15,4 +15,4 @@ class User(Base):
 
     # Relationships
     employee = relationship("Employee", backref="user")
-    roles = relationship("UserRole", back_populates="user")
+    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")

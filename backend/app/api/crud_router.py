@@ -18,6 +18,13 @@ def make_crud_router(
             q = q.filter(Model.archived == False)
         return q.offset(skip).limit(limit).all()
 
+    # Must be registered BEFORE /{item_id} — otherwise "archived" is captured as the id
+    @router.get("/archived", response_model=list[ReadSchema])
+    def list_archived(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
+        if not (allow_archive and hasattr(Model, "archived")):
+            return []
+        return db.query(Model).filter(Model.archived == True).offset(skip).limit(limit).all()
+
     @router.get("/{item_id}", response_model=ReadSchema)
     def get_item(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
         item = db.query(Model).filter(Model.id == item_id).first()
@@ -57,10 +64,6 @@ def make_crud_router(
             db.commit()
 
     if allow_archive and hasattr(Model, "archived"):
-        @router.get("/archived", response_model=list[ReadSchema])
-        def list_archived(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
-            return db.query(Model).filter(Model.archived == True).offset(skip).limit(limit).all()
-
         @router.post("/{item_id}/restore", response_model=ReadSchema)
         def restore_item(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
             item = db.query(Model).filter(Model.id == item_id).first()

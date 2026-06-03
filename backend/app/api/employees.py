@@ -5,6 +5,7 @@ from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.employee import Employee
 from app.models.user import User
+from app.models.attendance import Attendance
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -18,6 +19,15 @@ def list_employees(
     current_user: User = Depends(get_current_user),
 ):
     return db.query(Employee).filter(Employee.archived == False).offset(skip).limit(limit).all()
+
+
+# Must be before /{employee_id} — otherwise "archived" is captured as the id
+@router.get("/archived", response_model=List[EmployeeRead])
+def list_archived_employees(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(Employee).filter(Employee.archived == True).all()
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)
@@ -87,14 +97,6 @@ def archive_employee(
     db.commit()
 
 
-@router.get("/archived", response_model=List[EmployeeRead])
-def list_archived_employees(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return db.query(Employee).filter(Employee.archived == True).all()
-
-
 @router.post("/{employee_id}/restore", response_model=EmployeeRead)
 def restore_employee(
     employee_id: int,
@@ -119,5 +121,17 @@ def permanent_delete_employee(
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 1. Delete attendance records (FK: attendance.employee_id → employees.id)
+    db.query(Attendance).filter(Attendance.employee_id == employee_id).delete()
+
+    # 2. Delete linked user account + their user_roles (cascade on User.roles)
+    linked_user = db.query(User).filter(User.employee_id == employee_id).first()
+    if linked_user:
+        db.delete(linked_user)
+
+    db.flush()
+
+    # 3. Delete the employee
     db.delete(employee)
     db.commit()
