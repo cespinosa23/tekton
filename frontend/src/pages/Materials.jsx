@@ -5,7 +5,7 @@ import Layout from '../components/Layout'
 import { getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial } from '../api/materials'
 import { Plus, Search, Pencil, Trash2, Archive, X } from 'lucide-react'
 
-const emptyForm = { name: '', material_type: '', unit: '', description: '' }
+const emptyForm = { rating_size: '', material_type: '', unit: '', description: '' }
 
 export default function Materials() {
   const queryClient = useQueryClient()
@@ -57,7 +57,7 @@ export default function Materials() {
   const handleEdit = (mat) => {
     setEditingMaterial(mat)
     setFormData({
-      name: mat.rating_size || '',
+      rating_size: mat.rating_size || '',
       material_type: mat.material_type || '',
       unit: mat.unit || '',
       description: mat.description || '',
@@ -67,7 +67,7 @@ export default function Materials() {
 
   const handleSave = () => {
     const isDuplicate = materials.some(m =>
-      m.name?.toLowerCase() === formData.name?.toLowerCase() &&
+      m.rating_size?.toLowerCase() === formData.rating_size?.toLowerCase() &&
       (!editingMaterial || m.id !== editingMaterial.id)
     )
     if (isDuplicate) { toast.error('A material with this name already exists.'); return }
@@ -79,7 +79,7 @@ export default function Materials() {
   }
 
   const filtered = materials.filter(m => {
-    const matchesSearch = m.name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = m.rating_size?.toLowerCase().includes(search.toLowerCase()) ||
       m.description?.toLowerCase().includes(search.toLowerCase())
     const matchesType = typeFilter === 'all' || m.material_type === typeFilter
     return matchesSearch && matchesType
@@ -176,8 +176,8 @@ export default function Materials() {
               </div>
               <div className="px-6 py-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Material Name / Specs *</label>
-                  <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Rating / Size *</label>
+                  <input value={formData.rating_size} onChange={e => setFormData(p => ({ ...p, rating_size: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                 </div>
                 <div>
@@ -205,7 +205,7 @@ export default function Materials() {
               </div>
               <div className="flex justify-end gap-2 px-6 py-4 border-t">
                 <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                <button onClick={handleSave} disabled={!formData.name || !formData.unit}
+                <button onClick={handleSave} disabled={!formData.rating_size || !formData.unit}
                   className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                   {editingMaterial ? 'Update' : 'Add'} Material
                 </button>
@@ -220,7 +220,7 @@ export default function Materials() {
             <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Archive Material</h3>
               <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to archive <strong>"{deleteMaterial.name}"</strong>?
+                Are you sure you want to archive <strong>"{deleteMaterial.rating_size}"</strong>?
               </p>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setDeleteMaterial(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
