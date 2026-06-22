@@ -54,7 +54,7 @@ const emptyForm = {
 
 // --- ProjectCard ---
 function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
-  const navigate = useNavigate()    
+  const navigate = useNavigate()
 
   const getScopeStatus = (key) => {
     if (!project[`scope_${key}`]) return 'not_included'
@@ -105,18 +105,18 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
 
         {/* Actions */}
         <div className="flex-shrink-0 flex flex-col gap-1.5 border-l border-gray-100 pl-4">
-            <button onClick={() => navigate(`/projects/${project.id}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors">
-                <Eye size={13} /> View
-            </button>
-            <button onClick={() => onEdit(project)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
-                <Pencil size={13} /> Edit
-            </button>
-            <button onClick={() => onDelete(project)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-                <Trash2 size={13} /> Archive
-            </button>
+          <button onClick={() => navigate(`/projects/${project.id}`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors">
+            <Eye size={13} /> View
+          </button>
+          <button onClick={() => onEdit(project)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+            <Pencil size={13} /> Edit
+          </button>
+          <button onClick={() => onDelete(project)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+            <Trash2 size={13} /> Archive
+          </button>
         </div>
       </div>
     </div>
@@ -160,18 +160,24 @@ function PaymentsView({ projects }) {
         const maxVal = Math.max(totalContract, totalExpenses, totalPayments, 1)
 
         const bars = [
-          { label: 'Contract', total: totalContract, segments: [
-            { label: 'Contract Cost', value: contractCost, color: '#10b981' },
-            { label: 'Encumbrance', value: encumbrance, color: '#6ee7b7' },
-          ]},
-          { label: 'Expenses', total: totalExpenses, segments: [
-            { label: 'Labor', value: laborCost, color: '#8b5cf6' },
-            { label: 'Materials', value: materialsCost, color: '#3b82f6' },
-            { label: 'Others', value: othersCost, color: '#f59e0b' },
-          ]},
-          { label: 'Payments', total: totalPayments, segments: [
-            { label: 'Payments Received', value: totalPayments, color: '#22c55e' },
-          ]},
+          {
+            label: 'Contract', total: totalContract, segments: [
+              { label: 'Contract Cost', value: contractCost, color: '#10b981' },
+              { label: 'Encumbrance', value: encumbrance, color: '#6ee7b7' },
+            ]
+          },
+          {
+            label: 'Expenses', total: totalExpenses, segments: [
+              { label: 'Labor', value: laborCost, color: '#8b5cf6' },
+              { label: 'Materials', value: materialsCost, color: '#3b82f6' },
+              { label: 'Others', value: othersCost, color: '#f59e0b' },
+            ]
+          },
+          {
+            label: 'Payments', total: totalPayments, segments: [
+              { label: 'Payments Received', value: totalPayments, color: '#22c55e' },
+            ]
+          },
         ]
 
         return (
@@ -204,7 +210,7 @@ function PaymentsView({ projects }) {
                   </div>
                 ))}
                 <div className="flex flex-wrap gap-3 pt-1">
-                  {[['#10b981','Contract Cost'],['#6ee7b7','Encumbrance'],['#8b5cf6','Labor'],['#3b82f6','Materials'],['#f59e0b','Others'],['#22c55e','Payments']].map(([color, label]) => (
+                  {[['#10b981', 'Contract Cost'], ['#6ee7b7', 'Encumbrance'], ['#8b5cf6', 'Labor'], ['#3b82f6', 'Materials'], ['#f59e0b', 'Others'], ['#22c55e', 'Payments']].map(([color, label]) => (
                     <div key={label} className="flex items-center gap-1 text-xs text-gray-500">
                       <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
                       {label}
@@ -267,7 +273,7 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
     }))
   }
 
-  const allSelected = ['wiring_permit','electrical_plan','installation','cfei','supply','meralco']
+  const allSelected = ['wiring_permit', 'electrical_plan', 'installation', 'cfei', 'supply', 'meralco']
     .every(k => formData[`scope_${k}`])
 
   if (!open) return null
@@ -393,16 +399,26 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Contract Cost (₱)</label>
-              <input type="number" value={formData.contract_cost}
-                onChange={e => setFormData(p => ({ ...p, contract_cost: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-            </div>
+              <input type="text" value={formData.contract_cost === 0 ? '' : Number(formData.contract_cost).toLocaleString('en-US')}
+                placeholder="0.00"
+                onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '');
+                  if (!/^\d*\.?\d*$/.test(raw)) return;
+                  if (/^0\d/.test(raw)) return;
+                  setFormData(p => ({ ...p, contract_cost: raw === '' ? 0 : parseFloat(raw) || 0 }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />            </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Encumbrance (₱)</label>
-              <input type="number" value={formData.encumbrance}
-                onChange={e => setFormData(p => ({ ...p, encumbrance: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-            </div>
+              <input type="text" value={formData.encumbrance === 0 ? '' : Number(formData.encumbrance).toLocaleString('en-US')}
+                placeholder="0.00"
+                onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '');
+                  if (!/^\d*\.?\d*$/.test(raw)) return;
+                  if (/^0\d/.test(raw)) return;
+                  setFormData(p => ({ ...p, encumbrance: raw === '' ? 0 : parseFloat(raw) || 0 }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />            </div>
           </div>
 
           {/* Notes */}
@@ -528,7 +544,7 @@ export default function Projects() {
         {activeTab === 'progress' && (
           isLoading ? (
             <div className="space-y-4">
-              {[1,2,3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
+              {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
