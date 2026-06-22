@@ -161,8 +161,19 @@ export default function PaymentsTab() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Amount (₱) *</label>
-                  <input type="number" value={formData.amount}
-                    onChange={e => setFormData(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                  <input
+                    type="text"
+                    value={formData.amount === 0 ? '' : Number(formData.amount).toLocaleString('en-US')}
+                    placeholder="0.00"
+                    onChange={e => {
+                      // Strip commas for processing
+                      const raw = e.target.value.replace(/,/g, '');
+                      // Only allow digits and one decimal point
+                      if (!/^\d*\.?\d*$/.test(raw)) return;
+                      // Prevent leading zeros (e.g. 0112313)
+                      if (/^0\d/.test(raw)) return;
+                      setFormData(p => ({ ...p, amount: raw === '' ? 0 : parseFloat(raw) || 0 }));
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                 </div>
               </div>

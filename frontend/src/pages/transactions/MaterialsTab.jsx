@@ -348,21 +348,19 @@ export default function MaterialsTab() {
                   <div className="grid grid-cols-2 gap-3">
                     <button type="button"
                       onClick={() => setFormData(p => ({ ...p, adjustment_direction: 'add' }))}
-                      className={`flex items-center justify-center gap-2 p-3 border-2 rounded-lg transition-all ${
-                        formData.adjustment_direction === 'add'
+                      className={`flex items-center justify-center gap-2 p-3 border-2 rounded-lg transition-all ${formData.adjustment_direction === 'add'
                           ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200'
                           : 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:opacity-80'
-                      }`}>
+                        }`}>
                       <TrendingUp size={18} />
                       <span className="text-sm font-semibold">+ Add to Stock</span>
                     </button>
                     <button type="button"
                       onClick={() => setFormData(p => ({ ...p, adjustment_direction: 'deduct' }))}
-                      className={`flex items-center justify-center gap-2 p-3 border-2 rounded-lg transition-all ${
-                        formData.adjustment_direction === 'deduct'
+                      className={`flex items-center justify-center gap-2 p-3 border-2 rounded-lg transition-all ${formData.adjustment_direction === 'deduct'
                           ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200'
                           : 'border-red-300 bg-red-50 text-red-600 hover:opacity-80'
-                      }`}>
+                        }`}>
                       <TrendingDown size={18} />
                       <span className="text-sm font-semibold">- Deduct from Stock</span>
                     </button>
@@ -491,8 +489,14 @@ export default function MaterialsTab() {
                           <div className="grid grid-cols-12 gap-3">
                             <div className="col-span-2">
                               <label className="block text-xs text-gray-500 mb-1">Qty</label>
-                              <input type="number" value={line.quantity}
-                                onChange={e => updateMaterialLine(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                              <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
+                                placeholder="0"
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/,/g, '');
+                                  if (!/^\d*\.?\d*$/.test(raw)) return;
+                                  if (/^0\d/.test(raw)) return;
+                                  updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
+                                }}
                                 className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
                             </div>
                             <div className="col-span-2">
@@ -504,9 +508,15 @@ export default function MaterialsTab() {
                                 Unit Cost
                                 {line.use_fifo && <span className="ml-1 text-blue-500 font-normal">(FIFO)</span>}
                               </label>
-                              <input type="number" value={line.unit_cost}
+                              <input type="text" value={line.use_fifo ? Number(line.unit_cost).toLocaleString('en-US') : (line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US'))}
                                 disabled={line.use_fifo}
-                                onChange={e => updateMaterialLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)}
+                                placeholder="0.00"
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/,/g, '');
+                                  if (!/^\d*\.?\d*$/.test(raw)) return;
+                                  if (/^0\d/.test(raw)) return;
+                                  updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
+                                }}
                                 className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed" />
                             </div>
                             <div className="col-span-5">
