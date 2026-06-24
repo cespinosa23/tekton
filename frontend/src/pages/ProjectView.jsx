@@ -155,7 +155,9 @@ export default function ProjectView() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {SCOPES.map(scope => {
               const isIncluded = project[`scope_${scope.key}`]
-              const currentStatus = project[`scope_${scope.key}_status`] || 'not_included'
+              const currentStatus = isIncluded
+                ? (project[`scope_${scope.key}_status`] === 'complete' ? 'complete' : 'pending')
+                : 'not_included'
               const completionDate = project[`scope_${scope.key}_date`]
               const notes = project[`scope_${scope.key}_notes`] || ''
 

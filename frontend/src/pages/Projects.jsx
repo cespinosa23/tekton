@@ -38,6 +38,11 @@ const SCOPE_COLORS = {
   complete: 'bg-emerald-500',
 }
 
+const getScopeStatus = (project, key) => {
+  if (!project[`scope_${key}`]) return 'not_included'
+  return project[`scope_${key}_status`] === 'complete' ? 'complete' : 'pending'
+}
+
 const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
 
 const emptyForm = {
@@ -55,13 +60,6 @@ const emptyForm = {
 // --- ProjectCard ---
 function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
   const navigate = useNavigate()
-
-  const getScopeStatus = (key) => {
-    if (!project[`scope_${key}`]) return 'not_included'
-    const s = project[`scope_${key}_status`]
-    if (!s || s === 'not_included') return 'pending'
-    return s
-  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 hover:border-gray-300 transition-colors">
@@ -98,7 +96,7 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
               className="flex flex-col items-center gap-1 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded"
               title={scope.label}>
               <span className="text-[10px] text-gray-500 font-medium">{scope.label}</span>
-              <div className={`w-3 h-3 rounded-full ${SCOPE_COLORS[getScopeStatus(scope.key)]}`} />
+              <div className={`w-3 h-3 rounded-full ${SCOPE_COLORS[getScopeStatus(project, scope.key)]}`} />
             </div>
           ))}
         </div>
@@ -482,8 +480,9 @@ export default function Projects() {
   }
 
   const handleScopeClick = (project, scopeKey) => {
-    const current = project[`scope_${scopeKey}_status`] || 'not_included'
-    const next = current === 'complete' ? 'pending' : current === 'pending' ? 'not_included' : 'complete'
+    if (!project[`scope_${scopeKey}`]) return  // Not part of this project — ignore click
+    const current = getScopeStatus(project, scopeKey)
+    const next = current === 'complete' ? 'pending' : 'complete'
     const updateData = { [`scope_${scopeKey}_status`]: next }
     if (next === 'complete' && !project[`scope_${scopeKey}_date`]) {
       updateData[`scope_${scopeKey}_date`] = new Date().toISOString().split('T')[0]
