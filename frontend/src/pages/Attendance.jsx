@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format, startOfWeek, endOfWeek, addDays } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, addDays, addWeeks, addMonths, addYears } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
   getAttendance, getEmployees, getProjects,
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
-import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users } from 'lucide-react'
 
 const STATUS_COLORS = {
   Present: 'bg-emerald-100 text-emerald-700',
@@ -174,16 +174,42 @@ export default function Attendance() {
     return Array.from({ length: 7 }, (_, i) => addDays(start, i))
   }
 
-  const navigateDate = (dir) => setSelectedDate(prev => addDays(prev, dir * (viewMode === 'day' ? 1 : 7)))
+  const getDateRange = () => {
+    switch (viewMode) {
+      case 'week': return { start: startOfWeek(selectedDate, { weekStartsOn: 1 }), end: endOfWeek(selectedDate, { weekStartsOn: 1 }) }
+      case 'month': return { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) }
+      case 'year': return { start: startOfYear(selectedDate), end: endOfYear(selectedDate) }
+      default: return { start: selectedDate, end: selectedDate }
+    }
+  }
+
+  const navigateDate = (dir) => {
+    setSelectedDate(prev => {
+      if (viewMode === 'week') return addWeeks(prev, dir)
+      if (viewMode === 'month') return addMonths(prev, dir)
+      if (viewMode === 'year') return addYears(prev, dir)
+      return addDays(prev, dir)
+    })
+  }
 
   const filtered = attendance.filter(att => {
-    const matchesDate = viewMode === 'day'
-      ? att.date === format(selectedDate, 'yyyy-MM-dd')
-      : getWeekDays().some(d => format(d, 'yyyy-MM-dd') === att.date)
+    let matchesDate
+    if (viewMode === 'day') {
+      matchesDate = att.date === format(selectedDate, 'yyyy-MM-dd')
+    } else {
+      const { start, end } = getDateRange()
+      const d = new Date(att.date + 'T00:00:00')
+      matchesDate = d >= start && d <= end
+    }
     const matchesEmp = employeeFilter === 'all' || att.employee_id === parseInt(employeeFilter)
     const matchesProj = projectFilter === 'all' || att.project_id === parseInt(projectFilter)
     return matchesDate && matchesEmp && matchesProj
   })
+
+  const summaryRegularHours = filtered.reduce((s, a) => s + (parseFloat(a.regular_hours) || 0), 0)
+  const summaryOTHours = filtered.reduce((s, a) => s + (parseFloat(a.overtime_hours) || 0), 0)
+  const summaryTotalSalary = filtered.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+  const summaryHeadcount = new Set(filtered.map(a => a.employee_id)).size
 
   return (
     <Layout>
@@ -211,10 +237,10 @@ export default function Attendance() {
             <div className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-md min-w-[220px] justify-center">
               <Calendar size={15} className="text-gray-400" />
               <span className="text-sm font-medium text-gray-700">
-                {viewMode === 'day'
-                  ? format(selectedDate, 'EEEE, MMM d, yyyy')
-                  : `${format(startOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d')} - ${format(endOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d, yyyy')}`
-                }
+                {viewMode === 'day' && format(selectedDate, 'EEEE, MMM d, yyyy')}
+                {viewMode === 'week' && `${format(startOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d')} – ${format(endOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d, yyyy')}`}
+                {viewMode === 'month' && format(selectedDate, 'MMMM yyyy')}
+                {viewMode === 'year' && format(selectedDate, 'yyyy')}
               </span>
             </div>
             <button onClick={() => navigateDate(1)} className="p-2 border border-gray-300 rounded-md hover:bg-gray-50">
@@ -230,6 +256,8 @@ export default function Attendance() {
               className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
               <option value="day">Daily</option>
               <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+              <option value="year">Yearly</option>
             </select>
             <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}
               className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
@@ -245,6 +273,46 @@ export default function Attendance() {
                 <option key={proj.id} value={proj.id}>{proj.project_name}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Employees</p>
+                <p className="text-2xl font-bold text-gray-900">{summaryHeadcount}</p>
+              </div>
+              <div className="bg-violet-500 p-2 rounded-lg"><Users size={18} className="text-white" /></div>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Regular Hours</p>
+                <p className="text-2xl font-bold text-gray-900">{summaryRegularHours.toLocaleString()}h</p>
+              </div>
+              <div className="bg-blue-500 p-2 rounded-lg"><Clock size={18} className="text-white" /></div>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Overtime Hours</p>
+                <p className="text-2xl font-bold text-gray-900">{summaryOTHours.toLocaleString()}h</p>
+              </div>
+              <div className="bg-purple-500 p-2 rounded-lg"><Clock size={18} className="text-white" /></div>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Total Labor Cost</p>
+                <p className="text-2xl font-bold text-emerald-600">₱{summaryTotalSalary.toLocaleString()}</p>
+              </div>
+              <div className="bg-emerald-500 p-2 rounded-lg"><DollarSign size={18} className="text-white" /></div>
+            </div>
           </div>
         </div>
 
