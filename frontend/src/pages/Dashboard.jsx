@@ -7,7 +7,7 @@ import {
 } from 'date-fns'
 import Layout from '../components/Layout'
 import {
-  getProjects, getTransactions, getEmployees,
+  getProjects, getTransactions, getEmployees, getAttendance,
   getCalendarDays, createCalendarDay, updateCalendarDay
 } from '../api/dashboard'
 import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw } from 'lucide-react'
@@ -41,6 +41,7 @@ export default function Dashboard() {
   const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: calendarDays = [] } = useQuery({ queryKey: ['calendarDays'], queryFn: getCalendarDays })
+  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
 
   // Fetch PH holidays when year changes
   useEffect(() => {
@@ -86,9 +87,12 @@ export default function Dashboard() {
   const totalPayments = filteredTransactions
     .filter(t => t.transaction_type === 'Payment')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-  const totalExpenses = filteredTransactions
+  const totalMaterialsAndOther = filteredTransactions
     .filter(t => ['General Expenditure', 'Materials Procurement'].includes(t.transaction_type))
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+  const totalLabor = filterByDateRange(attendance, 'date')
+    .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
+  const totalExpenses = totalMaterialsAndOther + totalLabor
 
   const activeProjects = projects.filter(p => p.status === 'Active').length
   const activeEmployees = employees.filter(e => e.status === 'Active').length

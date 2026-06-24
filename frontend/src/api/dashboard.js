@@ -15,6 +15,11 @@ export const getEmployees = async () => {
   return data
 }
 
+export const getAttendance = async () => {
+  const { data } = await client.get('/attendance/')
+  return data
+}
+
 export const getCalendarDays = async () => {
   const { data } = await client.get('/calendar-days/')
   return data
