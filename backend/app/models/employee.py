@@ -28,3 +28,5 @@ class Employee(Base):
     status = Column(Enum(EmployeeStatus), default=EmployeeStatus.Active)
     archived = Column(Boolean, default=False)
     email = Column(String(255), nullable=True)
+    department = Column(String(100), nullable=True)
+    id_number = Column(String(50), nullable=True)

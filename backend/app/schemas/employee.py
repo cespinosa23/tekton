@@ -20,6 +20,8 @@ class EmployeeCreate(BaseModel):
     phone: Optional[str] = None
     status: EmployeeStatus = EmployeeStatus.Active
     email: Optional[str] = None
+    department: Optional[str] = None
+    id_number: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -37,6 +39,8 @@ class EmployeeUpdate(BaseModel):
     phone: Optional[str] = None
     status: Optional[EmployeeStatus] = None
     email: Optional[str] = None
+    department: Optional[str] = None
+    id_number: Optional[str] = None
 
 class EmployeeRead(BaseModel):
     id: int
@@ -56,5 +60,7 @@ class EmployeeRead(BaseModel):
     status: EmployeeStatus
     email: Optional[str] = None
     archived: bool
+    department: Optional[str] = None
+    id_number: Optional[str] = None
 
     model_config = {"from_attributes": True}

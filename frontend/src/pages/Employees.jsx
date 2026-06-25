@@ -20,7 +20,7 @@ const emptyForm = {
   philhealth_number: '', pagibig_number: '', tin_number: '',
   emergency_contact: '', emergency_phone: '',
   address: '', phone: '', email: '', status: 'Active',
-  role: 'Engineer',
+  role: 'Engineer', department: '', id_number: '',
 }
 
 export default function Employees() {
@@ -130,6 +130,8 @@ export default function Employees() {
       email: emp.email || '',
       status: emp.status || 'Active',
       role: 'Engineer',
+      department: emp.department || '',
+      id_number: emp.id_number || '',
     })
     setFormOpen(true)
   }
@@ -225,14 +227,13 @@ export default function Employees() {
                         {employeeRoles[emp.id]?.roles?.length > 0 && (
                           <div className="flex gap-1 mt-1 flex-wrap">
                             {employeeRoles[emp.id].roles.map(role => (
-                              <span key={role} className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                role === 'Admin' ? 'bg-red-100 text-red-700' :
-                                role === 'HR' ? 'bg-purple-100 text-purple-700' :
-                                role === 'Accounting' ? 'bg-blue-100 text-blue-700' :
-                                role === 'Engineer' ? 'bg-green-100 text-green-700' :
-                                role === 'Liaison' ? 'bg-orange-100 text-orange-700' :
-                                'bg-gray-100 text-gray-600'
-                              }`}>
+                              <span key={role} className={`px-1.5 py-0.5 rounded text-xs font-medium ${role === 'Admin' ? 'bg-red-100 text-red-700' :
+                                  role === 'HR' ? 'bg-purple-100 text-purple-700' :
+                                    role === 'Accounting' ? 'bg-blue-100 text-blue-700' :
+                                      role === 'Engineer' ? 'bg-green-100 text-green-700' :
+                                        role === 'Liaison' ? 'bg-orange-100 text-orange-700' :
+                                          'bg-gray-100 text-gray-600'
+                                }`}>
                                 {role}
                               </span>
                             ))}
@@ -331,8 +332,14 @@ export default function Employees() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Daily Salary (₱)</label>
-                    <input type="number" value={formData.daily_salary}
-                      onChange={(e) => setFormData(p => ({ ...p, daily_salary: parseFloat(e.target.value) || 0 }))}
+                    <input type="text" value={formData.daily_salary === 0 ? '' : Number(formData.daily_salary).toLocaleString('en-US')}
+                      placeholder="0.00"
+                      onChange={e => {
+                        const raw = e.target.value.replace(/,/g, '');
+                        if (!/^\d*\.?\d*$/.test(raw)) return;
+                        if (/^0\d/.test(raw)) return;
+                        setFormData(p => ({ ...p, daily_salary: raw === '' ? 0 : parseFloat(raw) || 0 }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                   </div>
                   <div>
@@ -344,6 +351,16 @@ export default function Employees() {
                       <option>Resigned</option>
                       <option>Terminated</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">ID Number</label>
+                    <input value={formData.id_number} onChange={set('id_number')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Department / Team</label>
+                    <input value={formData.department} onChange={set('department')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                   </div>
                 </div>
                 {/* Contact */}
@@ -414,8 +431,8 @@ export default function Employees() {
                   className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
                 <button onClick={handleSave}
                   disabled={
-                    !formData.first_name || 
-                    !formData.last_name || 
+                    !formData.first_name ||
+                    !formData.last_name ||
                     (formData.role !== 'Others' && !formData.email)
                   }
                   className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
@@ -446,6 +463,8 @@ export default function Employees() {
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {[
+                    ['ID Number', viewEmployee.id_number || '-'],
+                    ['Department / Team', viewEmployee.department || '-'],
                     ['Date Hired', viewEmployee.date_hired ? format(new Date(viewEmployee.date_hired), 'MMM d, yyyy') : '-'],
                     ['Daily Salary', `₱${(viewEmployee.daily_salary || 0).toLocaleString()}`],
                     ['Phone', viewEmployee.phone || '-'],
