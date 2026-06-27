@@ -72,13 +72,14 @@ def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = D
     return tx
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
+def archive_transaction(item_id: int, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     material_ids = get_material_ids(tx.materials or [])
     tx.archived = True
+    tx.archived_by = current_user.email
     db.commit()
 
     # Sync inventory after archive

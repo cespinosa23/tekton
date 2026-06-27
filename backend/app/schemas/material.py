@@ -15,4 +15,5 @@ class MaterialUpdate(MaterialCreate):
 class MaterialRead(MaterialCreate):
     id: int
     archived: bool = False
+    archived_by: Optional[str] = None
     model_config = {"from_attributes": True}

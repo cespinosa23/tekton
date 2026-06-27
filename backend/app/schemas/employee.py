@@ -60,6 +60,7 @@ class EmployeeRead(BaseModel):
     status: EmployeeStatus
     email: Optional[str] = None
     archived: bool
+    archived_by: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
 

@@ -11,3 +11,4 @@ class Supplier(Base):
     contact_number = Column(String(50), nullable=True)
     is_active = Column(Boolean, default=True)
     archived = Column(Boolean, default=False)
+    archived_by = Column(String(255), nullable=True)

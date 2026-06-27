@@ -94,6 +94,7 @@ def archive_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     employee.archived = True
+    employee.archived_by = current_user.email
     db.commit()
 
 

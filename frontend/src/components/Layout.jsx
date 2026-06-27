@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   LayoutDashboard, FolderKanban, ArrowLeftRight, Users,
   Package, Archive, ClipboardList, BookOpen, FolderArchive, Settings, LogOut
@@ -20,6 +21,7 @@ const navItems = [
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
+  const { canSeeNav } = usePermissions()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -46,7 +48,7 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {navItems.filter(({ to }) => canSeeNav(to)).map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

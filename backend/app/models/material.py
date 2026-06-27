@@ -11,4 +11,5 @@ class Material(Base):
     unit = Column(String(50), nullable=False)
     description = Column(String(500), nullable=True)
     archived = Column(Boolean, default=False)
+    archived_by = Column(String(255), nullable=True)
     

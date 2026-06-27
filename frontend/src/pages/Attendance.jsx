@@ -8,6 +8,7 @@ import {
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
 import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users } from 'lucide-react'
+import { usePermissions } from '../hooks/usePermissions'
 
 const STATUS_COLORS = {
   Present: 'bg-emerald-100 text-emerald-700',
@@ -65,6 +66,7 @@ const calculateSalaries = (data, employee) => {
 }
 
 export default function Attendance() {
+  const { canWrite } = usePermissions()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingAttendance, setEditingAttendance] = useState(null)
@@ -220,12 +222,14 @@ export default function Attendance() {
             <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
             <p className="text-sm text-gray-500 mt-1">Track employee attendance by project</p>
           </div>
-          <button
-            onClick={() => { setEditingAttendance(null); setFormData({ ...emptyForm, date: format(selectedDate, 'yyyy-MM-dd') }); setFormOpen(true) }}
-            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-          >
-            <Plus size={16} /> Log Attendance
-          </button>
+          {canWrite('attendance') && (
+            <button
+              onClick={() => { setEditingAttendance(null); setFormData({ ...emptyForm, date: format(selectedDate, 'yyyy-MM-dd') }); setFormOpen(true) }}
+              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+            >
+              <Plus size={16} /> Log Attendance
+            </button>
+          )}
         </div>
 
         {/* Date Navigation & Filters */}
@@ -374,12 +378,16 @@ export default function Attendance() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleEdit(att)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => setDeleteRecord(att)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
-                        <Trash2 size={15} />
-                      </button>
+                      {canWrite('attendance') && (
+                        <button onClick={() => handleEdit(att)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                      {canWrite('attendance') && (
+                        <button onClick={() => setDeleteRecord(att)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

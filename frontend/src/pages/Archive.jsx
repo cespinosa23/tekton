@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { RotateCcw, Trash2, X, AlertTriangle } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   getArchivedEmployees, getArchivedProjects, getArchivedMaterials,
   getArchivedTransactions, getArchivedSuppliers,
@@ -66,7 +67,7 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel, loading }) {
   )
 }
 
-function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, restoring, deleting }) {
+function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, canRestore, restoring, deleting }) {
   if (rows.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400 text-sm">
@@ -98,14 +99,16 @@ function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, restoring,
               ))}
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1">
-                  <button
-                    onClick={() => onRestore(id)}
-                    disabled={restoring === id}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-                    title="Restore">
-                    <RotateCcw size={13} />
-                    {restoring === id ? 'Restoring...' : 'Restore'}
-                  </button>
+                  {canRestore && (
+                    <button
+                      onClick={() => onRestore(id)}
+                      disabled={restoring === id}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                      title="Restore">
+                      <RotateCcw size={13} />
+                      {restoring === id ? 'Restoring...' : 'Restore'}
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       onClick={() => onDelete(id)}
@@ -128,6 +131,7 @@ function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, restoring,
 
 export default function Archive() {
   const { isAdmin } = useAuth()
+  const { canWrite } = usePermissions()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('employees')
   const [restoringId, setRestoringId] = useState(null)
@@ -180,6 +184,10 @@ export default function Archive() {
   }
 
   // ── Row builders ─────────────────────────────────────────────────────
+  const archivedBy = (value) => (
+    <span className="text-xs text-gray-500 italic">{value || '—'}</span>
+  )
+
   const employeeRows = archivedEmployees.map(e => ({
     id: e.id,
     cells: [
@@ -187,17 +195,18 @@ export default function Archive() {
       e.email || '-',
       e.status,
       e.date_hired ? format(new Date(e.date_hired), 'MMM d, yyyy') : '-',
+      archivedBy(e.archived_by),
     ],
   }))
 
   const projectRows = archivedProjects.map(p => ({
     id: p.id,
-    cells: [p.project_name, p.owner_company_name || '-', p.status || '-'],
+    cells: [p.project_name, p.owner_company_name || '-', p.status || '-', archivedBy(p.archived_by)],
   }))
 
   const materialRows = archivedMaterials.map(m => ({
     id: m.id,
-    cells: [m.rating_size, m.material_type || '-', m.unit || '-'],
+    cells: [m.rating_size, m.material_type || '-', m.unit || '-', archivedBy(m.archived_by)],
   }))
 
   const transactionRows = archivedTransactions.map(tx => ({
@@ -211,21 +220,22 @@ export default function Archive() {
       <span key="amt" className={tx.transaction_type === 'Payment' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
         {fmt(tx.amount)}
       </span>,
+      archivedBy(tx.archived_by),
     ],
   }))
 
   const supplierRows = archivedSuppliers.map(s => ({
     id: s.id,
-    cells: [s.name, s.contact_person || '-', s.phone || '-'],
+    cells: [s.name, s.contact_person || '-', s.contact_number || '-', archivedBy(s.archived_by)],
   }))
 
   // ── Tab config ────────────────────────────────────────────────────────
   const tabConfig = {
-    employees:    { columns: ['Name', 'Email', 'Status', 'Date Hired'],                          rows: employeeRows,    restoreFn: id => handleRestore('employees', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'employees',    label: row.cells[0] }),    isPending: restoreEmp.isPending || deleteEmp.isPending },
-    projects:     { columns: ['Project Name', 'Owner', 'Status'],                                rows: projectRows,     restoreFn: id => handleRestore('projects', id),     deleteFn: (id, row) => setConfirmDelete({ id, type: 'projects',     label: row.cells[0] }),    isPending: restorePrj.isPending || deletePrj.isPending },
-    materials:    { columns: ['Name / Size', 'Type', 'Unit'],                                    rows: materialRows,    restoreFn: id => handleRestore('materials', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'materials',    label: row.cells[0] }),    isPending: restoreMat.isPending || deleteMat.isPending },
-    transactions: { columns: ['Type', 'Date', 'Project', 'Amount'],                              rows: transactionRows, restoreFn: id => handleRestore('transactions', id), deleteFn: (id, row) => setConfirmDelete({ id, type: 'transactions', label: `Transaction #${id}` }), isPending: restoreTx.isPending || deleteTx.isPending },
-    suppliers:    { columns: ['Name', 'Contact Person', 'Phone'],                                rows: supplierRows,    restoreFn: id => handleRestore('suppliers', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'suppliers',    label: row.cells[0] }),    isPending: restoreSup.isPending || deleteSup.isPending },
+    employees:    { columns: ['Name', 'Email', 'Status', 'Date Hired', 'Archived By'],              rows: employeeRows,    restoreFn: id => handleRestore('employees', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'employees',    label: row.cells[0] }),    isPending: restoreEmp.isPending || deleteEmp.isPending },
+    projects:     { columns: ['Project Name', 'Owner', 'Status', 'Archived By'],                    rows: projectRows,     restoreFn: id => handleRestore('projects', id),     deleteFn: (id, row) => setConfirmDelete({ id, type: 'projects',     label: row.cells[0] }),    isPending: restorePrj.isPending || deletePrj.isPending },
+    materials:    { columns: ['Name / Size', 'Type', 'Unit', 'Archived By'],                        rows: materialRows,    restoreFn: id => handleRestore('materials', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'materials',    label: row.cells[0] }),    isPending: restoreMat.isPending || deleteMat.isPending },
+    transactions: { columns: ['Type', 'Date', 'Project', 'Amount', 'Archived By'],                  rows: transactionRows, restoreFn: id => handleRestore('transactions', id), deleteFn: (id, row) => setConfirmDelete({ id, type: 'transactions', label: `Transaction #${id}` }), isPending: restoreTx.isPending || deleteTx.isPending },
+    suppliers:    { columns: ['Name', 'Contact Person', 'Phone', 'Archived By'],                    rows: supplierRows,    restoreFn: id => handleRestore('suppliers', id),    deleteFn: (id, row) => setConfirmDelete({ id, type: 'suppliers',    label: row.cells[0] }),    isPending: restoreSup.isPending || deleteSup.isPending },
   }
 
   const current = tabConfig[activeTab]
@@ -266,6 +276,7 @@ export default function Archive() {
               current.deleteFn(id, row)
             }}
             isAdmin={isAdmin()}
+            canRestore={canWrite('archive')}
             restoring={restoringId}
             deleting={null}
           />

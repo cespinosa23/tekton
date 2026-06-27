@@ -15,6 +15,7 @@ class Transaction(Base):
     expenditure_category = Column(String(100), nullable=True)
     supplier = Column(String(255), nullable=True)
     archived = Column(Boolean, default=False)
+    archived_by = Column(String(255), nullable=True)
     materials = Column(JSON, nullable=True)
     use_fifo_pricing = Column(Boolean, default=False)
     reference_number = Column(String(100), nullable=True)

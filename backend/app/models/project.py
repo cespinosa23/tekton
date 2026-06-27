@@ -12,6 +12,7 @@ class Project(Base):
     quotation_date = Column(Date, nullable=True)
     status = Column(String(50), default="Active")
     archived = Column(Boolean, default=False)
+    archived_by = Column(String(255), nullable=True)
     referred_by = Column(String(100), nullable=True)
     lgu = Column(String(100), nullable=True)
     meralco_branch = Column(String(100), nullable=True)

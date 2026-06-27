@@ -4,10 +4,12 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import { getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial } from '../api/materials'
 import { Plus, Search, Pencil, Trash2, Archive, X } from 'lucide-react'
+import { usePermissions } from '../hooks/usePermissions'
 
 const emptyForm = { rating_size: '', material_type: '', unit: '', description: '' }
 
 export default function Materials() {
+  const { canWrite } = usePermissions()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState(null)
@@ -94,12 +96,14 @@ export default function Materials() {
             <h1 className="text-2xl font-bold text-gray-900">Materials Master List</h1>
             <p className="text-sm text-gray-500 mt-1">Manage materials reference for the system</p>
           </div>
-          <button
-            onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
-            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-          >
-            <Plus size={16} /> Add Material
-          </button>
+          {canWrite('materials') && (
+            <button
+              onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
+              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+            >
+              <Plus size={16} /> Add Material
+            </button>
+          )}
         </div>
 
         {/* Filters */}
@@ -152,12 +156,16 @@ export default function Materials() {
                   <td className="px-4 py-3 text-gray-600">{mat.unit || '-'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleEdit(mat)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => setDeleteMaterial(mat)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
-                        <Trash2 size={15} />
-                      </button>
+                      {canWrite('materials') && (
+                        <button onClick={() => handleEdit(mat)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                      {canWrite('materials') && (
+                        <button onClick={() => setDeleteMaterial(mat)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

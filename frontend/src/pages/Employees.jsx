@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { inviteEmployee as inviteEmployeeApi, resendInvite as resendInviteApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers } from '../api/employees'
 import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus, RefreshCw, CheckCircle } from 'lucide-react'
+import { usePermissions } from '../hooks/usePermissions'
 
 
 const statusColors = {
@@ -24,6 +25,7 @@ const emptyForm = {
 }
 
 export default function Employees() {
+  const { canWrite } = usePermissions()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [viewEmployee, setViewEmployee] = useState(null)
@@ -164,12 +166,14 @@ export default function Employees() {
             <h1 className="text-2xl font-bold text-gray-900">Employees</h1>
             <p className="text-sm text-gray-500 mt-1">Manage employee profiles and information</p>
           </div>
-          <button
-            onClick={() => { setEditingEmployee(null); setFormData(emptyForm); setFormOpen(true) }}
-            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-          >
-            <Plus size={16} /> Add Employee
-          </button>
+          {canWrite('employees') && (
+            <button
+              onClick={() => { setEditingEmployee(null); setFormData(emptyForm); setFormOpen(true) }}
+              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+            >
+              <Plus size={16} /> Add Employee
+            </button>
+          )}
         </div>
 
         {/* Filters */}
@@ -256,10 +260,12 @@ export default function Employees() {
                       <button onClick={() => setViewEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => handleEdit(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                        <Pencil size={15} />
-                      </button>
-                      {emp.email && (() => {
+                      {canWrite('employees') && (
+                        <button onClick={() => handleEdit(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                      {canWrite('employees') && emp.email && (() => {
                         const account = employeeRoles[emp.id]
                         if (account?.is_active) {
                           return (
@@ -290,9 +296,11 @@ export default function Employees() {
                           </button>
                         )
                       })()}
-                      <button onClick={() => setDeleteEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
-                        <Trash2 size={15} />
-                      </button>
+                      {canWrite('employees') && (
+                        <button onClick={() => setDeleteEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
