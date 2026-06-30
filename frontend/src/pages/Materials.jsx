@@ -184,7 +184,7 @@ export default function Materials() {
               </div>
               <div className="px-6 py-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Rating / Size *</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Material / Specs *</label>
                   <input value={formData.rating_size} onChange={e => setFormData(p => ({ ...p, rating_size: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                 </div>
