@@ -5,6 +5,8 @@ import Layout from '../components/Layout'
 import { getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial } from '../api/materials'
 import { Plus, Search, Pencil, Trash2, Archive, X } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 
 const emptyForm = { rating_size: '', material_type: '', unit: '', description: '' }
 
@@ -86,6 +88,7 @@ export default function Materials() {
     const matchesType = typeFilter === 'all' || m.material_type === typeFilter
     return matchesSearch && matchesType
   })
+  const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'rating_size')
 
   return (
     <Layout>
@@ -129,9 +132,9 @@ export default function Materials() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Material / Specs</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit</th>
+                <SortableHeader label="Material / Specs" field="rating_size" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Unit" field="unit" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -140,7 +143,7 @@ export default function Materials() {
                 <tr><td colSpan={4} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={4} className="text-center py-8 text-gray-400">No materials found</td></tr>
-              ) : filtered.map(mat => (
+              ) : sorted.map(mat => (
                 <tr key={mat.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{mat.rating_size}</p>

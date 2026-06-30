@@ -6,6 +6,8 @@ import Layout from '../components/Layout'
 import { inviteEmployee as inviteEmployeeApi, resendInvite as resendInviteApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers } from '../api/employees'
 import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus, RefreshCw, CheckCircle } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 
 
 const statusColors = {
@@ -156,6 +158,7 @@ export default function Employees() {
       (statusFilter === 'all' || emp.status === statusFilter)
     )
   })
+  const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'first_name')
 
   return (
     <Layout>
@@ -205,10 +208,10 @@ export default function Employees() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Date Hired</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Daily Salary</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                <SortableHeader label="Name" field="first_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Date Hired" field="date_hired" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Daily Salary" field="daily_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -217,7 +220,7 @@ export default function Employees() {
                 <tr><td colSpan={5} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} className="text-center py-8 text-gray-400">No employees found</td></tr>
-              ) : filtered.map((emp) => (
+              ) : sorted.map((emp) => (
                 <tr key={emp.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">

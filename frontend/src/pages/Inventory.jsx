@@ -4,6 +4,8 @@ import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { getMaterials, getTransactions, getInventoryRecords, getMaterialTypes } from '../api/inventory'
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 
 export default function Inventory() {
   const [search, setSearch] = useState('')
@@ -140,6 +142,8 @@ export default function Inventory() {
     return matchesSearch && matchesType
   })
 
+  const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'material_name')
+
   const totalItems = filtered.reduce((sum, i) => sum + i.balance, 0)
   const totalValue = filtered.reduce((sum, i) => sum + i.total_value, 0)
   const lowStockItems = filtered.filter(i => i.balance <= 0).length
@@ -216,21 +220,21 @@ export default function Inventory() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Material / Specs</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Brand</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
+                <SortableHeader label="Material / Specs" field="material_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Brand" field="brand" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Starting</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">In</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Out</th>
-                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Balance</th>
+                <SortableHeader label="Balance" field="balance" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit Cost</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total Value</th>
+                <SortableHeader label="Total Value" field="total_value" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-8 text-gray-400">No inventory data available</td></tr>
-              ) : filtered.map(item => (
+              ) : sorted.map(item => (
                 <tr key={`${item.material_id}_${item.brand}`} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{item.material_name}</p>

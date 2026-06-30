@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Receipt } from 'lucide-react'
+import { useSortable } from '../../hooks/useSortable'
+import { SortableHeader } from '../../components/SortableHeader'
 import { fmt } from './constants'
 import ProjectCombobox from '../../components/ProjectCombobox'
 import {
@@ -91,6 +93,7 @@ export default function ExpendituresTab() {
     tx.project_name?.toLowerCase().includes(search.toLowerCase()) ||
     tx.expenditure_category?.toLowerCase().includes(search.toLowerCase())
   )
+  const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'transaction_date', 'desc')
 
   const set = (field) => (e) => setFormData(p => ({ ...p, [field]: e.target.value }))
 
@@ -114,9 +117,13 @@ export default function ExpendituresTab() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              {['#', 'Date', 'Project / Office', 'Category', 'Description', 'Amount', 'Actions'].map(h => (
-                <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${['Amount', 'Actions'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
-              ))}
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">#</th>
+              <SortableHeader label="Date" field="transaction_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+              <SortableHeader label="Project / Office" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+              <SortableHeader label="Category" field="expenditure_category" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Description</th>
+              <SortableHeader label="Amount" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -124,7 +131,7 @@ export default function ExpendituresTab() {
               <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading...</td></tr>
             ) : filtered.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-8 text-gray-400">No expenditures found</td></tr>
-            ) : filtered.map(tx => (
+            ) : sorted.map(tx => (
               <tr key={tx.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-gray-400 text-xs font-mono">{tx.id}</td>
                 <td className="px-4 py-3 text-gray-600">{tx.transaction_date ? format(new Date(tx.transaction_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}</td>

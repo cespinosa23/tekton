@@ -9,6 +9,8 @@ import {
 } from '../api/attendance'
 import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 
 const STATUS_COLORS = {
   Present: 'bg-emerald-100 text-emerald-700',
@@ -208,6 +210,8 @@ export default function Attendance() {
     return matchesDate && matchesEmp && matchesProj
   })
 
+  const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'date', 'desc')
+
   const summaryRegularHours = filtered.reduce((s, a) => s + (parseFloat(a.regular_hours) || 0), 0)
   const summaryOTHours = filtered.reduce((s, a) => s + (parseFloat(a.overtime_hours) || 0), 0)
   const summaryTotalSalary = filtered.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
@@ -325,9 +329,14 @@ export default function Attendance() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Date', 'Employee', 'Project', 'Regular Hours', 'OT Hours', 'Salary', 'Status', 'Actions'].map(h => (
-                  <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${h === 'Salary' || h === 'Actions' ? 'text-right' : 'text-left'}`}>{h}</th>
-                ))}
+                <SortableHeader label="Date" field="date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Employee" field="employee_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Project" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Regular Hours" field="regular_hours" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="OT Hours" field="overtime_hours" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Salary" field="total_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                <SortableHeader label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -335,7 +344,7 @@ export default function Attendance() {
                 <tr><td colSpan={8} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-8 text-gray-400">No attendance records for this period</td></tr>
-              ) : filtered.map(att => (
+              ) : sorted.map(att => (
                 <tr key={att.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-600">
                     {att.date ? format(new Date(att.date + 'T00:00:00'), 'MMM d') : '-'}
