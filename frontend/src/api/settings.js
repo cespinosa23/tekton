@@ -34,6 +34,10 @@ export const updateCompany = async ({ id, data: payload }) => {
   return data
 }
 
+export const deleteCompany = async (id) => {
+  await client.delete(`/companies/${id}`)
+}
+
 export const getMaterialTypes = async () => {
   const { data } = await client.get('/material-types/')
   return data
@@ -79,4 +83,9 @@ export const updateSupplier = async ({ id, data: payload }) => {
 
 export const archiveSupplier = async (id) => {
   await client.delete(`/suppliers/${id}`)
+}
+
+export const resetAllData = async () => {
+  const { data } = await client.post('/admin/reset')
+  return data
 }

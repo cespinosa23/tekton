@@ -14,6 +14,7 @@ import Projects from './pages/Projects'
 import ProjectView from './pages/ProjectView'
 import Transactions from './pages/transactions/index'
 import Archive from './pages/Archive'
+import Quotations from './pages/Quotations'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -44,7 +45,7 @@ export default function App() {
       <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-      <Route path="/quotations" element={<ProtectedRoute><Placeholder title="Quotations" /></ProtectedRoute>} />
+      <Route path="/quotations" element={<ProtectedRoute><Quotations /></ProtectedRoute>} />
       <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/login" replace />} />

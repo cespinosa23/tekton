@@ -4,15 +4,17 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
   getSettings, createSetting, updateSetting, archiveSetting,
-  getCompanies, createCompany, updateCompany,
+  getCompanies, createCompany, updateCompany, deleteCompany,
   getMaterialTypes, createMaterialType, updateMaterialType,
   archiveMaterialType, addBrandToType, removeBrandFromType,
-  getSuppliers, createSupplier, updateSupplier, archiveSupplier
+  getSuppliers, createSupplier, updateSupplier, archiveSupplier,
+  resetAllData
 } from '../api/settings'
 import {
   Plus, Trash2, Pencil, Check, X,
-  Users, MapPin, Building2, Tag, Ruler, Package, Truck
+  Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle
 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const CATEGORIES = [
   { key: 'Brand', label: 'Brand', icon: Tag, description: 'Master list of material brands' },
@@ -26,6 +28,7 @@ const CATEGORIES = [
 
 export default function Settings() {
   const queryClient = useQueryClient()
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('Referred By')
   const [mainTab, setMainTab] = useState('dropdown')
   const [newValue, setNewValue] = useState('')
@@ -45,30 +48,22 @@ export default function Settings() {
   const [expandedType, setExpandedType] = useState(null)
   const [newBrandName, setNewBrandName] = useState('')
 
+  // Danger Zone state
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetText, setResetText] = useState('')
+
   // Company state
-  const [companyForm, setCompanyForm] = useState({
+  const emptyCompanyForm = {
     company_name: '', short_name: '', address: '', contact_number: '',
     email: '', website: '', footer_text: '', default_signatory: '', signatory_position: ''
-  })
-  const [editingCompany, setEditingCompany] = useState(false)
+  }
+  const [companyFormOpen, setCompanyFormOpen] = useState(false)
+  const [editingCompany, setEditingCompany] = useState(null)
+  const [companyForm, setCompanyForm] = useState(emptyCompanyForm)
 
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
-  const { data: companies = [] } = useQuery({
-    queryKey: ['companies'], queryFn: getCompanies,
-    onSuccess: (data) => {
-      if (data.length > 0 && !editingCompany) {
-        const c = data[0]
-        setCompanyForm({
-          company_name: c.company_name || '', short_name: c.short_name || '',
-          address: c.address || '', contact_number: c.contact_number || '',
-          email: c.email || '', website: c.website || '',
-          footer_text: c.footer_text || '', default_signatory: c.default_signatory || '',
-          signatory_position: c.signatory_position || '',
-        })
-      }
-    }
-  })
+  const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
 
   const createMutation = useMutation({
     mutationFn: createSetting,
@@ -118,16 +113,35 @@ export default function Settings() {
     onError: () => toast.error('Failed to remove brand'),
   })
 
+  const closeCompanyForm = () => { setCompanyFormOpen(false); setEditingCompany(null); setCompanyForm(emptyCompanyForm) }
+
   const createCompanyMutation = useMutation({
     mutationFn: createCompany,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); setEditingCompany(false); toast.success('Company saved') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); closeCompanyForm(); toast.success('Company added') },
     onError: () => toast.error('Failed to save company'),
   })
 
   const updateCompanyMutation = useMutation({
     mutationFn: updateCompany,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); setEditingCompany(false); toast.success('Company updated') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); closeCompanyForm(); toast.success('Company updated') },
     onError: () => toast.error('Failed to update company'),
+  })
+
+  const deleteCompanyMutation = useMutation({
+    mutationFn: deleteCompany,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); toast.success('Company deleted') },
+    onError: () => toast.error('Failed to delete company'),
+  })
+
+  const resetMutation = useMutation({
+    mutationFn: resetAllData,
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+      setResetOpen(false)
+      setResetText('')
+      toast.success('All data has been reset.')
+    },
+    onError: () => toast.error('Reset failed.'),
   })
 
   const handleAdd = () => {
@@ -138,14 +152,6 @@ export default function Settings() {
   const handleSaveEdit = (id) => {
     if (!editValue.trim()) return
     updateMutation.mutate({ id, data: { value: editValue.trim() } })
-  }
-
-  const handleSaveCompany = () => {
-    if (companies.length > 0) {
-      updateCompanyMutation.mutate({ id: companies[0].id, data: companyForm })
-    } else {
-      createCompanyMutation.mutate(companyForm)
-    }
   }
 
   const filteredSettings = settings
@@ -480,61 +486,193 @@ export default function Settings() {
 
         {/* Company Settings Tab */}
         {mainTab === 'companies' && (
-          <div className="max-w-2xl">
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-semibold text-gray-900">Company Information</h3>
-                {!editingCompany && (
-                  <button onClick={() => setEditingCompany(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
-                    <Pencil size={13} /> Edit
-                  </button>
-                )}
+          <div className="max-w-2xl space-y-6">
+            {/* Company list */}
+            <div className="bg-white border border-gray-200 rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Companies</h3>
+                  <p className="text-xs text-gray-400">Company profiles used in quotations and documents</p>
+                </div>
+                <button
+                  onClick={() => { setEditingCompany(null); setCompanyForm(emptyCompanyForm); setCompanyFormOpen(true) }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700">
+                  <Plus size={15} /> Add Company
+                </button>
               </div>
-              <div className="space-y-4">
-                {[
-                  ['company_name', 'Company Name *'],
-                  ['short_name', 'Short Name'],
-                  ['address', 'Address'],
-                  ['contact_number', 'Contact Number'],
-                  ['email', 'Email'],
-                  ['website', 'Website'],
-                  ['default_signatory', 'Default Signatory'],
-                  ['signatory_position', 'Signatory Position'],
-                ].map(([field, label]) => (
-                  <div key={field}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-                    {editingCompany ? (
-                      <input value={companyForm[field]} onChange={e => setCompanyForm(p => ({ ...p, [field]: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                    ) : (
-                      <p className="text-sm text-gray-900">{companyForm[field] || <span className="text-gray-400">—</span>}</p>
-                    )}
+              <div className="p-6 space-y-3">
+                {companies.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">No companies yet. Add your first one.</div>
+                ) : companies.map(company => (
+                  <div key={company.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg group">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{company.company_name}</p>
+                        {company.short_name && (
+                          <span className="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">{company.short_name}</span>
+                        )}
+                      </div>
+                      {company.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin size={11} />{company.address}</p>}
+                      {company.contact_number && <p className="text-xs text-gray-500 mt-0.5">{company.contact_number}</p>}
+                      {company.email && <p className="text-xs text-gray-500 mt-0.5">{company.email}</p>}
+                      {company.default_signatory && (
+                        <p className="text-xs text-gray-400 mt-1 italic">{company.default_signatory}{company.signatory_position ? ` — ${company.signatory_position}` : ''}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditingCompany(company)
+                          setCompanyForm({
+                            company_name: company.company_name || '',
+                            short_name: company.short_name || '',
+                            address: company.address || '',
+                            contact_number: company.contact_number || '',
+                            email: company.email || '',
+                            website: company.website || '',
+                            footer_text: company.footer_text || '',
+                            default_signatory: company.default_signatory || '',
+                            signatory_position: company.signatory_position || '',
+                          })
+                          setCompanyFormOpen(true)
+                        }}
+                        className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => deleteCompanyMutation.mutate(company.id)}
+                        className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 ))}
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Footer Text</label>
-                  {editingCompany ? (
-                    <textarea value={companyForm.footer_text} rows={2}
-                      onChange={e => setCompanyForm(p => ({ ...p, footer_text: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                  ) : (
-                    <p className="text-sm text-gray-900">{companyForm.footer_text || <span className="text-gray-400">—</span>}</p>
-                  )}
-                </div>
-                {editingCompany && (
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={() => setEditingCompany(false)}
-                      className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                    <button onClick={handleSaveCompany} disabled={!companyForm.company_name}
-                      className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">Save</button>
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Danger Zone — Admin only */}
+            {isAdmin() && (
+              <div className="border border-red-200 rounded-lg overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border-b border-red-200">
+                  <AlertTriangle size={16} className="text-red-500" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-700">Danger Zone</h3>
+                    <p className="text-xs text-red-500">These actions are irreversible. Use only during testing.</p>
+                  </div>
+                </div>
+                <div className="px-6 py-4 bg-white flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Reset All Data</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Wipes employees, projects, attendance, transactions, materials, suppliers, and inventory.
+                      Settings and dropdown options are kept.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setResetOpen(true); setResetText('') }}
+                    className="ml-6 flex-shrink-0 px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
+                  >
+                    Reset Data
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Company Form Dialog */}
+      {companyFormOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+              <h2 className="text-lg font-semibold text-gray-900">{editingCompany ? 'Edit Company' : 'Add Company'}</h2>
+              <button onClick={closeCompanyForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4 overflow-y-auto">
+              {[
+                ['company_name', 'Company Name *', 'text'],
+                ['short_name', 'Short Name', 'text'],
+                ['address', 'Address', 'text'],
+                ['contact_number', 'Contact Number', 'text'],
+                ['email', 'Email', 'email'],
+                ['website', 'Website', 'url'],
+                ['default_signatory', 'Default Signatory', 'text'],
+                ['signatory_position', 'Signatory Position', 'text'],
+              ].map(([field, label, type]) => (
+                <div key={field}>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                  <input type={type} value={companyForm[field]}
+                    onChange={e => setCompanyForm(p => ({ ...p, [field]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Footer Text</label>
+                <textarea value={companyForm.footer_text} rows={2}
+                  onChange={e => setCompanyForm(p => ({ ...p, footer_text: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t flex-shrink-0">
+              <button onClick={closeCompanyForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={() => {
+                  if (editingCompany) {
+                    updateCompanyMutation.mutate({ id: editingCompany.id, data: companyForm })
+                  } else {
+                    createCompanyMutation.mutate(companyForm)
+                  }
+                }}
+                disabled={!companyForm.company_name}
+                className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
+                {editingCompany ? 'Update' : 'Add'} Company
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirmation Dialog */}
+      {resetOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md m-4">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-red-100 bg-red-50 rounded-t-lg">
+              <AlertTriangle size={18} className="text-red-500" />
+              <h2 className="text-lg font-semibold text-red-700">Confirm Data Reset</h2>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-700">
+                This will permanently delete all <strong>employees, projects, attendance records, transactions, materials, suppliers, and inventory</strong>. Settings and lookup values will be kept.
+              </p>
+              <p className="text-sm text-gray-700">
+                Type <strong className="font-mono text-red-600">RESET</strong> below to confirm.
+              </p>
+              <input
+                value={resetText}
+                onChange={e => setResetText(e.target.value)}
+                placeholder="Type RESET to confirm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 font-mono"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              <button
+                onClick={() => { setResetOpen(false); setResetText('') }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => resetMutation.mutate()}
+                disabled={resetText !== 'RESET' || resetMutation.isPending}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 font-medium"
+              >
+                {resetMutation.isPending ? 'Resetting...' : 'Reset All Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

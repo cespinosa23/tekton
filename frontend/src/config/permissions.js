@@ -20,7 +20,7 @@ export const WRITE_ROLES = {
 // Paths not listed here are visible to all authenticated users.
 export const NAV_ROLES = {
   '/settings':   [],                          // Admin only
-  '/quotations': [],                          // hidden for now — enable by adding roles when ready
+  '/quotations': ['Engineer'],                 // visible to Admin + Engineer
   '/archive':    [],                          // Admin only
   '/materials':  ['Engineer', 'Accounting', 'Liaison'],
   '/inventory':  ['Engineer', 'Accounting', 'Liaison'],

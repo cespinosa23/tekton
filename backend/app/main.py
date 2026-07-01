@@ -6,7 +6,7 @@ from app.models import user, role, employee  # noqa
 from app.models import project, attendance, calendar_day  # noqa
 from app.models import company, material, inventory  # noqa
 from app.models import supplier, transaction, quotation, setting  # noqa
-from app.api import auth, employees, users
+from app.api import auth, employees, users, admin
 from app.api.crud_router import make_crud_router
 from app.models.project import Project
 from app.models.attendance import Attendance
@@ -48,6 +48,7 @@ app.include_router(auth.router)
 app.include_router(employees.router)
 app.include_router(users.router)
 app.include_router(material_types.router)
+app.include_router(admin.router)
 
 # CRUD routes
 app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Engineer", "Liaison"]))

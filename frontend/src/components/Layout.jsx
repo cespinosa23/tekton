@@ -31,8 +31,8 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
+      {/* Sidebar — hidden when printing */}
+      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col print:hidden">
         {/* Logo */}
         <div className="px-5 py-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
