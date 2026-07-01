@@ -89,3 +89,13 @@ export const resetAllData = async () => {
   const { data } = await client.post('/admin/reset')
   return data
 }
+
+export const getSystemUsers = async () => {
+  const { data } = await client.get('/admin/users')
+  return data
+}
+
+export const forceLogoutUser = async (userId) => {
+  const { data } = await client.post(`/admin/users/${userId}/force-logout`)
+  return data
+}

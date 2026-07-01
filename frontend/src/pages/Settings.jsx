@@ -8,11 +8,11 @@ import {
   getMaterialTypes, createMaterialType, updateMaterialType,
   archiveMaterialType, addBrandToType, removeBrandFromType,
   getSuppliers, createSupplier, updateSupplier, archiveSupplier,
-  resetAllData
+  resetAllData, getSystemUsers, forceLogoutUser
 } from '../api/settings'
 import {
   Plus, Trash2, Pencil, Check, X,
-  Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle
+  Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle, LogOut, ShieldAlert
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -51,6 +51,9 @@ export default function Settings() {
   // Danger Zone state
   const [resetOpen, setResetOpen] = useState(false)
   const [resetText, setResetText] = useState('')
+
+  // Users tab state
+  const [forceLogoutConfirm, setForceLogoutConfirm] = useState(null)
 
   // Company state
   const emptyCompanyForm = {
@@ -161,6 +164,7 @@ export default function Settings() {
   const activeCategory = CATEGORIES.find(c => c.key === activeTab)
 
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: getSuppliers })
+  const { data: systemUsers = [] } = useQuery({ queryKey: ['systemUsers'], queryFn: getSystemUsers })
 
   const createSupplierMutation = useMutation({
     mutationFn: createSupplier,
@@ -180,6 +184,16 @@ export default function Settings() {
     onError: () => toast.error('Failed to archive supplier'),
   })
 
+  const forceLogoutMutation = useMutation({
+    mutationFn: forceLogoutUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['systemUsers'] })
+      setForceLogoutConfirm(null)
+      toast.success('User has been logged out')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to force logout'),
+  })
+
   return (
     <Layout>
       <div className="p-8">
@@ -190,7 +204,7 @@ export default function Settings() {
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings']].map(([val, label]) => (
+          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
             <button key={val} onClick={() => setMainTab(val)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -578,6 +592,56 @@ export default function Settings() {
             )}
           </div>
         )}
+
+        {/* User Management Tab */}
+        {mainTab === 'users' && (
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3 mb-4">
+              <ShieldAlert size={18} className="text-gray-500" />
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">User Management</h2>
+                <p className="text-xs text-gray-500">Force-logout a user to immediately invalidate their session.</p>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Email</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Roles</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {systemUsers.map(u => (
+                    <tr key={u.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{u.email}</td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {u.roles.map(r => r.role.name).join(', ') || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => setForceLogoutConfirm(u)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-md hover:bg-red-50 ml-auto">
+                          <LogOut size={13} /> Force Logout
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {systemUsers.length === 0 && (
+                    <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">No users found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Company Form Dialog */}
@@ -626,6 +690,30 @@ export default function Settings() {
                 disabled={!companyForm.company_name}
                 className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                 {editingCompany ? 'Update' : 'Add'} Company
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Logout Confirmation Dialog */}
+      {forceLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <LogOut size={20} className="text-red-500 flex-shrink-0" />
+              <h3 className="text-lg font-semibold text-gray-900">Force Logout</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              Immediately invalidate the session for <strong>{forceLogoutConfirm.email}</strong>? They will be logged out on their next request.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setForceLogoutConfirm(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={() => forceLogoutMutation.mutate(forceLogoutConfirm.id)}
+                disabled={forceLogoutMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50">
+                <LogOut size={14} /> {forceLogoutMutation.isPending ? 'Logging out…' : 'Force Logout'}
               </button>
             </div>
           </div>

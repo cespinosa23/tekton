@@ -23,6 +23,7 @@ def get_current_user(
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: int = payload.get("sub")
+        token_version: int = payload.get("tkv", 0)
         if user_id is None:
             raise credentials_exception
         token_data = TokenData(user_id=int(user_id))
@@ -31,6 +32,8 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == token_data.user_id).first()
     if user is None or not user.is_active:
+        raise credentials_exception
+    if token_version != user.token_version:
         raise credentials_exception
     return user
 

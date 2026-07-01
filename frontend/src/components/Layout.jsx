@@ -41,7 +41,7 @@ export default function Layout({ children }) {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900 leading-none">Tekton</p>
-              <p className="text-xs text-gray-400 mt-0.5">Electrical Services</p>
+              <p className="text-xs text-gray-400 mt-0.5">Ledger</p>
             </div>
           </div>
         </div>

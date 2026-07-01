@@ -12,6 +12,7 @@ class User(Base):
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     invite_token = Column(String(255), nullable=True)
     invite_token_expires = Column(DateTime, nullable=True)
+    token_version = Column(Integer, default=0, nullable=False, server_default='0')
 
     # Relationships
     employee = relationship("Employee", backref="user")
