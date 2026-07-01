@@ -213,7 +213,35 @@ export default function Quotations() {
     }
   }
 
+  // Returns an error message if the given step has unfilled required fields
+  const validateStep = (stepName) => {
+    if (stepName === 'Addressee') {
+      if (!quoteData.addressee_name?.trim()) return 'Client / Addressee Name is required'
+      if (!quoteData.subject?.trim()) return 'Subject is required'
+    }
+    return null
+  }
+
+  // Returns all missing required fields across the full quote
+  const validateForFinalize = () => {
+    const errors = []
+    if (!quoteData.addressee_name?.trim()) errors.push('Client / Addressee Name is required')
+    if (!quoteData.subject?.trim()) errors.push('Subject is required')
+    return errors
+  }
+
+  const handleNext = () => {
+    const error = validateStep(steps[step])
+    if (error) { toast.error(error); return }
+    setStep(s => Math.min(s + 1, steps.length - 1))
+  }
+
   const handleFinalize = async () => {
+    const errors = validateForFinalize()
+    if (errors.length > 0) {
+      errors.forEach(e => toast.error(e))
+      return
+    }
     const data = { ...quoteData, total_contract_cost: calcTotal(), status: 'Finalized' }
     if (editingQuote) {
       await updateMutation.mutateAsync({ id: editingQuote.id, data })
@@ -324,7 +352,7 @@ export default function Quotations() {
           <input value={quoteData.addressee_address} onChange={e => set('addressee_address', e.target.value)} className={inp} disabled={isLocked} />
         </Field>
         <div className="md:col-span-2">
-          <Field label="Subject">
+          <Field label="Subject" required>
             <input value={quoteData.subject} onChange={e => set('subject', e.target.value)}
               placeholder="e.g. Electrical Installation — Main Building" className={inp} disabled={isLocked} />
           </Field>
@@ -674,7 +702,7 @@ export default function Quotations() {
                 )}
               </>
             ) : (
-              <button onClick={() => setStep(s => Math.min(s + 1, steps.length - 1))}
+              <button onClick={handleNext}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600">
                 Next →
               </button>
