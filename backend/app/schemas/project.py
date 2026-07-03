@@ -44,6 +44,13 @@ class ProjectCreate(BaseModel):
     scope_others_status: str = "not_included"
     scope_others_date: Optional[date] = None
     scope_others_notes: Optional[str] = None
+    scope_encumbrance: bool = False
+    scope_wiring_permit_cost: Optional[float] = 0
+    scope_electrical_plan_cost: Optional[float] = 0
+    scope_installation_cost: Optional[float] = 0
+    scope_supply_cost: Optional[float] = 0
+    scope_meralco_cost: Optional[float] = 0
+    scope_others_cost: Optional[float] = 0
 
 class ProjectUpdate(ProjectCreate):
     owner_company_name: Optional[str] = None

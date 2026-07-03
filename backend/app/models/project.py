@@ -56,3 +56,12 @@ class Project(Base):
     scope_others_status = Column(String(50), default="not_included")
     scope_others_date = Column(Date, nullable=True)
     scope_others_notes = Column(String(500), nullable=True)
+
+    # Per-scope contract costs (encumbrance reuses the existing encumbrance column)
+    scope_encumbrance = Column(Boolean, default=False)
+    scope_wiring_permit_cost = Column(Numeric(12, 2), default=0)
+    scope_electrical_plan_cost = Column(Numeric(12, 2), default=0)
+    scope_installation_cost = Column(Numeric(12, 2), default=0)
+    scope_supply_cost = Column(Numeric(12, 2), default=0)
+    scope_meralco_cost = Column(Numeric(12, 2), default=0)
+    scope_others_cost = Column(Numeric(12, 2), default=0)

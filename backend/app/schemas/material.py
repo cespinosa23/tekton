@@ -7,10 +7,13 @@ class MaterialCreate(BaseModel):
     material_type: Optional[str] = None
     unit: str
     description: Optional[str] = None
+    min_stock: int = 0
+    max_stock: Optional[int] = None
 
 class MaterialUpdate(MaterialCreate):
     rating_size: Optional[str] = None
     unit: Optional[str] = None
+    min_stock: Optional[int] = None
 
 class MaterialRead(MaterialCreate):
     id: int

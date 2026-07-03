@@ -52,11 +52,26 @@ const emptyForm = {
   scope_wiring_permit: false, scope_electrical_plan: false,
   scope_installation: false, scope_cfei: false,
   scope_supply: false, scope_meralco: false,
+  scope_encumbrance: false,
   scope_others: false, scope_others_text: '',
+  scope_wiring_permit_cost: '', scope_electrical_plan_cost: '',
+  scope_installation_cost: '', scope_supply_cost: '',
+  scope_meralco_cost: '', scope_others_cost: '',
+  encumbrance: '',
   project_manager: '', referred_by: '',
   lgu: '', meralco_branch: '',
-  contract_cost: 0, encumbrance: 0, other_notes: '',
+  contract_cost: 0, other_notes: '',
 }
+
+const FORM_SCOPES = [
+  { key: 'wiring_permit', label: 'Wiring Permit / CFEI', costField: 'scope_wiring_permit_cost', mirror: 'cfei' },
+  { key: 'electrical_plan', label: 'Electrical Plan',    costField: 'scope_electrical_plan_cost' },
+  { key: 'supply',          label: 'Supply',             costField: 'scope_supply_cost' },
+  { key: 'installation',    label: 'Installation',       costField: 'scope_installation_cost' },
+  { key: 'meralco',         label: 'Meralco',            costField: 'scope_meralco_cost' },
+  { key: 'encumbrance',     label: 'Encumbrance',        costField: 'encumbrance' },
+  { key: 'others',          label: 'Others',             costField: 'scope_others_cost', hasRemarks: true },
+]
 
 // --- ProjectCard ---
 function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
@@ -249,14 +264,21 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
         scope_cfei: project.scope_cfei || false,
         scope_supply: project.scope_supply || false,
         scope_meralco: project.scope_meralco || false,
+        scope_encumbrance: project.scope_encumbrance || false,
         scope_others: project.scope_others || false,
         scope_others_text: project.scope_others_text || '',
+        scope_wiring_permit_cost: project.scope_wiring_permit_cost || '',
+        scope_electrical_plan_cost: project.scope_electrical_plan_cost || '',
+        scope_installation_cost: project.scope_installation_cost || '',
+        scope_supply_cost: project.scope_supply_cost || '',
+        scope_meralco_cost: project.scope_meralco_cost || '',
+        scope_others_cost: project.scope_others_cost || '',
+        encumbrance: project.encumbrance || '',
         project_manager: project.project_manager || '',
         referred_by: project.referred_by || '',
         lgu: project.lgu || '',
         meralco_branch: project.meralco_branch || '',
         contract_cost: project.contract_cost || 0,
-        encumbrance: project.encumbrance || 0,
         other_notes: project.other_notes || '',
       })
       setNoReferral(project.referred_by === 'N/A')
@@ -268,17 +290,75 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
 
   const getOptions = (category) => settings.filter(s => s.category === category && s.is_active)
 
+  const toggleScope = (key, checked, mirror) => {
+    const update = { [`scope_${key}`]: checked }
+    if (mirror) update[`scope_${mirror}`] = checked
+    setFormData(p => ({ ...p, ...update }))
+  }
+
   const handleSelectAll = (checked) => {
     setFormData(p => ({
       ...p,
-      scope_wiring_permit: checked, scope_electrical_plan: checked,
-      scope_installation: checked, scope_cfei: checked,
-      scope_supply: checked, scope_meralco: checked,
+      scope_wiring_permit: checked, scope_cfei: checked,
+      scope_electrical_plan: checked, scope_installation: checked,
+      scope_supply: checked, scope_meralco: checked, scope_encumbrance: checked,
     }))
   }
 
-  const allSelected = ['wiring_permit', 'electrical_plan', 'installation', 'cfei', 'supply', 'meralco']
-    .every(k => formData[`scope_${k}`])
+  const allSelected = FORM_SCOPES
+    .filter(s => !s.hasRemarks)
+    .every(s => formData[`scope_${s.key}`])
+
+  const formatCostDisplay = (raw) => {
+    if (raw === '' || raw === undefined || raw === null) return ''
+    const str = String(raw)
+    const parts = str.split('.')
+    const intFormatted = (parseInt(parts[0], 10) || 0).toLocaleString('en-US')
+    if (parts.length === 1) return intFormatted
+    return intFormatted + '.' + parts[1]  // preserve decimal as-typed (trailing zeros allowed while typing)
+  }
+
+  const normalizeCost = (raw) => {
+    if (raw === '' || raw === '.' || raw === undefined) return ''
+    const num = parseFloat(raw)
+    if (isNaN(num)) return ''
+    return String(num)  // parseFloat removes trailing zeros: "100.50" → "100.5"
+  }
+
+  const costInput = (field, enabled, hasError) => (
+    <input
+      type="text"
+      disabled={!enabled}
+      value={enabled ? formatCostDisplay(formData[field]) : ''}
+      placeholder="Required"
+      onChange={e => {
+        const raw = e.target.value.replace(/,/g, '')
+        if (!/^\d*\.?\d*$/.test(raw)) return
+        if (/^0\d/.test(raw)) return  // block leading zeros like "01..."
+        setFormData(p => ({ ...p, [field]: raw }))
+      }}
+      onBlur={() => {
+        if (!enabled) return
+        setFormData(p => ({ ...p, [field]: normalizeCost(p[field]) }))
+      }}
+      className={`w-36 px-3 py-1.5 text-right border rounded-md text-sm focus:outline-none focus:ring-2 ${
+        !enabled
+          ? 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed focus:ring-gray-400'
+          : hasError
+          ? 'border-red-400 bg-red-50 text-gray-900 focus:ring-red-300'
+          : 'border-gray-300 bg-white text-gray-900 focus:ring-gray-400'
+      }`}
+    />
+  )
+
+  const scopeCostValid = FORM_SCOPES.every(s =>
+    !formData[`scope_${s.key}`] || formData[s.costField] !== ''
+  )
+
+  const scopeTotal = FORM_SCOPES.reduce((sum, s) => {
+    if (!formData[`scope_${s.key}`]) return sum
+    return sum + (parseFloat(formData[s.costField]) || 0)
+  }, 0)
 
   if (!open) return null
 
@@ -290,6 +370,7 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
         <div className="px-6 py-4 space-y-5">
+
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -330,36 +411,62 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
             </div>
           </div>
 
-          {/* Scope */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Scope of Work</p>
-            <div className="mb-3 flex items-center gap-2">
-              <input type="checkbox" id="select_all" checked={allSelected}
-                onChange={e => handleSelectAll(e.target.checked)} className="w-4 h-4 rounded" />
-              <label htmlFor="select_all" className="text-sm font-medium text-gray-700 cursor-pointer">Select All (except Others)</label>
+          {/* Scope of Work */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Scope of Work</p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={allSelected} onChange={e => handleSelectAll(e.target.checked)}
+                  className="w-4 h-4 rounded accent-gray-800" />
+                <span className="text-xs text-gray-500 font-medium">Select All</span>
+              </label>
             </div>
-            <div className="grid grid-cols-3 gap-2 pl-2">
-              {SCOPES.filter(s => s.key !== 'others').map(scope => (
-                <div key={scope.key} className="flex items-center gap-2">
-                  <input type="checkbox" id={scope.key} checked={formData[`scope_${scope.key}`]}
-                    onChange={e => setFormData(p => ({ ...p, [`scope_${scope.key}`]: e.target.checked }))}
-                    className="w-4 h-4 rounded" />
-                  <label htmlFor={scope.key} className="text-sm text-gray-700 cursor-pointer">{scope.label}</label>
-                </div>
-              ))}
+            {/* Column labels */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+              <span className="text-xs text-gray-400">Scope</span>
+              <span className="text-xs text-gray-400 w-36 text-right">Contract Cost (₱)</span>
             </div>
-            <div className="flex items-start gap-2 pl-2 mt-2">
-              <input type="checkbox" id="others" checked={formData.scope_others}
-                onChange={e => setFormData(p => ({ ...p, scope_others: e.target.checked }))}
-                className="w-4 h-4 rounded mt-0.5" />
-              <div className="flex-1">
-                <label htmlFor="others" className="text-sm text-gray-700 cursor-pointer">Others</label>
-                {formData.scope_others && (
-                  <input placeholder="Specify other scope..." value={formData.scope_others_text}
-                    onChange={e => setFormData(p => ({ ...p, scope_others_text: e.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                )}
-              </div>
+            {/* Scope rows */}
+            <div className="divide-y divide-gray-100">
+              {FORM_SCOPES.map(scope => {
+                const checked = formData[`scope_${scope.key}`]
+                const costError = checked && formData[scope.costField] === ''
+                return (
+                  <div key={scope.key} className={`px-4 py-2.5 transition-colors ${checked ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <div className="flex items-center justify-between gap-4">
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                        <input type="checkbox" checked={checked}
+                          onChange={e => toggleScope(scope.key, e.target.checked, scope.mirror)}
+                          className="w-4 h-4 rounded accent-gray-800 flex-shrink-0" />
+                        <span className={`text-sm ${checked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                          {scope.label}
+                        </span>
+                        {costError && <span className="text-xs text-red-500 ml-1">required</span>}
+                      </label>
+                      {costInput(scope.costField, checked, costError)}
+                    </div>
+                    {/* Others remarks */}
+                    {scope.hasRemarks && checked && (
+                      <div className="mt-2 ml-6">
+                        <input
+                          placeholder="Specify scope / remarks..."
+                          value={formData.scope_others_text}
+                          onChange={e => setFormData(p => ({ ...p, scope_others_text: e.target.value }))}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 text-gray-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {/* Total */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-900 text-white">
+              <span className="text-sm font-semibold">Total Contract Cost</span>
+              <span className="text-base font-bold">
+                ₱{scopeTotal.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
 
@@ -399,32 +506,6 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
             </div>
           </div>
 
-          {/* Financial */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Contract Cost (₱)</label>
-              <input type="text" value={formData.contract_cost === 0 ? '' : Number(formData.contract_cost).toLocaleString('en-US')}
-                placeholder="0.00"
-                onChange={e => {
-                  const raw = e.target.value.replace(/,/g, '');
-                  if (!/^\d*\.?\d*$/.test(raw)) return;
-                  if (/^0\d/.test(raw)) return;
-                  setFormData(p => ({ ...p, contract_cost: raw === '' ? 0 : parseFloat(raw) || 0 }));
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Encumbrance (₱)</label>
-              <input type="text" value={formData.encumbrance === 0 ? '' : Number(formData.encumbrance).toLocaleString('en-US')}
-                placeholder="0.00"
-                onChange={e => {
-                  const raw = e.target.value.replace(/,/g, '');
-                  if (!/^\d*\.?\d*$/.test(raw)) return;
-                  if (/^0\d/.test(raw)) return;
-                  setFormData(p => ({ ...p, encumbrance: raw === '' ? 0 : parseFloat(raw) || 0 }));
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />            </div>
-          </div>
-
           {/* Notes */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Other Notes</label>
@@ -433,10 +514,11 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
           </div>
         </div>
+
         <div className="flex justify-end gap-2 px-6 py-4 border-t">
           <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
           <button onClick={() => onSave(formData)}
-            disabled={!formData.owner_company_name || !formData.address || !formData.project_name || !formData.referred_by}
+            disabled={!formData.owner_company_name || !formData.address || !formData.project_name || !formData.referred_by || !scopeCostValid}
             className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
             {project ? 'Update' : 'Create'} Project
           </button>
@@ -455,6 +537,7 @@ export default function Projects() {
   const [deleteProject, setDeleteProject] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('newest')
   const [activeTab, setActiveTab] = useState('progress')
 
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
@@ -479,10 +562,16 @@ export default function Projects() {
   })
 
   const handleSave = (data) => {
+    const contractCost = FORM_SCOPES
+      .filter(s => s.key !== 'encumbrance' && s.key !== 'others')
+      .reduce((sum, s) => sum + (data[`scope_${s.key}`] ? parseFloat(data[s.costField]) || 0 : 0), 0)
+      + (data.scope_others ? parseFloat(data.scope_others_cost) || 0 : 0)
+    const encumbranceVal = data.scope_encumbrance ? parseFloat(data.encumbrance) || 0 : 0
+    const payload = { ...data, contract_cost: contractCost, encumbrance: encumbranceVal }
     if (editingProject) {
-      updateMutation.mutate({ id: editingProject.id, data })
+      updateMutation.mutate({ id: editingProject.id, data: payload })
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate(payload)
     }
   }
 
@@ -504,6 +593,20 @@ export default function Projects() {
       p.address?.toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
     return matchesSearch && matchesStatus
+  })
+
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case 'newest':    return b.id - a.id
+      case 'oldest':    return a.id - b.id
+      case 'name_az':   return (a.project_name || '').localeCompare(b.project_name || '')
+      case 'name_za':   return (b.project_name || '').localeCompare(a.project_name || '')
+      case 'cost_high': return (parseFloat(b.contract_cost) + parseFloat(b.encumbrance || 0)) - (parseFloat(a.contract_cost) + parseFloat(a.encumbrance || 0))
+      case 'cost_low':  return (parseFloat(a.contract_cost) + parseFloat(a.encumbrance || 0)) - (parseFloat(b.contract_cost) + parseFloat(b.encumbrance || 0))
+      case 'date_new':  return new Date(b.quotation_date || 0) - new Date(a.quotation_date || 0)
+      case 'date_old':  return new Date(a.quotation_date || 0) - new Date(b.quotation_date || 0)
+      default:          return b.id - a.id
+    }
   })
 
   return (
@@ -536,6 +639,17 @@ export default function Projects() {
             <option>Active</option><option>Inactive</option><option>Completed</option>
             <option>On Hold</option><option>Cancelled</option>
           </select>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
+            <option value="newest">Newest Added</option>
+            <option value="oldest">Oldest Added</option>
+            <option value="date_new">Quote Date ↓</option>
+            <option value="date_old">Quote Date ↑</option>
+            <option value="name_az">Name A → Z</option>
+            <option value="name_za">Name Z → A</option>
+            <option value="cost_high">Cost: High → Low</option>
+            <option value="cost_low">Cost: Low → High</option>
+          </select>
         </div>
 
         {/* Tabs */}
@@ -554,14 +668,14 @@ export default function Projects() {
             <div className="space-y-4">
               {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : sortedFiltered.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Search size={40} className="mx-auto mb-3 opacity-50" />
               <p>{search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : 'Create your first project to get started'}</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {filtered.map(project => (
+              {sortedFiltered.map(project => (
                 <ProjectCard key={project.id} project={project}
                   onEdit={p => { setEditingProject(p); setFormOpen(true) }}
                   onDelete={setDeleteProject}
@@ -572,7 +686,7 @@ export default function Projects() {
         )}
 
         {/* Payments Tab */}
-        {activeTab === 'payments' && <PaymentsView projects={filtered} />}
+        {activeTab === 'payments' && <PaymentsView projects={sortedFiltered} />}
 
         {/* Form */}
         <ProjectForm open={formOpen} onClose={() => { setFormOpen(false); setEditingProject(null) }}

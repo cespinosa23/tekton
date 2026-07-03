@@ -6,7 +6,6 @@ from email.utils import formataddr
 from app.core.config import settings
 
 _SMTP_SERVER = "mail.spacemail.com"
-_SMTP_PORT = 465
 _DISPLAY_NAME = "Tekton Ledger"
 
 
@@ -16,15 +15,24 @@ def _send(to: str, subject: str, html: str, plain: str):
     msg["To"] = to
     msg["Subject"] = subject
     msg["X-Mailer"] = "Tekton Ledger Mailer"
-    # Plain text first — mail clients prefer the last matching part,
-    # but including plain text is essential for spam score.
     msg.attach(MIMEText(plain, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
 
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(_SMTP_SERVER, _SMTP_PORT, context=context) as server:
-        server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
-        server.sendmail(settings.MAIL_FROM, to, msg.as_string())
+    port = settings.MAIL_PORT
+    if port == 465:
+        # Implicit SSL
+        with smtplib.SMTP_SSL(_SMTP_SERVER, port, context=context) as server:
+            server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
+            server.sendmail(settings.MAIL_FROM, to, msg.as_string())
+    else:
+        # STARTTLS (port 587)
+        with smtplib.SMTP(_SMTP_SERVER, port) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+            server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
+            server.sendmail(settings.MAIL_FROM, to, msg.as_string())
 
 
 def send_invite_email(email: str, token: str):

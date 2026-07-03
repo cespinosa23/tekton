@@ -8,7 +8,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 
-const emptyForm = { rating_size: '', material_type: '', unit: '', description: '' }
+const emptyForm = { rating_size: '', material_type: '', unit: '', description: '', min_stock: '', max_stock: '' }
 
 export default function Materials() {
   const { canWrite } = usePermissions()
@@ -65,6 +65,8 @@ export default function Materials() {
       material_type: mat.material_type || '',
       unit: mat.unit || '',
       description: mat.description || '',
+      min_stock: mat.min_stock ?? '',
+      max_stock: mat.max_stock ?? '',
     })
     setFormOpen(true)
   }
@@ -75,10 +77,15 @@ export default function Materials() {
       (!editingMaterial || m.id !== editingMaterial.id)
     )
     if (isDuplicate) { toast.error('A material with this name already exists.'); return }
+    const payload = {
+      ...formData,
+      min_stock: formData.min_stock === '' ? 0 : parseInt(formData.min_stock, 10),
+      max_stock: formData.max_stock === '' ? null : parseInt(formData.max_stock, 10),
+    }
     if (editingMaterial) {
-      updateMutation.mutate({ id: editingMaterial.id, data: formData })
+      updateMutation.mutate({ id: editingMaterial.id, data: payload })
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 
@@ -135,14 +142,15 @@ export default function Materials() {
                 <SortableHeader label="Material / Specs" field="rating_size" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Unit" field="unit" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Min / Max Stock</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
-                <tr><td colSpan={4} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={5} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-8 text-gray-400">No materials found</td></tr>
+                <tr><td colSpan={5} className="text-center py-8 text-gray-400">No materials found</td></tr>
               ) : sorted.map(mat => (
                 <tr key={mat.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -157,6 +165,11 @@ export default function Materials() {
                     ) : '-'}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{mat.unit || '-'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="text-xs text-gray-700 font-medium">{mat.min_stock ?? 0}</span>
+                    <span className="text-xs text-gray-400 mx-1">/</span>
+                    <span className="text-xs text-gray-500">{mat.max_stock ?? '—'}</span>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {canWrite('materials') && (
@@ -207,6 +220,24 @@ export default function Materials() {
                     {getOptions('Material Unit').map(o => <option key={o.id} value={o.value}>{o.value}</option>)}
                   </select>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Min Stock *</label>
+                    <input type="number" min="0" value={formData.min_stock}
+                      onChange={e => setFormData(p => ({ ...p, min_stock: e.target.value }))}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <p className="text-xs text-gray-400 mt-1">Out of stock threshold</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Max Stock</label>
+                    <input type="number" min="0" value={formData.max_stock}
+                      onChange={e => setFormData(p => ({ ...p, max_stock: e.target.value }))}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <p className="text-xs text-gray-400 mt-1">Maximum capacity</p>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
                   <textarea value={formData.description} rows={3}
@@ -216,7 +247,7 @@ export default function Materials() {
               </div>
               <div className="flex justify-end gap-2 px-6 py-4 border-t">
                 <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                <button onClick={handleSave} disabled={!formData.rating_size || !formData.unit}
+                <button onClick={handleSave} disabled={!formData.rating_size || !formData.unit || formData.min_stock === ''}
                   className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                   {editingMaterial ? 'Update' : 'Add'} Material
                 </button>

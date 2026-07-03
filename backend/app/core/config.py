@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     MAIL_FROM: str
+    MAIL_PORT: int = 465
     FRONTEND_URL: str = "http://localhost:3000"
     # Comma-separated list of allowed CORS origins
     ALLOWED_ORIGINS: str = "http://localhost:5173"

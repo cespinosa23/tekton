@@ -10,6 +10,8 @@ class Material(Base):
     material_type = Column(String(100), nullable=True)
     unit = Column(String(50), nullable=False)
     description = Column(String(500), nullable=True)
+    min_stock = Column(Integer, nullable=False, server_default='0')
+    max_stock = Column(Integer, nullable=True)
     archived = Column(Boolean, default=False)
     archived_by = Column(String(255), nullable=True)
     

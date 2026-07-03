@@ -36,6 +36,7 @@ export default function Inventory() {
         material_name: mat?.rating_size || mat?.name || 'Unknown',
         material_type: mat?.material_type || '',
         unit: mat?.unit || '',
+        min_stock: mat?.min_stock ?? 0,
         latest_unit_cost: parseFloat(rec.latest_unit_cost) || 0,
         starting_quantity: 0,
         quantity_in: 0,
@@ -55,6 +56,7 @@ export default function Inventory() {
           material_name: mat.rating_size || mat.name || '',
           material_type: mat.material_type || '',
           unit: mat.unit || '',
+          min_stock: mat.min_stock ?? 0,
           latest_unit_cost: 0,
           starting_quantity: 0,
           quantity_in: 0,
@@ -83,6 +85,7 @@ export default function Inventory() {
             material_name: material?.rating_size || mat.material_name || 'Unknown',
             material_type: material?.material_type || '',
             unit: mat.unit || material?.unit || '',
+            min_stock: material?.min_stock ?? 0,
             latest_unit_cost: 0,
             starting_quantity: 0,
             quantity_in: 0,
@@ -146,7 +149,7 @@ export default function Inventory() {
 
   const totalItems = filtered.reduce((sum, i) => sum + i.balance, 0)
   const totalValue = filtered.reduce((sum, i) => sum + i.total_value, 0)
-  const lowStockItems = filtered.filter(i => i.balance <= 0).length
+  const lowStockItems = filtered.filter(i => i.balance < i.min_stock).length
 
   return (
     <Layout>
@@ -227,13 +230,14 @@ export default function Inventory() {
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">In</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Out</th>
                 <SortableHeader label="Balance" field="balance" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit Cost</th>
                 <SortableHeader label="Total Value" field="total_value" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-8 text-gray-400">No inventory data available</td></tr>
+                <tr><td colSpan={10} className="text-center py-8 text-gray-400">No inventory data available</td></tr>
               ) : sorted.map(item => (
                 <tr key={`${item.material_id}_${item.brand}`} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -264,9 +268,23 @@ export default function Inventory() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${item.balance <= 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      item.balance <= 0
+                        ? 'bg-red-100 text-red-700'
+                        : item.balance < item.min_stock
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
                       {item.balance}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {item.balance <= 0
+                      ? <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">Out of Stock</span>
+                      : item.balance < item.min_stock
+                      ? <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-medium">Low Stock</span>
+                      : <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-medium">OK</span>
+                    }
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">
                     ₱{parseFloat(item.latest_unit_cost).toLocaleString()}

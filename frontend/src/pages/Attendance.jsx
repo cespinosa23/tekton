@@ -7,7 +7,7 @@ import {
   getAttendance, getEmployees, getProjects,
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
-import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
@@ -78,6 +78,10 @@ export default function Attendance() {
   const [employeeFilter, setEmployeeFilter] = useState('all')
   const [projectFilter, setProjectFilter] = useState('all')
   const [formData, setFormData] = useState(emptyForm)
+  const [selectedEmployees, setSelectedEmployees] = useState([])
+  const [empSearch, setEmpSearch] = useState('')
+  const [splitRecord, setSplitRecord] = useState(null)
+  const [splitFormData, setSplitFormData] = useState(emptyForm)
 
   const { data: attendance = [], isLoading } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
   const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
@@ -85,7 +89,6 @@ export default function Attendance() {
 
   const createMutation = useMutation({
     mutationFn: createAttendance,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['attendance'] }); closeForm(); toast.success('Attendance logged') },
     onError: () => toast.error('Failed to log attendance'),
   })
 
@@ -101,7 +104,7 @@ export default function Attendance() {
     onError: () => toast.error('Failed to delete record'),
   })
 
-  const closeForm = () => { setFormOpen(false); setEditingAttendance(null); setFormData(emptyForm) }
+  const closeForm = () => { setFormOpen(false); setEditingAttendance(null); setFormData(emptyForm); setSelectedEmployees([]); setEmpSearch('') }
 
   const handleEmployeeChange = (e) => {
     const emp = employees.find(x => x.id === parseInt(e.target.value))
@@ -160,17 +163,82 @@ export default function Attendance() {
     setFormOpen(true)
   }
 
-  const handleSave = () => {
-    const payload = {
-      ...formData,
-      employee_id: parseInt(formData.employee_id),
-      project_id: formData.project_id ? parseInt(formData.project_id) : null,
-    }
+  const toggleEmployee = (empId) =>
+    setSelectedEmployees(prev =>
+      prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
+    )
+
+  const handleSave = async () => {
     if (editingAttendance) {
+      const payload = {
+        ...formData,
+        employee_id: parseInt(formData.employee_id),
+        project_id: formData.project_id ? parseInt(formData.project_id) : null,
+      }
       updateMutation.mutate({ id: editingAttendance.id, data: payload })
     } else {
-      createMutation.mutate(payload)
+      if (selectedEmployees.length === 0) { toast.error('Select at least one employee'); return }
+      try {
+        await Promise.all(
+          selectedEmployees.map(empId => {
+            const emp = employees.find(e => e.id === empId)
+            const base = {
+              ...formData,
+              employee_id: empId,
+              employee_name: emp ? `${emp.first_name} ${emp.last_name}` : '',
+              project_id: formData.project_id ? parseInt(formData.project_id) : null,
+            }
+            return createMutation.mutateAsync(calculateSalaries(base, emp))
+          })
+        )
+        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        closeForm()
+        toast.success(`Attendance logged for ${selectedEmployees.length} employee(s)`)
+      } catch {
+        toast.error('Failed to log attendance')
+      }
     }
+  }
+
+  const openSplit = (att, currentTimeOut) => {
+    setSplitRecord(att)
+    setSplitFormData({
+      ...emptyForm,
+      employee_id: att.employee_id,
+      employee_name: att.employee_name,
+      date: att.date,
+      is_office_based: false,
+      regular_time_in: currentTimeOut || att.regular_time_out || '',
+      regular_time_out: '',
+    })
+  }
+
+  const updateSplitField = (field, value, isRegular = false) => {
+    setSplitFormData(prev => {
+      const updated = { ...prev, [field]: value }
+      if (field === 'regular_time_in' || field === 'regular_time_out')
+        updated.regular_hours = calculateHours(updated.regular_time_in, updated.regular_time_out, true)
+      if (field === 'overtime_time_in' || field === 'overtime_time_out')
+        updated.overtime_hours = calculateHours(updated.overtime_time_in, updated.overtime_time_out)
+      return calculateSalaries(updated, employees.find(e => e.id === prev.employee_id))
+    })
+  }
+
+  const handleSplitSave = () => {
+    const emp = employees.find(e => e.id === splitRecord.employee_id)
+    const payload = calculateSalaries({
+      ...splitFormData,
+      employee_id: parseInt(splitFormData.employee_id),
+      project_id: splitFormData.project_id ? parseInt(splitFormData.project_id) : null,
+    }, emp)
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        setSplitRecord(null)
+        toast.success('Split assignment logged')
+      },
+      onError: () => toast.error('Failed to log split assignment'),
+    })
   }
 
   const getWeekDays = () => {
@@ -212,10 +280,15 @@ export default function Attendance() {
 
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'date', 'desc')
 
+  const loggedOnDate = new Set(
+    attendance.filter(a => a.date === formData.date).map(a => a.employee_id)
+  )
+
   const summaryRegularHours = filtered.reduce((s, a) => s + (parseFloat(a.regular_hours) || 0), 0)
   const summaryOTHours = filtered.reduce((s, a) => s + (parseFloat(a.overtime_hours) || 0), 0)
   const summaryTotalSalary = filtered.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
   const summaryHeadcount = new Set(filtered.map(a => a.employee_id)).size
+  const summaryDaysPresent = parseFloat((summaryRegularHours / 8).toFixed(1))
 
   return (
     <Layout>
@@ -285,7 +358,7 @@ export default function Attendance() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className={`grid grid-cols-2 gap-4 mb-6 ${viewMode !== 'day' && employeeFilter !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -295,6 +368,18 @@ export default function Attendance() {
               <div className="bg-violet-500 p-2 rounded-lg"><Users size={18} className="text-white" /></div>
             </div>
           </div>
+          {viewMode !== 'day' && employeeFilter !== 'all' && (
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Days Present</p>
+                  <p className="text-2xl font-bold text-gray-900">{summaryDaysPresent}d</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Based on regular hrs</p>
+                </div>
+                <div className="bg-teal-500 p-2 rounded-lg"><CalendarCheck size={18} className="text-white" /></div>
+              </div>
+            </div>
+          )}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -431,39 +516,111 @@ export default function Attendance() {
                   </label>
                 </div>
 
-                {/* Employee & Project */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Employee *</label>
-                    <select value={formData.employee_id} onChange={handleEmployeeChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                      <option value="">Select employee...</option>
-                      {employees.map(emp => (
-                        <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {!formData.is_office_based && (
+                {editingAttendance ? (
+                  /* ── EDIT MODE: single employee, project editable ── */
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
-                      <select value={formData.project_id} onChange={handleProjectChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                        <option value="">Select project...</option>
-                        {projects.map(proj => (
-                          <option key={proj.id} value={proj.id}>{proj.project_name}</option>
-                        ))}
-                      </select>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Employee</label>
+                      <div className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-700">
+                        {formData.employee_name}
+                      </div>
                     </div>
-                  )}
-                </div>
+                    {!formData.is_office_based && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
+                        <select value={formData.project_id} onChange={handleProjectChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                          <option value="">Select project...</option>
+                          {projects.map(proj => (
+                            <option key={proj.id} value={proj.id}>{proj.project_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* ── CREATE MODE: project first, then date, then multi-employee ── */
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      {!formData.is_office_based && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
+                          <select value={formData.project_id} onChange={handleProjectChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                            <option value="">Select project...</option>
+                            {projects.map(proj => (
+                              <option key={proj.id} value={proj.id}>{proj.project_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className={formData.is_office_based ? 'col-span-2' : ''}>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
+                        <input type="date" value={formData.date}
+                          onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                      </div>
+                    </div>
 
-                {/* Date */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
-                  <input type="date" value={formData.date}
-                    onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-medium text-gray-700">
+                          Employees * <span className="text-gray-400 font-normal">({selectedEmployees.length} selected)</span>
+                        </label>
+                        {selectedEmployees.length > 0 && (
+                          <button type="button" onClick={() => setSelectedEmployees([])}
+                            className="text-xs text-gray-400 hover:text-gray-600">Clear all</button>
+                        )}
+                      </div>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="relative border-b border-gray-200">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            value={empSearch}
+                            onChange={e => setEmpSearch(e.target.value)}
+                            placeholder="Search employees..."
+                            className="w-full pl-8 pr-3 py-2 text-sm focus:outline-none"
+                          />
+                        </div>
+                        <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+                          {employees
+                            .filter(emp => `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(empSearch.toLowerCase()))
+                            .map(emp => {
+                              const alreadyLogged = loggedOnDate.has(emp.id)
+                              const isSelected = selectedEmployees.includes(emp.id)
+                              return (
+                                <label key={emp.id}
+                                  className={`flex items-center gap-3 px-4 py-2.5 ${alreadyLogged ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:bg-gray-50'}`}>
+                                  <input type="checkbox"
+                                    checked={isSelected}
+                                    disabled={alreadyLogged}
+                                    onChange={() => toggleEmployee(emp.id)}
+                                    className="w-4 h-4 rounded accent-gray-900" />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
+                                    {emp.position && <p className="text-xs text-gray-400">{emp.position}</p>}
+                                  </div>
+                                  {alreadyLogged && (
+                                    <span className="text-xs text-amber-600 font-medium">Already logged</span>
+                                  )}
+                                </label>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Date (edit mode only — create mode has it above) */}
+                {editingAttendance && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
+                    <input type="date" value={formData.date}
+                      onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  </div>
+                )}
 
                 {/* Regular Hours */}
                 <div className="border rounded-lg p-4 bg-gray-50">
@@ -487,10 +644,13 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" />
                     </div>
                   </div>
-                  {formData.regular_salary > 0 && (
+                  {editingAttendance && formData.regular_salary > 0 && (
                     <p className="mt-2 text-sm text-gray-600">
                       Regular Salary: <span className="font-semibold text-emerald-600">₱{parseFloat(formData.regular_salary).toLocaleString()}</span>
                     </p>
+                  )}
+                  {!editingAttendance && (
+                    <p className="mt-2 text-xs text-gray-400">Salary calculated per employee's rate on save</p>
                   )}
                 </div>
 
@@ -527,15 +687,15 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                     </div>
                   </div>
-                  {formData.overtime_salary > 0 && (
+                  {editingAttendance && formData.overtime_salary > 0 && (
                     <p className="mt-3 text-sm text-purple-700">
                       Overtime Salary ({formData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(formData.overtime_salary).toLocaleString()}</span>
                     </p>
                   )}
                 </div>
 
-                {/* Total */}
-                {formData.total_salary > 0 && (
+                {/* Total (edit mode only) */}
+                {editingAttendance && formData.total_salary > 0 && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
                     <span className="font-medium text-gray-900">Total Salary:</span>
                     <span className="text-2xl font-bold text-emerald-600">₱{parseFloat(formData.total_salary).toLocaleString()}</span>
@@ -563,12 +723,199 @@ export default function Attendance() {
                 </div>
               </div>
 
+              <div className="flex justify-between gap-2 px-6 py-4 border-t">
+                <div>
+                  {editingAttendance && (
+                    <button onClick={async () => {
+                      const att = editingAttendance
+                      const t = formData.regular_time_out
+                      try {
+                        await updateMutation.mutateAsync({
+                          id: att.id,
+                          data: {
+                            ...formData,
+                            employee_id: parseInt(formData.employee_id),
+                            project_id: formData.project_id ? parseInt(formData.project_id) : null,
+                          }
+                        })
+                        openSplit(att, t)
+                      } catch { /* error handled by mutation */ }
+                    }}
+                      className="flex items-center gap-2 px-4 py-2 text-sm border border-teal-400 text-teal-700 rounded-md hover:bg-teal-50">
+                      <Plus size={15} /> Add Split Assignment
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                  <button onClick={handleSave}
+                    disabled={
+                      editingAttendance
+                        ? (!formData.is_office_based && !formData.project_id) || !formData.date
+                        : selectedEmployees.length === 0 || (!formData.is_office_based && !formData.project_id) || !formData.date
+                    }
+                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
+                    {editingAttendance ? 'Update' : `Log Attendance${selectedEmployees.length > 1 ? ` (${selectedEmployees.length})` : ''}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Split Assignment Dialog */}
+        {splitRecord && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+              <div className="flex items-center justify-between px-6 py-4 border-b">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Add Split Assignment</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {splitRecord.employee_name} · {splitRecord.date} · continues from {splitFormData.regular_time_in || splitRecord.regular_time_out}
+                  </p>
+                </div>
+                <button onClick={() => setSplitRecord(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              </div>
+              <div className="px-6 py-4 space-y-5">
+
+                {/* Employee + Date locked */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Employee</label>
+                    <div className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-700">
+                      {splitRecord.employee_name}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                    <div className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-700">
+                      {splitRecord.date}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Office-based toggle */}
+                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <input type="checkbox" id="split_office_based" checked={splitFormData.is_office_based}
+                    onChange={e => setSplitFormData(prev => ({
+                      ...prev, is_office_based: e.target.checked,
+                      project_id: e.target.checked ? '' : prev.project_id,
+                      project_name: e.target.checked ? '' : prev.project_name,
+                    }))}
+                    className="w-4 h-4 rounded" />
+                  <label htmlFor="split_office_based" className="flex items-center gap-2 text-sm font-medium text-blue-800 cursor-pointer">
+                    <Building2 size={15} /> Office-based assignment
+                  </label>
+                </div>
+
+                {/* Project selector (hidden when office-based) */}
+                {!splitFormData.is_office_based && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
+                    <select value={splitFormData.project_id}
+                      onChange={e => {
+                        const proj = projects.find(x => x.id === parseInt(e.target.value))
+                        setSplitFormData(prev => ({ ...prev, project_id: proj?.id || '', project_name: proj?.project_name || '' }))
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Select project...</option>
+                      {projects.map(proj => (
+                        <option key={proj.id} value={proj.id}>{proj.project_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Regular Hours */}
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Regular Hours</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
+                      <input type="time" value={splitFormData.regular_time_in}
+                        onChange={e => updateSplitField('regular_time_in', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Time Out</label>
+                      <input type="time" value={splitFormData.regular_time_out}
+                        onChange={e => updateSplitField('regular_time_out', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Hours</label>
+                      <input type="number" value={splitFormData.regular_hours} readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" />
+                    </div>
+                  </div>
+                  {splitFormData.regular_salary > 0 && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Regular Salary: <span className="font-semibold text-emerald-600">₱{parseFloat(splitFormData.regular_salary).toLocaleString()}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Overtime Hours */}
+                <div className="border rounded-lg p-4 bg-purple-50">
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Overtime Hours</p>
+                  <div className="grid grid-cols-3 gap-4 mb-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
+                      <input type="time" value={splitFormData.overtime_time_in}
+                        onChange={e => updateSplitField('overtime_time_in', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Time Out</label>
+                      <input type="time" value={splitFormData.overtime_time_out}
+                        onChange={e => updateSplitField('overtime_time_out', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Hours</label>
+                      <input type="number" value={splitFormData.overtime_hours} readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">OT Multiplier</label>
+                      <input type="number" step="0.01" value={splitFormData.overtime_multiplier}
+                        onChange={e => setSplitFormData(prev => {
+                          const updated = { ...prev, overtime_multiplier: parseFloat(e.target.value) || 1.15 }
+                          return calculateSalaries(updated, employees.find(x => x.id === prev.employee_id))
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                  </div>
+                  {splitFormData.overtime_salary > 0 && (
+                    <p className="mt-3 text-sm text-purple-700">
+                      Overtime Salary ({splitFormData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(splitFormData.overtime_salary).toLocaleString()}</span>
+                    </p>
+                  )}
+                </div>
+
+                {splitFormData.total_salary > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
+                    <span className="font-medium text-gray-900">Total Salary:</span>
+                    <span className="text-2xl font-bold text-emerald-600">₱{parseFloat(splitFormData.total_salary).toLocaleString()}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
+                  <textarea value={splitFormData.remarks} rows={2}
+                    onChange={e => setSplitFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 px-6 py-4 border-t">
-                <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                <button onClick={handleSave}
-                  disabled={!formData.employee_id || (!formData.is_office_based && !formData.project_id) || !formData.date}
-                  className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
-                  {editingAttendance ? 'Update' : 'Log'} Attendance
+                <button onClick={() => setSplitRecord(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                <button onClick={handleSplitSave}
+                  disabled={(!splitFormData.is_office_based && !splitFormData.project_id) || !splitFormData.regular_time_in || !splitFormData.regular_time_out}
+                  className="px-4 py-2 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800 disabled:opacity-50">
+                  Log Split Assignment
                 </button>
               </div>
             </div>
