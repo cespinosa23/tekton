@@ -184,7 +184,7 @@ export default function Employees() {
       phone: emp.phone || '',
       email: emp.email || '',
       status: emp.status || 'Active',
-      role: emp.role || '',
+      role: employeeRoles[emp.id]?.roles?.[0] || emp.role || '',
       department: emp.department || '',
       id_number: emp.id_number || '',
     })
