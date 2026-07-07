@@ -9,6 +9,7 @@ import {
 } from '../api/attendance'
 import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 
@@ -69,6 +70,8 @@ const calculateSalaries = (data, employee) => {
 
 export default function Attendance() {
   const { canWrite } = usePermissions()
+  const { hasRole } = useAuth()
+  const hideSalary = hasRole('Project Coordinator') || hasRole('Project Manager')
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingAttendance, setEditingAttendance] = useState(null)
@@ -398,6 +401,7 @@ export default function Attendance() {
               <div className="bg-purple-500 p-2 rounded-lg"><Clock size={18} className="text-white" /></div>
             </div>
           </div>
+          {!hideSalary && (
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -407,6 +411,7 @@ export default function Attendance() {
               <div className="bg-emerald-500 p-2 rounded-lg"><DollarSign size={18} className="text-white" /></div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Table */}
@@ -419,16 +424,16 @@ export default function Attendance() {
                 <SortableHeader label="Project" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Regular Hours" field="regular_hours" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="OT Hours" field="overtime_hours" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                <SortableHeader label="Salary" field="total_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                {!hideSalary && <SortableHeader label="Salary" field="total_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />}
                 <SortableHeader label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
-                <tr><td colSpan={8} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={hideSalary ? 7 : 8} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-8 text-gray-400">No attendance records for this period</td></tr>
+                <tr><td colSpan={hideSalary ? 7 : 8} className="text-center py-8 text-gray-400">No attendance records for this period</td></tr>
               ) : sorted.map(att => (
                 <tr key={att.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-600">
@@ -459,12 +464,14 @@ export default function Attendance() {
                       </div>
                     ) : '-'}
                   </td>
+                  {!hideSalary && (
                   <td className="px-4 py-3 text-right">
                     <p className="font-semibold text-emerald-600">₱{(parseFloat(att.total_salary) || 0).toLocaleString()}</p>
                     {att.regular_salary > 0 && att.overtime_salary > 0 && (
                       <p className="text-xs text-gray-400">Reg: ₱{parseFloat(att.regular_salary).toLocaleString()} + OT: ₱{parseFloat(att.overtime_salary).toLocaleString()}</p>
                     )}
                   </td>
+                  )}
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[att.status] || STATUS_COLORS.Present}`}>
                       {att.status}
@@ -644,7 +651,7 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" />
                     </div>
                   </div>
-                  {editingAttendance && formData.regular_salary > 0 && (
+                  {!hideSalary && editingAttendance && formData.regular_salary > 0 && (
                     <p className="mt-2 text-sm text-gray-600">
                       Regular Salary: <span className="font-semibold text-emerald-600">₱{parseFloat(formData.regular_salary).toLocaleString()}</span>
                     </p>
@@ -687,7 +694,7 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                     </div>
                   </div>
-                  {editingAttendance && formData.overtime_salary > 0 && (
+                  {!hideSalary && editingAttendance && formData.overtime_salary > 0 && (
                     <p className="mt-3 text-sm text-purple-700">
                       Overtime Salary ({formData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(formData.overtime_salary).toLocaleString()}</span>
                     </p>
@@ -695,7 +702,7 @@ export default function Attendance() {
                 </div>
 
                 {/* Total (edit mode only) */}
-                {editingAttendance && formData.total_salary > 0 && (
+                {!hideSalary && editingAttendance && formData.total_salary > 0 && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
                     <span className="font-medium text-gray-900">Total Salary:</span>
                     <span className="text-2xl font-bold text-emerald-600">₱{parseFloat(formData.total_salary).toLocaleString()}</span>

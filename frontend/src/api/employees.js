@@ -33,3 +33,13 @@ export const getEmployeeUsers = async () => {
   const { data } = await client.get('/users/employee-roles')
   return data
 }
+
+export const updateEmployeeRoles = async ({ employeeId, roles }) => {
+  const { data } = await client.put(`/users/by-employee/${employeeId}/roles`, { roles })
+  return data
+}
+
+export const sendPasswordReset = async (email) => {
+  const { data } = await client.post(`/users/forgot-password?email=${encodeURIComponent(email)}`)
+  return data
+}

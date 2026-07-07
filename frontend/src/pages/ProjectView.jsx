@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
+import { getEmployees } from '../api/employees'
+import { useAuth } from '../context/AuthContext'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
@@ -46,11 +48,23 @@ export default function ProjectView() {
   const [scopeNotes, setScopeNotes] = useState({})
   const [selectedTx, setSelectedTx] = useState(null)
 
+  const { isAdmin, hasRole, user } = useAuth()
+  const hideFinancials = hasRole('Project Coordinator') || hasRole('Project Manager')
+  const hidePayroll = hasRole('Project Coordinator') || hasRole('Project Manager')
+  const isPM = hasRole('Project Manager') && !isAdmin()
+
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
 
   const project = projects.find(p => p.id === parseInt(id))
+
+  // PM can only view their own projects
+  const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
+  const myFullName = myEmployee
+    ? [myEmployee.first_name, myEmployee.middle_name, myEmployee.last_name].filter(Boolean).join(' ')
+    : null
 
   const updateMutation = useMutation({
     mutationFn: ({ data }) => updateProject({ id: parseInt(id), data }),
@@ -60,6 +74,12 @@ export default function ProjectView() {
   if (!project) return (
     <Layout>
       <div className="p-8 text-center text-gray-400">Project not found.</div>
+    </Layout>
+  )
+
+  if (isPM && myFullName && project.project_manager !== myFullName) return (
+    <Layout>
+      <div className="p-8 text-center text-gray-400">You don't have access to this project.</div>
     </Layout>
   )
 
@@ -130,10 +150,10 @@ export default function ProjectView() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           {[
             { label: 'Contract Cost', value: fmt(project.contract_cost), color: 'bg-emerald-50', iconColor: 'text-emerald-600', icon: Banknote },
-            { label: 'Total Payments', value: fmt(totalPayments), color: 'bg-green-50', iconColor: 'text-green-600', icon: Receipt },
+            ...(!hideFinancials || isPM ? [{ label: 'Total Payments', value: fmt(totalPayments), color: 'bg-green-50', iconColor: 'text-green-600', icon: Receipt }] : []),
             { label: 'Total Expenses', value: fmt(totalExpenses), color: 'bg-red-50', iconColor: 'text-red-600', icon: Package },
             { label: 'Encumbrance', value: fmt(project.encumbrance), color: 'bg-amber-50', iconColor: 'text-amber-600', icon: Banknote },
-            { label: 'Labor Cost', value: fmt(laborCost), color: 'bg-purple-50', iconColor: 'text-purple-600', icon: Users },
+            ...(!hideFinancials ? [{ label: 'Labor Cost', value: fmt(laborCost), color: 'bg-purple-50', iconColor: 'text-purple-600', icon: Users }] : []),
           ].map(({ label, value, color, iconColor, icon: Icon }) => (
             <div key={label} className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
@@ -213,7 +233,11 @@ export default function ProjectView() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['transactions', 'Transactions'], ['payroll', 'Payroll / Attendance'], ['details', 'Details']].map(([val, label]) => (
+          {[
+            ['transactions', 'Transactions'],
+            ...(!hidePayroll ? [['payroll', 'Payroll / Attendance']] : []),
+            ['details', 'Details'],
+          ].map(([val, label]) => (
             <button key={val} onClick={() => setActiveTab(val)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -226,26 +250,32 @@ export default function ProjectView() {
           <div className="space-y-4">
             {/* Cost Breakdown */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Materials Cost</p>
-                <p className="text-2xl font-bold text-blue-700">{fmt(materialsCost)}</p>
-                <div className="mt-2 space-y-1 text-xs text-gray-600">
-                  <div className="flex justify-between"><span>Procurement:</span><span>{fmt(procurementCost)}</span></div>
-                  <div className="flex justify-between"><span>Outgoing:</span><span>{fmt(outgoingCost)}</span></div>
-                  <div className="flex justify-between"><span>Incoming (return):</span><span>-{fmt(incomingCost)}</span></div>
+              {!hideFinancials && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Materials Cost</p>
+                  <p className="text-2xl font-bold text-blue-700">{fmt(materialsCost)}</p>
+                  <div className="mt-2 space-y-1 text-xs text-gray-600">
+                    <div className="flex justify-between"><span>Procurement:</span><span>{fmt(procurementCost)}</span></div>
+                    <div className="flex justify-between"><span>Outgoing:</span><span>{fmt(outgoingCost)}</span></div>
+                    <div className="flex justify-between"><span>Incoming (return):</span><span>-{fmt(incomingCost)}</span></div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Other Transactions</p>
-                <p className="text-2xl font-bold text-amber-700">{fmt(othersCost)}</p>
-                <p className="text-xs text-gray-500 mt-2">General expenditures</p>
-              </div>
-              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Labor Cost</p>
-                <p className="text-2xl font-bold text-purple-700">{fmt(laborCost)}</p>
-                <p className="text-xs text-gray-500 mt-2">From attendance records</p>
-              </div>
-              <div className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+              )}
+              {!hideFinancials && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Other Transactions</p>
+                  <p className="text-2xl font-bold text-amber-700">{fmt(othersCost)}</p>
+                  <p className="text-xs text-gray-500 mt-2">General expenditures</p>
+                </div>
+              )}
+              {!hideFinancials && (
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Labor Cost</p>
+                  <p className="text-2xl font-bold text-purple-700">{fmt(laborCost)}</p>
+                  <p className="text-xs text-gray-500 mt-2">From attendance records</p>
+                </div>
+              )}
+              <div className={`p-4 bg-gray-100 border border-gray-300 rounded-lg ${hideFinancials ? 'col-span-2' : ''}`}>
                 <p className="text-sm text-gray-600 mb-1">Total Project Expenses</p>
                 <p className="text-3xl font-bold text-gray-900">{fmt(totalExpenses)}</p>
               </div>

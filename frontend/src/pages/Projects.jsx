@@ -8,11 +8,13 @@ import {
   getProjects, createProject, updateProject, archiveProject,
   getTransactions, getAttendance, getSettings
 } from '../api/projects'
+import { getEmployees } from '../api/employees'
 import {
   Plus, Search, Eye, Pencil, Trash2, Archive,
   MapPin, User, Calendar, X, Filter
 } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAuth } from '../context/AuthContext'
 
 
 const SCOPES = [
@@ -64,11 +66,11 @@ const emptyForm = {
 }
 
 const FORM_SCOPES = [
-  { key: 'wiring_permit', label: 'Wiring Permit / CFEI', costField: 'scope_wiring_permit_cost', mirror: 'cfei' },
-  { key: 'electrical_plan', label: 'Electrical Plan',    costField: 'scope_electrical_plan_cost' },
-  { key: 'supply',          label: 'Supply',             costField: 'scope_supply_cost' },
-  { key: 'installation',    label: 'Installation',       costField: 'scope_installation_cost' },
-  { key: 'meralco',         label: 'Meralco',            costField: 'scope_meralco_cost' },
+  { key: 'wiring_permit', label: 'Wiring Permit / CFEI Processing', costField: 'scope_wiring_permit_cost', mirror: 'cfei' },
+  { key: 'electrical_plan', label: 'Electrical Plan Drafting',    costField: 'scope_electrical_plan_cost' },
+  { key: 'supply',          label: 'Supply of Materials',             costField: 'scope_supply_cost' },
+  { key: 'installation',    label: 'Installation Works',       costField: 'scope_installation_cost' },
+  { key: 'meralco',         label: 'Meralco Application',            costField: 'scope_meralco_cost' },
   { key: 'encumbrance',     label: 'Encumbrance',        costField: 'encumbrance' },
   { key: 'others',          label: 'Others',             costField: 'scope_others_cost', hasRemarks: true },
 ]
@@ -246,7 +248,7 @@ function PaymentsView({ projects }) {
 }
 
 // --- ProjectForm ---
-function ProjectForm({ open, onClose, project, onSave, settings }) {
+function ProjectForm({ open, onClose, project, onSave, settings, projectManagers = [] }) {
   const [formData, setFormData] = useState(emptyForm)
   const [noReferral, setNoReferral] = useState(false)
 
@@ -406,7 +408,10 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
               <select value={formData.project_manager} onChange={e => setFormData(p => ({ ...p, project_manager: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
                 <option value="">Select...</option>
-                {getOptions('Project Manager').map(o => <option key={o.id} value={o.value}>{o.value}</option>)}
+                {projectManagers.map(e => {
+                  const name = [e.first_name, e.middle_name, e.last_name].filter(Boolean).join(' ')
+                  return <option key={e.id} value={name}>{name}</option>
+                })}
               </select>
             </div>
           </div>
@@ -531,6 +536,7 @@ function ProjectForm({ open, onClose, project, onSave, settings }) {
 // --- Main Projects Page ---
 export default function Projects() {
   const { canWrite } = usePermissions()
+  const { isAdmin, hasRole, user } = useAuth()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
@@ -542,6 +548,15 @@ export default function Projects() {
 
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
+  const projectManagers = employees.filter(e => e.role === 'Project Manager' && !e.archived)
+
+  // For PM role: only show their own projects
+  const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
+  const myFullName = myEmployee
+    ? [myEmployee.first_name, myEmployee.middle_name, myEmployee.last_name].filter(Boolean).join(' ')
+    : null
+  const isPM = hasRole('Project Manager') && !isAdmin()
 
   const createMutation = useMutation({
     mutationFn: createProject,
@@ -654,7 +669,10 @@ export default function Projects() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['progress', 'Project Progress'], ['payments', 'Payments View']].map(([val, label]) => (
+          {[
+            ['progress', 'Project Progress'],
+            ...(isAdmin() || hasRole('Project Manager') ? [['payments', 'Payments View']] : []),
+          ].map(([val, label]) => (
             <button key={val} onClick={() => setActiveTab(val)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -663,19 +681,22 @@ export default function Projects() {
         </div>
 
         {/* Progress Tab */}
-        {activeTab === 'progress' && (
-          isLoading ? (
+        {activeTab === 'progress' && (() => {
+          const visible = isPM && myFullName
+            ? sortedFiltered.filter(p => p.project_manager === myFullName)
+            : sortedFiltered
+          return isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
             </div>
-          ) : sortedFiltered.length === 0 ? (
+          ) : visible.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Search size={40} className="mx-auto mb-3 opacity-50" />
-              <p>{search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : 'Create your first project to get started'}</p>
+              <p>{search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : isPM ? 'No projects assigned to you' : 'Create your first project to get started'}</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {sortedFiltered.map(project => (
+              {visible.map(project => (
                 <ProjectCard key={project.id} project={project}
                   onEdit={p => { setEditingProject(p); setFormOpen(true) }}
                   onDelete={setDeleteProject}
@@ -683,14 +704,19 @@ export default function Projects() {
               ))}
             </div>
           )
-        )}
+        })()}
 
         {/* Payments Tab */}
-        {activeTab === 'payments' && <PaymentsView projects={sortedFiltered} />}
+        {activeTab === 'payments' && (() => {
+          const visible = isPM && myFullName
+            ? sortedFiltered.filter(p => p.project_manager === myFullName)
+            : sortedFiltered
+          return <PaymentsView projects={visible} />
+        })()}
 
         {/* Form */}
         <ProjectForm open={formOpen} onClose={() => { setFormOpen(false); setEditingProject(null) }}
-          project={editingProject} onSave={handleSave} settings={settings} />
+          project={editingProject} onSave={handleSave} settings={settings} projectManagers={projectManagers} />
 
         {/* Archive Confirmation */}
         {deleteProject && (

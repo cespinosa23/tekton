@@ -4,24 +4,28 @@
 // To restrict: remove it. Quotations are defined but nav is hidden via NAV_ROLES.
 
 export const WRITE_ROLES = {
-  projects:     ['Engineer', 'Liaison'],
-  employees:    ['HR'],
-  materials:    ['Engineer'],
-  inventory:    [],           // Admin only
-  attendance:   ['HR'],
-  transactions: ['Accounting'],
-  suppliers:    ['Accounting'],
-  settings:     [],           // Admin only
-  archive:      [],           // Admin only (restore + permanent delete)
-  quotations:   ['Engineer'], // defined for future use
+  projects:     ['Project Coordinator', 'Project Manager'],
+  employees:    ['Project Coordinator'],
+  materials:    [],                         // Admin only
+  inventory:    ['Project Coordinator', 'Project Manager'],
+  attendance:   ['Project Coordinator', 'Project Manager'],
+  transactions: ['Project Coordinator'],
+  suppliers:    [],                         // Admin only
+  settings:     [],                         // Admin only
+  archive:      [],                         // Admin only (restore + permanent delete)
+  quotations:   ['Project Coordinator', 'Project Manager'],
 }
 
 // Nav paths visible only to the listed roles (plus Admin).
 // Paths not listed here are visible to all authenticated users.
 export const NAV_ROLES = {
-  '/settings':   [],                          // Admin only
-  '/quotations': ['Engineer'],                 // visible to Admin + Engineer
-  '/archive':    [],                          // Admin only
-  '/materials':  ['Engineer', 'Accounting', 'Liaison'],
-  '/inventory':  ['Engineer', 'Accounting', 'Liaison'],
+  '/settings':      [],                     // Admin only
+  '/quotations':    ['Project Coordinator', 'Project Manager'],
+  '/archive':       [],                     // Admin only
+  '/materials':     [],                     // Admin only
+  '/inventory':     ['Project Coordinator', 'Project Manager'],
+  '/transactions':  ['Project Coordinator'],
+  '/employees':     ['Project Coordinator'],
+  '/projects':      ['Project Coordinator', 'Project Manager'],
+  '/attendance':    ['Project Coordinator', 'Project Manager'],
 }

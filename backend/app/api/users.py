@@ -9,7 +9,7 @@ from app.core.email import send_invite_email, send_reset_email
 from app.models.user import User
 from app.models.role import Role, UserRole
 from app.models.employee import Employee
-from app.schemas.user import UserInvite, CompleteRegistration, UserRead
+from app.schemas.user import UserInvite, CompleteRegistration, UserRead, UserRolesUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -198,3 +198,33 @@ async def resend_invite(
 
     background_tasks.add_task(send_invite_email, email, user.invite_token)
     return {"message": "Invite resent successfully"}
+
+
+@router.put("/by-employee/{employee_id}/roles")
+def update_employee_roles(
+    employee_id: int,
+    payload: UserRolesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["Admin"])),
+):
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # Always persist role on the employee record
+    employee.role = payload.roles[0].value if payload.roles else None
+
+    # Update user_roles if account exists
+    account_updated = False
+    user = db.query(User).filter(User.employee_id == employee_id).first()
+    if user:
+        db.query(UserRole).filter(UserRole.user_id == user.id).delete()
+        for role_name in payload.roles:
+            role = db.query(Role).filter(Role.name == role_name.value).first()
+            if not role:
+                raise HTTPException(status_code=400, detail=f"Role '{role_name.value}' not found")
+            db.add(UserRole(user_id=user.id, role_id=role.id))
+        account_updated = True
+
+    db.commit()
+    return {"employee_id": employee_id, "role": employee.role, "account_updated": account_updated}

@@ -22,6 +22,7 @@ class EmployeeCreate(BaseModel):
     email: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
+    role: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -41,6 +42,7 @@ class EmployeeUpdate(BaseModel):
     email: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
+    role: Optional[str] = None
 
 class EmployeeRead(BaseModel):
     id: int
@@ -63,5 +65,6 @@ class EmployeeRead(BaseModel):
     archived_by: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
+    role: Optional[str] = None
 
     model_config = {"from_attributes": True}

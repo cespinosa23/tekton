@@ -3,11 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
-import { inviteEmployee as inviteEmployeeApi, resendInvite as resendInviteApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers } from '../api/employees'
-import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus, RefreshCw, CheckCircle } from 'lucide-react'
+import { inviteEmployee as inviteEmployeeApi, resendInvite as resendInviteApi, getEmployees, createEmployee, updateEmployee, archiveEmployee, getEmployeeUsers, updateEmployeeRoles, sendPasswordReset } from '../api/employees'
+import { Plus, Search, Eye, Pencil, Trash2, Archive, X, UserPlus, RefreshCw, CheckCircle, ShieldCheck } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+
+const ALL_ROLES = ['Engineer', 'Accounting', 'HR', 'Liaison', 'Project Coordinator', 'Project Manager', 'Admin', 'Others']
 
 
 const statusColors = {
@@ -23,18 +26,21 @@ const emptyForm = {
   philhealth_number: '', pagibig_number: '', tin_number: '',
   emergency_contact: '', emergency_phone: '',
   address: '', phone: '', email: '', status: 'Active',
-  role: 'Engineer', department: '', id_number: '',
+  role: '', department: '', id_number: '',
 }
 
 export default function Employees() {
   const { canWrite } = usePermissions()
+  const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [viewEmployee, setViewEmployee] = useState(null)
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [deleteEmployee, setDeleteEmployee] = useState(null)
   const [selectedInvite, setSelectedInvite] = useState(null)
-  const [inviteRole, setInviteRole] = useState('Engineer')
+  const [inviteRole, setInviteRole] = useState('')
+  const [managingRoles, setManagingRoles] = useState(null)  // employee whose roles are being edited
+  const [managingRoleValue, setManagingRoleValue] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [formData, setFormData] = useState(emptyForm)
@@ -57,23 +63,54 @@ export default function Employees() {
       setFormData(emptyForm)
       toast.success('Employee added')
 
-      // Only auto-invite if this employee has no account yet
+      // Auto-invite if email provided and no account exists yet
       const alreadyHasAccount = !!employeeRoles[data.id]
-      if (variables.email && variables.role !== 'Others' && !alreadyHasAccount) {
-        inviteMutation.mutate({ email: variables.email, roles: [variables.role || 'Engineer'] })
+      if (variables.email && !alreadyHasAccount) {
+        inviteMutation.mutate({ email: variables.email, roles: variables.role ? [variables.role] : [] })
       }
     },
     onError: () => toast.error('Failed to add employee'),
   })
 
+  const sendResetMutation = useMutation({
+    mutationFn: sendPasswordReset,
+    onSuccess: () => toast.success('Password reset link sent'),
+    onError: () => toast.error('Failed to send reset link'),
+  })
+
   const updateMutation = useMutation({
-    mutationFn: updateEmployee,
-    onSuccess: () => {
+    mutationFn: ({ id, data }) => updateEmployee({ id, data }),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setFormOpen(false)
       setEditingEmployee(null)
       setFormData(emptyForm)
-      toast.success('Employee updated')
+
+      const oldEmail = (variables.oldEmail || '').trim()
+      const newEmail = (variables.data.email || '').trim()
+
+      if (!oldEmail && newEmail) {
+        // Email just added — auto-invite
+        const alreadyHasAccount = !!employeeRoles[variables.id]
+        if (!alreadyHasAccount) {
+          inviteMutation.mutate({
+            email: newEmail,
+            roles: variables.data.role ? [variables.data.role] : [],
+          })
+        }
+      } else if (oldEmail && newEmail && oldEmail !== newEmail) {
+        // Email changed — offer reset link
+        toast.success('Employee updated', {
+          description: `Email changed to ${newEmail}`,
+          action: {
+            label: 'Send Reset Link',
+            onClick: () => sendResetMutation.mutate(newEmail),
+          },
+          duration: 10000,
+        })
+      } else {
+        toast.success('Employee updated')
+      }
     },
     onError: () => toast.error('Failed to update employee'),
   })
@@ -94,11 +131,25 @@ export default function Employees() {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       queryClient.invalidateQueries({ queryKey: ['employeeRoles'] })
       setSelectedInvite(null)
-      setInviteRole('Engineer')
+      setInviteRole('')
       toast.success('Invite sent successfully')
     },
     onError: (err) => {
       const msg = err?.response?.data?.detail || 'Failed to send invite'
+      toast.error(msg)
+    },
+  })
+
+  const updateRolesMutation = useMutation({
+    mutationFn: updateEmployeeRoles,
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['employees'] })
+      queryClient.refetchQueries({ queryKey: ['employeeRoles'] })
+      setManagingRoles(null)
+      toast.success('Role updated')
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.detail || 'Failed to update role'
       toast.error(msg)
     },
   })
@@ -133,7 +184,7 @@ export default function Employees() {
       phone: emp.phone || '',
       email: emp.email || '',
       status: emp.status || 'Active',
-      role: 'Engineer',
+      role: emp.role || '',
       department: emp.department || '',
       id_number: emp.id_number || '',
     })
@@ -142,7 +193,7 @@ export default function Employees() {
 
   const handleSave = () => {
     if (editingEmployee) {
-      updateMutation.mutate({ id: editingEmployee.id, data: formData })
+      updateMutation.mutate({ id: editingEmployee.id, data: formData, oldEmail: editingEmployee.email || '' })
     } else {
       createMutation.mutate(formData)
     }
@@ -210,16 +261,16 @@ export default function Employees() {
               <tr>
                 <SortableHeader label="Name" field="first_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Date Hired" field="date_hired" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                <SortableHeader label="Daily Salary" field="daily_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                {isAdmin() && <SortableHeader label="Daily Salary" field="daily_salary" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />}
                 <SortableHeader label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={isAdmin() ? 5 : 4} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400">No employees found</td></tr>
+                <tr><td colSpan={isAdmin() ? 5 : 4} className="text-center py-8 text-gray-400">No employees found</td></tr>
               ) : sorted.map((emp) => (
                 <tr key={emp.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -231,28 +282,47 @@ export default function Employees() {
                         <p className="font-medium text-gray-900">{emp.first_name} {emp.middle_name} {emp.last_name}</p>
                         {emp.email && <p className="text-xs text-gray-400">{emp.email}</p>}
                         {/* Role badges */}
-                        {employeeRoles[emp.id]?.roles?.length > 0 && (
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {employeeRoles[emp.id].roles.map(role => (
-                              <span key={role} className={`px-1.5 py-0.5 rounded text-xs font-medium ${role === 'Admin' ? 'bg-red-100 text-red-700' :
-                                  role === 'HR' ? 'bg-purple-100 text-purple-700' :
-                                    role === 'Accounting' ? 'bg-blue-100 text-blue-700' :
-                                      role === 'Engineer' ? 'bg-green-100 text-green-700' :
-                                        role === 'Liaison' ? 'bg-orange-100 text-orange-700' :
-                                          'bg-gray-100 text-gray-600'
-                                }`}>
-                                {role}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        {(() => {
+                          const roleBadgeClass = (role) =>
+                            role === 'Admin' ? 'bg-red-100 text-red-700' :
+                            role === 'HR' ? 'bg-purple-100 text-purple-700' :
+                            role === 'Accounting' ? 'bg-blue-100 text-blue-700' :
+                            role === 'Engineer' ? 'bg-green-100 text-green-700' :
+                            role === 'Liaison' ? 'bg-orange-100 text-orange-700' :
+                            role === 'Project Coordinator' ? 'bg-cyan-100 text-cyan-700' :
+                            role === 'Project Manager' ? 'bg-teal-100 text-teal-700' :
+                            'bg-gray-100 text-gray-600'
+                          const accountRoles = employeeRoles[emp.id]?.roles ?? []
+                          if (accountRoles.length > 0) {
+                            return (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {accountRoles.map(role => (
+                                  <span key={role} className={`px-1.5 py-0.5 rounded text-xs font-medium ${roleBadgeClass(role)}`}>
+                                    {role}
+                                  </span>
+                                ))}
+                              </div>
+                            )
+                          }
+                          if (emp.role) {
+                            return (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium opacity-50 ${roleBadgeClass(emp.role)}`}
+                                  title="Role assigned — no account yet">
+                                  {emp.role}
+                                </span>
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     {emp.date_hired ? format(new Date(emp.date_hired), 'MMM d, yyyy') : '-'}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">₱{(emp.daily_salary || 0).toLocaleString()}</td>
+                  {isAdmin() && <td className="px-4 py-3 text-gray-600">₱{(emp.daily_salary || 0).toLocaleString()}</td>}
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[emp.status]}`}>
                       {emp.status}
@@ -291,7 +361,7 @@ export default function Employees() {
                         }
                         return (
                           <button
-                            onClick={() => { setSelectedInvite(emp); setInviteRole('Engineer') }}
+                            onClick={() => { setSelectedInvite(emp); setInviteRole('') }}
                             className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
                             title="Send registration invite"
                           >
@@ -299,6 +369,19 @@ export default function Employees() {
                           </button>
                         )
                       })()}
+                      {isAdmin() && (
+                        <button
+                          onClick={() => {
+                            const accountRole = employeeRoles[emp.id]?.roles?.[0] || ''
+                            setManagingRoles(emp)
+                            setManagingRoleValue(accountRole || emp.role || '')
+                          }}
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-indigo-500"
+                          title="Manage role"
+                        >
+                          <ShieldCheck size={15} />
+                        </button>
+                      )}
                       {canWrite('employees') && (
                         <button onClick={() => setDeleteEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500">
                           <Trash2 size={15} />
@@ -341,6 +424,7 @@ export default function Employees() {
                     <input type="date" value={formData.date_hired} onChange={set('date_hired')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                   </div>
+                  {isAdmin() && (
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Daily Salary (₱)</label>
                     <input type="text" value={formData.daily_salary === 0 ? '' : Number(formData.daily_salary).toLocaleString('en-US')}
@@ -353,6 +437,7 @@ export default function Employees() {
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                   </div>
+                  )}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
                     <select value={formData.status} onChange={set('status')}
@@ -386,31 +471,26 @@ export default function Employees() {
                 </div>
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Email Address {formData.role !== 'Others' && <span className="text-red-500">*</span>}
-                  </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Email Address</label>
                   <input type="email" value={formData.email} onChange={set('email')}
                     placeholder="employee@example.com"
-                    required={formData.role !== 'Others'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                  {formData.role === 'Others' && (
-                    <p className="text-xs text-gray-400 mt-1">Email optional for Others role — no system access will be created.</p>
-                  )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {formData.email
+                      ? 'An invite email will be sent automatically.'
+                      : 'Leave blank to skip system access — employee record only.'}
+                  </p>
                 </div>
                 {/* Role */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">System Role</label>
                   <select value={formData.role} onChange={set('role')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                    <option value="Engineer">Engineer</option>
-                    <option value="Accounting">Accounting</option>
-                    <option value="HR">HR</option>
-                    <option value="Liaison">Liaison</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Others">Others</option>
+                    <option value="">— No role (Dashboard only) —</option>
+                    {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
-                  {!formData.email && (
-                    <p className="text-xs text-gray-400 mt-1">Add an email address to send a system invite.</p>
+                  {formData.email && !formData.role && (
+                    <p className="text-xs text-amber-500 mt-1">No role assigned — user will only see the Dashboard.</p>
                   )}
                 </div>
                 {/* Gov IDs */}
@@ -441,11 +521,7 @@ export default function Employees() {
                 <button onClick={() => { setFormOpen(false); setEditingEmployee(null); setFormData(emptyForm) }}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
                 <button onClick={handleSave}
-                  disabled={
-                    !formData.first_name ||
-                    !formData.last_name ||
-                    (formData.role !== 'Others' && !formData.email)
-                  }
+                  disabled={!formData.first_name || !formData.last_name}
                   className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                   {editingEmployee ? 'Update' : 'Add'} Employee
                 </button>
@@ -477,7 +553,7 @@ export default function Employees() {
                     ['ID Number', viewEmployee.id_number || '-'],
                     ['Department / Team', viewEmployee.department || '-'],
                     ['Date Hired', viewEmployee.date_hired ? format(new Date(viewEmployee.date_hired), 'MMM d, yyyy') : '-'],
-                    ['Daily Salary', `₱${(viewEmployee.daily_salary || 0).toLocaleString()}`],
+                    ...(isAdmin() ? [['Daily Salary', `₱${(viewEmployee.daily_salary || 0).toLocaleString()}`]] : []),
                     ['Phone', viewEmployee.phone || '-'],
                     ['Email', viewEmployee.email || '-'],
                     ['Address', viewEmployee.address || '-'],
@@ -543,23 +619,66 @@ export default function Employees() {
                 <label className="block text-xs font-medium text-gray-700 mb-1">Assign Role</label>
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                  <option value="Engineer">Engineer</option>
-                  <option value="Accounting">Accounting</option>
-                  <option value="HR">HR</option>
-                  <option value="Liaison">Liaison</option>
-                  <option value="Admin">Admin</option>
-                  <option value="Others">Others</option>
+                  <option value="">— No role (Dashboard only) —</option>
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
+                {!inviteRole && (
+                  <p className="text-xs text-amber-500 mt-1">User will only see the Dashboard after registering.</p>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setSelectedInvite(null)}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
                 <button
-                  onClick={() => inviteMutation.mutate({ email: selectedInvite.email, roles: [inviteRole] })}
+                  onClick={() => inviteMutation.mutate({ email: selectedInvite.email, roles: inviteRole ? [inviteRole] : [] })}
                   disabled={inviteMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                   <UserPlus size={15} />
                   {inviteMutation.isPending ? 'Sending...' : 'Send Invite'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Manage Role Dialog — Admin only */}
+        {managingRoles && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <ShieldCheck size={18} className="text-indigo-500" />
+                <h3 className="text-lg font-semibold text-gray-900">Manage Role</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Updating role for <strong>{managingRoles.first_name} {managingRoles.last_name}</strong>
+              </p>
+              <div className="mb-5">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Assigned Role</label>
+                <select
+                  value={managingRoleValue}
+                  onChange={e => setManagingRoleValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                >
+                  <option value="">— No role (Dashboard only) —</option>
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                {!managingRoleValue && (
+                  <p className="text-xs text-amber-500 mt-1">User will only see the Dashboard.</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setManagingRoles(null)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => updateRolesMutation.mutate({
+                    employeeId: managingRoles.id,
+                    roles: managingRoleValue ? [managingRoleValue] : [],
+                  })}
+                  disabled={updateRolesMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  <ShieldCheck size={15} />
+                  {updateRolesMutation.isPending ? 'Saving...' : 'Save Role'}
                 </button>
               </div>
             </div>

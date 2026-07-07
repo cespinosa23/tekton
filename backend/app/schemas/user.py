@@ -45,6 +45,9 @@ class UserRead(BaseModel):
 
     model_config = {"from_attributes": True}
     
+class UserRolesUpdate(BaseModel):
+    roles: list[RoleName] = []
+
 class ForgotPassword(BaseModel):
     email: EmailStr
 

@@ -31,3 +31,4 @@ class Employee(Base):
     email = Column(String(255), nullable=True)
     department = Column(String(100), nullable=True)
     id_number = Column(String(50), nullable=True)
+    role = Column(String(50), nullable=True)

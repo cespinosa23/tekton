@@ -8,6 +8,8 @@ class RoleName(str, Enum):
     hr = "HR"
     liaison = "Liaison"
     others = "Others"
+    project_coordinator = "Project Coordinator"
+    project_manager = "Project Manager"
 
 class RoleRead(BaseModel):
     id: int

@@ -10,7 +10,12 @@ import {
   getProjects, getTransactions, getEmployees, getAttendance,
   getCalendarDays, createCalendarDay, updateCalendarDay
 } from '../api/dashboard'
+import { useAuth } from '../context/AuthContext'
 import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw } from 'lucide-react'
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine,
+} from 'recharts'
 
 const DATE_FILTERS = [
   { value: 'wtd', label: 'Week to Date' },
@@ -87,15 +92,56 @@ export default function Dashboard() {
   const totalPayments = filteredTransactions
     .filter(t => t.transaction_type === 'Payment')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-  const totalMaterialsAndOther = filteredTransactions
-    .filter(t => ['General Expenditure', 'Materials Procurement'].includes(t.transaction_type))
+  const totalMaterials = filteredTransactions
+    .filter(t => t.transaction_type === 'Materials Procurement')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+  const totalGeneral = filteredTransactions
+    .filter(t => t.transaction_type === 'General Expenditure')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
   const totalLabor = filterByDateRange(attendance, 'date')
     .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
-  const totalExpenses = totalMaterialsAndOther + totalLabor
+  const totalExpenses = totalMaterials + totalGeneral + totalLabor
+
+  // Last 6 months of monthly data for charts
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - (5 - i))
+    const yr = d.getFullYear()
+    const mo = d.getMonth()
+    const inMonth = (dateStr) => {
+      if (!dateStr) return false
+      const dd = new Date(dateStr)
+      return dd.getFullYear() === yr && dd.getMonth() === mo
+    }
+    const revenue = transactions
+      .filter(t => t.transaction_type === 'Payment' && inMonth(t.transaction_date))
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+    const labor = attendance
+      .filter(a => inMonth(a.date))
+      .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
+    const materials = transactions
+      .filter(t => t.transaction_type === 'Materials Procurement' && inMonth(t.transaction_date))
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+    const general = transactions
+      .filter(t => t.transaction_type === 'General Expenditure' && inMonth(t.transaction_date))
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+    return {
+      month: format(d, 'MMM yy'),
+      revenue,
+      labor,
+      materials,
+      general,
+      net: revenue - labor - materials - general,
+    }
+  })
 
   const activeProjects = projects.filter(p => p.status === 'Active').length
   const activeEmployees = employees.filter(e => e.status === 'Active').length
+
+  const { isAdmin, hasRole } = useAuth()
+  const canSeeFinancials = isAdmin()
+  const canSeeTotalExpenses = isAdmin() || hasRole('Project Coordinator') || hasRole('Project Manager')
 
   // Check if a date is a PH holiday
   const getPhHoliday = (date) => {
@@ -190,8 +236,12 @@ export default function Dashboard() {
   const stats = [
     { label: 'Working Days', value: calculateWorkingDays(), icon: Calendar, color: 'bg-blue-500', clickable: true },
     { label: 'Active Projects', value: activeProjects, icon: FolderKanban, color: 'bg-emerald-500' },
-    { label: 'Total Payments Received', value: `₱${totalPayments.toLocaleString()}`, icon: Banknote, color: 'bg-green-500' },
-    { label: 'Total Expenses', value: `₱${totalExpenses.toLocaleString()}`, icon: Receipt, color: 'bg-red-500' },
+    ...(canSeeFinancials ? [
+      { label: 'Total Payments Received', value: `₱${totalPayments.toLocaleString()}`, icon: Banknote, color: 'bg-green-500' },
+    ] : []),
+    ...(canSeeTotalExpenses ? [
+      { label: 'Total Expenses', value: `₱${totalExpenses.toLocaleString()}`, icon: Receipt, color: 'bg-red-500' },
+    ] : []),
     { label: 'Active Employees', value: activeEmployees, icon: Users, color: 'bg-violet-500' },
   ]
 
@@ -214,7 +264,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className={`grid gap-4 ${canSeeFinancials ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : canSeeTotalExpenses ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
           {stats.map(({ label, value, icon: Icon, color, clickable }) => (
             <div
               key={label}
@@ -233,6 +283,106 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Financial Analysis — Admin only */}
+        {isAdmin() && (
+          <div className="mt-8">
+            <h2 className="text-base font-semibold text-gray-900 mb-4">Financial Analysis</h2>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+              {/* Monthly Revenue vs Expenses */}
+              <div className="xl:col-span-2 bg-white rounded-lg border border-gray-200 p-5">
+                <p className="text-sm font-medium text-gray-700 mb-1">Revenue vs Expenses — Last 6 Months</p>
+                <p className="text-xs text-gray-400 mb-4">Bars show cost breakdown; line shows net profit / loss</p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₱${(v/1000).toFixed(0)}k` : `₱${v}`} width={56} />
+                    <Tooltip
+                      formatter={(value, name) => [`₱${value.toLocaleString()}`, name]}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 2" />
+                    <Bar dataKey="labor" name="Labor" stackId="exp" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="materials" name="Materials" stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="general" name="General" stackId="exp" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Line type="monotone" dataKey="net" name="Net Profit" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Expense Breakdown donut */}
+              <div className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col">
+                <p className="text-sm font-medium text-gray-700 mb-1">Expense Breakdown</p>
+                <p className="text-xs text-gray-400 mb-4">Current period ({DATE_FILTERS.find(f => f.value === dateFilter)?.label})</p>
+                {(totalLabor + totalMaterials + totalGeneral) === 0 ? (
+                  <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No expenses recorded</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Labor', value: totalLabor, color: '#f59e0b' },
+                            { name: 'Materials', value: totalMaterials, color: '#3b82f6' },
+                            { name: 'General', value: totalGeneral, color: '#8b5cf6' },
+                          ].filter(e => e.value > 0)}
+                          cx="50%" cy="50%"
+                          innerRadius={50} outerRadius={80}
+                          dataKey="value"
+                        >
+                          {[
+                            { name: 'Labor', value: totalLabor, color: '#f59e0b' },
+                            { name: 'Materials', value: totalMaterials, color: '#3b82f6' },
+                            { name: 'General', value: totalGeneral, color: '#8b5cf6' },
+                          ].filter(e => e.value > 0).map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `₱${value.toLocaleString()}`} contentStyle={{ fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-2 space-y-2">
+                      {[
+                        { label: 'Labor', value: totalLabor, color: 'bg-amber-400' },
+                        { label: 'Materials', value: totalMaterials, color: 'bg-blue-500' },
+                        { label: 'General', value: totalGeneral, color: 'bg-violet-500' },
+                      ].filter(e => e.value > 0).map(({ label, value, color }) => {
+                        const total = totalLabor + totalMaterials + totalGeneral
+                        const pct = total > 0 ? Math.round((value / total) * 100) : 0
+                        const warn = label === 'Labor' && pct > 50
+                        return (
+                          <div key={label} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
+                              <span className="text-gray-600">{label}</span>
+                              {warn && <span className="text-amber-600 font-medium">High</span>}
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium text-gray-800">₱{value.toLocaleString()}</span>
+                              <span className="text-gray-400 ml-1">({pct}%)</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-gray-700">
+                        <span>Total Expenses</span>
+                        <span>₱{(totalLabor + totalMaterials + totalGeneral).toLocaleString()}</span>
+                      </div>
+                      <div className={`flex items-center justify-between text-xs font-semibold pt-1 ${(totalPayments - totalExpenses) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        <span>{(totalPayments - totalExpenses) >= 0 ? 'Net Gain' : 'Net Loss'}</span>
+                        <span>₱{Math.abs(totalPayments - totalExpenses).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Calendar Modal */}
         {calendarOpen && (

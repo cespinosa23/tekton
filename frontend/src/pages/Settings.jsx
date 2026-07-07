@@ -22,7 +22,6 @@ const CATEGORIES = [
   { key: 'LGU', label: 'LGU', icon: MapPin, description: 'Local Government Units' },
   { key: 'Material Unit', label: 'Material Unit', icon: Ruler, description: 'Units of measurement' },
   { key: 'Meralco Branch', label: 'Meralco Branch', icon: Building2, description: 'Meralco branches' },
-  { key: 'Project Manager', label: 'Project Manager', icon: Users, description: 'People who can be assigned as project managers' },
   { key: 'Referred By', label: 'Referred By', icon: Users, description: 'Sources of project referrals' },
 ]
 
