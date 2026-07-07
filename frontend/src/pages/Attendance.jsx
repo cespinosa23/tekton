@@ -361,7 +361,7 @@ export default function Attendance() {
         </div>
 
         {/* Summary Cards */}
-        <div className={`grid grid-cols-2 gap-4 mb-6 ${viewMode !== 'day' && employeeFilter !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        <div className={`grid grid-cols-2 gap-4 mb-6 ${hideSalary ? (viewMode !== 'day' && employeeFilter !== 'all' ? 'lg:grid-cols-4' : 'lg:grid-cols-3') : (viewMode !== 'day' && employeeFilter !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}`}>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>

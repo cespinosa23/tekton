@@ -56,7 +56,7 @@ export default function ProjectView() {
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
-  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
+  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
 
   const project = projects.find(p => p.id === parseInt(id))
 
@@ -77,7 +77,11 @@ export default function ProjectView() {
     </Layout>
   )
 
-  if (isPM && myFullName && project.project_manager !== myFullName) return (
+  if (isPM && isLoadingEmployees) return (
+    <Layout><div className="p-8 text-center text-gray-400">Loading...</div></Layout>
+  )
+
+  if (isPM && (!myFullName || project.project_manager !== myFullName)) return (
     <Layout>
       <div className="p-8 text-center text-gray-400">You don't have access to this project.</div>
     </Layout>
@@ -147,7 +151,7 @@ export default function ProjectView() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className={`grid grid-cols-2 gap-4 mb-6 ${!hideFinancials ? 'lg:grid-cols-5' : isPM ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
           {[
             { label: 'Contract Cost', value: fmt(project.contract_cost), color: 'bg-emerald-50', iconColor: 'text-emerald-600', icon: Banknote },
             ...(!hideFinancials || isPM ? [{ label: 'Total Payments', value: fmt(totalPayments), color: 'bg-green-50', iconColor: 'text-green-600', icon: Receipt }] : []),
@@ -336,7 +340,7 @@ export default function ProjectView() {
         )}
 
         {/* Payroll Tab */}
-        {activeTab === 'payroll' && (
+        {!hidePayroll && activeTab === 'payroll' && (
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900">Attendance Records</h3>

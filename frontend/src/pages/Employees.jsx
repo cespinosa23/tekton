@@ -81,6 +81,16 @@ export default function Employees() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateEmployee({ id, data }),
     onSuccess: (_, variables) => {
+      // If employee has an account, sync role to user_roles silently
+      if (employeeRoles[variables.id]) {
+        updateEmployeeRoles({
+          employeeId: variables.id,
+          roles: variables.data.role ? [variables.data.role] : [],
+        }).then(() => {
+          queryClient.refetchQueries({ queryKey: ['employeeRoles'] })
+        }).catch(() => {})
+      }
+
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setFormOpen(false)
       setEditingEmployee(null)

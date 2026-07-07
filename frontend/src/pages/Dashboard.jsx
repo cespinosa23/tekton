@@ -11,11 +11,8 @@ import {
   getCalendarDays, createCalendarDay, updateCalendarDay
 } from '../api/dashboard'
 import { useAuth } from '../context/AuthContext'
-import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw } from 'lucide-react'
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine,
-} from 'recharts'
+import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, TrendingDown, Clock, CheckCircle2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const DATE_FILTERS = [
   { value: 'wtd', label: 'Week to Date' },
@@ -102,46 +99,65 @@ export default function Dashboard() {
     .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
   const totalExpenses = totalMaterials + totalGeneral + totalLabor
 
-  // Last 6 months of monthly data for charts
-  const monthlyData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - (5 - i))
-    const yr = d.getFullYear()
-    const mo = d.getMonth()
-    const inMonth = (dateStr) => {
-      if (!dateStr) return false
-      const dd = new Date(dateStr)
-      return dd.getFullYear() === yr && dd.getMonth() === mo
-    }
-    const revenue = transactions
-      .filter(t => t.transaction_type === 'Payment' && inMonth(t.transaction_date))
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-    const labor = attendance
-      .filter(a => inMonth(a.date))
-      .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
-    const materials = transactions
-      .filter(t => t.transaction_type === 'Materials Procurement' && inMonth(t.transaction_date))
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-    const general = transactions
-      .filter(t => t.transaction_type === 'General Expenditure' && inMonth(t.transaction_date))
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-    return {
-      month: format(d, 'MMM yy'),
-      revenue,
-      labor,
-      materials,
-      general,
-      net: revenue - labor - materials - general,
-    }
-  })
-
   const activeProjects = projects.filter(p => p.status === 'Active').length
   const activeEmployees = employees.filter(e => e.status === 'Active').length
 
   const { isAdmin, hasRole } = useAuth()
   const canSeeFinancials = isAdmin()
   const canSeeTotalExpenses = isAdmin() || hasRole('Project Coordinator') || hasRole('Project Manager')
+
+  // Admin-only tracking widgets
+  const adminWidgets = (() => {
+    if (!isAdmin()) return { arProjects: [], overrunProjects: [], staleProjects: [] }
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30)
+    const activeProjs = projects.filter(p => p.status === 'Active')
+    const arList = [], overrunList = [], staleList = []
+    activeProjs.forEach(project => {
+      const projectTx = transactions.filter(t => t.project_id === project.id)
+      const projectAtt = attendance.filter(a => a.project_id === project.id)
+      const contractCost = parseFloat(project.contract_cost) || 0
+      const encumbrance = parseFloat(project.encumbrance) || 0
+      const totalContract = contractCost + encumbrance
+      const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+      const materialsCost = projectTx
+        .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
+        .reduce((s, t) => {
+          const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
+          return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
+        }, 0)
+      const othersCost = projectTx
+        .filter(t => t.transaction_type === 'General Expenditure')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+      const totalExpenses = laborCost + materialsCost + othersCost
+      const totalPaid = projectTx
+        .filter(t => t.transaction_type === 'Payment')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+      const outstanding = totalContract - totalPaid
+      if (outstanding > 0) arList.push({ ...project, outstanding, totalContract, totalPaid })
+      if (totalContract > 0 && totalExpenses / totalContract >= 0.8) {
+        overrunList.push({ ...project, overrunPct: totalExpenses / totalContract, totalExpenses, totalContract })
+      }
+      const lastTxMs = projectTx.length ? Math.max(...projectTx.map(t => new Date(t.transaction_date || 0).getTime())) : 0
+      const lastAttMs = projectAtt.length ? Math.max(...projectAtt.map(a => new Date(a.date || 0).getTime())) : 0
+      const lastMs = Math.max(lastTxMs, lastAttMs)
+      if (!lastMs || new Date(lastMs) < cutoff) {
+        staleList.push({ ...project, lastActivity: lastMs ? new Date(lastMs) : null })
+      }
+    })
+    arList.sort((a, b) => b.outstanding - a.outstanding)
+    overrunList.sort((a, b) => b.overrunPct - a.overrunPct)
+    return { arProjects: arList, overrunProjects: overrunList, staleProjects: staleList }
+  })()
+
+  const projectPipeline = (() => {
+    const counts = {}
+    projects.forEach(p => { counts[p.status] = (counts[p.status] || 0) + 1 })
+    const order = ['Active', 'Completed', 'On Hold', 'Cancelled', 'Inactive']
+    const palette = { Active: '#10b981', Completed: '#3b82f6', 'On Hold': '#f59e0b', Cancelled: '#ef4444', Inactive: '#9ca3af' }
+    const entries = Object.entries(counts).sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99))
+    const max = Math.max(...entries.map(([, n]) => n), 1)
+    return { entries, max, palette, total: projects.length }
+  })()
 
   // Check if a date is a PH holiday
   const getPhHoliday = (date) => {
@@ -284,100 +300,223 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Financial Analysis — Admin only */}
+        {/* Admin overview — replaces chart section */}
         {isAdmin() && (
-          <div className="mt-8">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Financial Analysis</h2>
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="mt-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Operations Overview</h2>
+              <Link to="/reports" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                View full analytics →
+              </Link>
+            </div>
 
-              {/* Monthly Revenue vs Expenses */}
-              <div className="xl:col-span-2 bg-white rounded-lg border border-gray-200 p-5">
-                <p className="text-sm font-medium text-gray-700 mb-1">Revenue vs Expenses — Last 6 Months</p>
-                <p className="text-xs text-gray-400 mb-4">Bars show cost breakdown; line shows net profit / loss</p>
-                <ResponsiveContainer width="100%" height={260}>
-                  <ComposedChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₱${(v/1000).toFixed(0)}k` : `₱${v}`} width={56} />
-                    <Tooltip
-                      formatter={(value, name) => [`₱${value.toLocaleString()}`, name]}
-                      contentStyle={{ fontSize: 12 }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 2" />
-                    <Bar dataKey="labor" name="Labor" stackId="exp" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="materials" name="Materials" stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="general" name="General" stackId="exp" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Line type="monotone" dataKey="net" name="Net Profit" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+            {/* Row 1: Project Pipeline + Period Financials */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* Project Pipeline */}
+              <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <p className="text-sm font-medium text-gray-700 mb-4">Project Pipeline</p>
+                {projectPipeline.entries.length === 0 ? (
+                  <p className="text-sm text-gray-400">No projects yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {projectPipeline.entries.map(([status, count]) => (
+                      <div key={status}>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="text-gray-600">{status}</span>
+                          <span className="font-semibold text-gray-900">{count}</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${(count / projectPipeline.max) * 100}%`,
+                              background: projectPipeline.palette[status] || '#9ca3af',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-xs text-gray-400 pt-1">{projectPipeline.total} projects total</p>
+                  </div>
+                )}
               </div>
 
-              {/* Expense Breakdown donut */}
-              <div className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col">
-                <p className="text-sm font-medium text-gray-700 mb-1">Expense Breakdown</p>
-                <p className="text-xs text-gray-400 mb-4">Current period ({DATE_FILTERS.find(f => f.value === dateFilter)?.label})</p>
-                {(totalLabor + totalMaterials + totalGeneral) === 0 ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No expenses recorded</div>
+              {/* Period Financials */}
+              <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-medium text-gray-700">Period Financials</p>
+                  <span className="text-xs text-gray-400">{DATE_FILTERS.find(f => f.value === dateFilter)?.label}</span>
+                </div>
+
+                {/* Net figure */}
+                <div className={`mb-4 px-4 py-3 rounded-lg ${(totalPayments - totalExpenses) >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <p className="text-xs text-gray-500 mb-0.5">{(totalPayments - totalExpenses) >= 0 ? 'Net Gain' : 'Net Loss'}</p>
+                  <p className={`text-2xl font-bold ${(totalPayments - totalExpenses) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    ₱{Math.abs(totalPayments - totalExpenses).toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Revenue vs Expenses */}
+                <div className="space-y-2 mb-4">
+                  {[
+                    { label: 'Revenue', value: totalPayments, bar: 'bg-emerald-400' },
+                    { label: 'Expenses', value: totalExpenses, bar: 'bg-red-400' },
+                  ].map(({ label, value, bar }) => {
+                    const max = Math.max(totalPayments, totalExpenses, 1)
+                    return (
+                      <div key={label}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-600">{label}</span>
+                          <span className="font-medium text-gray-800">₱{value.toLocaleString()}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${bar}`} style={{ width: `${(value / max) * 100}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Expense breakdown */}
+                {totalExpenses > 0 && (
+                  <div className="border-t border-gray-100 pt-3 space-y-1.5">
+                    <p className="text-xs text-gray-400 mb-2">Expense breakdown</p>
+                    {[
+                      { label: 'Labor', value: totalLabor, dot: 'bg-amber-400' },
+                      { label: 'Materials', value: totalMaterials, dot: 'bg-blue-400' },
+                      { label: 'General', value: totalGeneral, dot: 'bg-violet-400' },
+                    ].filter(e => e.value > 0).map(({ label, value, dot }) => {
+                      const pct = Math.round((value / totalExpenses) * 100)
+                      return (
+                        <div key={label} className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1.5 text-gray-600">
+                            <span className={`w-2 h-2 rounded-full ${dot}`} />
+                            {label}
+                          </span>
+                          <span className="text-gray-500">₱{value.toLocaleString()} <span className="text-gray-400">({pct}%)</span></span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Alert widgets */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* Accounts Receivable */}
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+                  <Banknote size={16} className="text-emerald-600" />
+                  <h3 className="text-sm font-medium text-gray-700">Accounts Receivable</h3>
+                  <span className="ml-auto bg-emerald-50 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {adminWidgets.arProjects.length}
+                  </span>
+                </div>
+                {adminWidgets.arProjects.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                    <CheckCircle2 size={24} className="mb-2 text-emerald-400" />
+                    <span className="text-xs">All payments settled</span>
+                  </div>
                 ) : (
-                  <>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Labor', value: totalLabor, color: '#f59e0b' },
-                            { name: 'Materials', value: totalMaterials, color: '#3b82f6' },
-                            { name: 'General', value: totalGeneral, color: '#8b5cf6' },
-                          ].filter(e => e.value > 0)}
-                          cx="50%" cy="50%"
-                          innerRadius={50} outerRadius={80}
-                          dataKey="value"
-                        >
-                          {[
-                            { name: 'Labor', value: totalLabor, color: '#f59e0b' },
-                            { name: 'Materials', value: totalMaterials, color: '#3b82f6' },
-                            { name: 'General', value: totalGeneral, color: '#8b5cf6' },
-                          ].filter(e => e.value > 0).map((entry) => (
-                            <Cell key={entry.name} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => `₱${value.toLocaleString()}`} contentStyle={{ fontSize: 12 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="mt-2 space-y-2">
-                      {[
-                        { label: 'Labor', value: totalLabor, color: 'bg-amber-400' },
-                        { label: 'Materials', value: totalMaterials, color: 'bg-blue-500' },
-                        { label: 'General', value: totalGeneral, color: 'bg-violet-500' },
-                      ].filter(e => e.value > 0).map(({ label, value, color }) => {
-                        const total = totalLabor + totalMaterials + totalGeneral
-                        const pct = total > 0 ? Math.round((value / total) * 100) : 0
-                        const warn = label === 'Labor' && pct > 50
-                        return (
-                          <div key={label} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
-                              <span className="text-gray-600">{label}</span>
-                              {warn && <span className="text-amber-600 font-medium">High</span>}
+                  <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                    {adminWidgets.arProjects.map(p => {
+                      const pct = p.totalContract > 0 ? (p.totalPaid / p.totalContract) * 100 : 0
+                      return (
+                        <div key={p.id} className="px-5 py-3">
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-gray-900 truncate">{p.project_name}</p>
+                              <p className="text-xs text-gray-400 truncate">{p.owner_company_name}</p>
                             </div>
-                            <div className="text-right">
-                              <span className="font-medium text-gray-800">₱{value.toLocaleString()}</span>
-                              <span className="text-gray-400 ml-1">({pct}%)</span>
-                            </div>
+                            <span className="text-xs font-bold text-red-600 whitespace-nowrap">
+                              ₱{p.outstanding.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </span>
                           </div>
-                        )
-                      })}
-                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-gray-700">
-                        <span>Total Expenses</span>
-                        <span>₱{(totalLabor + totalMaterials + totalGeneral).toLocaleString()}</span>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">{pct.toFixed(0)}% collected</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Cost Overrun Alerts */}
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+                  <TrendingDown size={16} className="text-red-500" />
+                  <h3 className="text-sm font-medium text-gray-700">Cost Overruns</h3>
+                  <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${adminWidgets.overrunProjects.length > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-500'}`}>
+                    {adminWidgets.overrunProjects.length}
+                  </span>
+                </div>
+                {adminWidgets.overrunProjects.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                    <CheckCircle2 size={24} className="mb-2 text-emerald-400" />
+                    <span className="text-xs">All projects within budget</span>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                    {adminWidgets.overrunProjects.map(p => {
+                      const isOver = p.overrunPct >= 1
+                      return (
+                        <div key={p.id} className={`px-5 py-3 ${isOver ? 'bg-red-50/40' : 'bg-amber-50/30'}`}>
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-gray-900 truncate">{p.project_name}</p>
+                              <p className="text-xs text-gray-400 truncate">{p.owner_company_name}</p>
+                            </div>
+                            <span className={`flex items-center gap-1 text-xs font-bold whitespace-nowrap ${isOver ? 'text-red-600' : 'text-amber-600'}`}>
+                              <AlertTriangle size={11} />
+                              {(p.overrunPct * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${isOver ? 'bg-red-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(p.overrunPct * 100, 100)}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            ₱{p.totalExpenses.toLocaleString(undefined, { maximumFractionDigits: 0 })} of ₱{p.totalContract.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Stale Projects */}
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+                  <Clock size={16} className="text-amber-500" />
+                  <h3 className="text-sm font-medium text-gray-700">Stale Projects</h3>
+                  <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${adminWidgets.staleProjects.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'}`}>
+                    {adminWidgets.staleProjects.length}
+                  </span>
+                </div>
+                {adminWidgets.staleProjects.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                    <CheckCircle2 size={24} className="mb-2 text-emerald-400" />
+                    <span className="text-xs">All projects have recent activity</span>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                    {adminWidgets.staleProjects.map(p => (
+                      <div key={p.id} className="px-5 py-3 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{p.project_name}</p>
+                          <p className="text-xs text-gray-400 truncate">{p.project_manager || '—'}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-amber-600 whitespace-nowrap">
+                          {p.lastActivity ? `${Math.floor((new Date() - p.lastActivity) / 86400000)}d ago` : 'No activity'}
+                        </span>
                       </div>
-                      <div className={`flex items-center justify-between text-xs font-semibold pt-1 ${(totalPayments - totalExpenses) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        <span>{(totalPayments - totalExpenses) >= 0 ? 'Net Gain' : 'Net Loss'}</span>
-                        <span>₱{Math.abs(totalPayments - totalExpenses).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

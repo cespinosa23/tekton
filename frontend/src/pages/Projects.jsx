@@ -548,7 +548,7 @@ export default function Projects() {
 
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
-  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
+  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const projectManagers = employees.filter(e => e.role === 'Project Manager' && !e.archived)
 
   // For PM role: only show their own projects
@@ -582,7 +582,11 @@ export default function Projects() {
       .reduce((sum, s) => sum + (data[`scope_${s.key}`] ? parseFloat(data[s.costField]) || 0 : 0), 0)
       + (data.scope_others ? parseFloat(data.scope_others_cost) || 0 : 0)
     const encumbranceVal = data.scope_encumbrance ? parseFloat(data.encumbrance) || 0 : 0
-    const payload = { ...data, contract_cost: contractCost, encumbrance: encumbranceVal }
+    const COST_FIELDS = ['scope_wiring_permit_cost', 'scope_electrical_plan_cost', 'scope_installation_cost', 'scope_supply_cost', 'scope_meralco_cost', 'scope_others_cost']
+    const sanitized = Object.fromEntries(
+      COST_FIELDS.map(f => [f, data[f] === '' || data[f] == null ? null : parseFloat(data[f]) || 0])
+    )
+    const payload = { ...data, ...sanitized, contract_cost: contractCost, encumbrance: encumbranceVal }
     if (editingProject) {
       updateMutation.mutate({ id: editingProject.id, data: payload })
     } else {
@@ -685,7 +689,7 @@ export default function Projects() {
           const visible = isPM && myFullName
             ? sortedFiltered.filter(p => p.project_manager === myFullName)
             : sortedFiltered
-          return isLoading ? (
+          return (isLoading || (isPM && isLoadingEmployees)) ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
             </div>
@@ -707,7 +711,7 @@ export default function Projects() {
         })()}
 
         {/* Payments Tab */}
-        {activeTab === 'payments' && (() => {
+        {(isAdmin() || hasRole('Project Manager')) && activeTab === 'payments' && (() => {
           const visible = isPM && myFullName
             ? sortedFiltered.filter(p => p.project_manager === myFullName)
             : sortedFiltered
