@@ -49,7 +49,7 @@ def get_employee(
 def create_employee(
     payload: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"])),
+    current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
     employee = Employee(**payload.model_dump())
     db.add(employee)
@@ -63,7 +63,7 @@ def update_employee(
     employee_id: int,
     payload: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"])),
+    current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
     employee = db.query(Employee).filter(
         Employee.id == employee_id,
@@ -84,7 +84,7 @@ def update_employee(
 def archive_employee(
     employee_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"])),
+    current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
     employee = db.query(Employee).filter(
         Employee.id == employee_id,

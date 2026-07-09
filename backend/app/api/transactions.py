@@ -6,7 +6,7 @@ from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionRead
 from app.core.inventory import sync_inventory
 
-_write_auth = require_role(["Admin", "Accounting"])
+_write_auth = require_role(["Admin", "Project Coordinator"])
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 

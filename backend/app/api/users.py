@@ -23,7 +23,7 @@ async def invite_user(
     payload: UserInvite,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"])),
+    current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
     # Check duplicate email
     existing_user = db.query(User).filter(User.email == payload.email).first()
@@ -183,7 +183,7 @@ async def resend_invite(
     email: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["Admin", "HR"])),
+    current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
     user = db.query(User).filter(User.email == email).first()
     if not user:
