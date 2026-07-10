@@ -584,9 +584,10 @@ export default function Projects() {
     const encumbranceVal = data.scope_encumbrance ? parseFloat(data.encumbrance) || 0 : 0
     const COST_FIELDS = ['scope_wiring_permit_cost', 'scope_electrical_plan_cost', 'scope_installation_cost', 'scope_supply_cost', 'scope_meralco_cost', 'scope_others_cost']
     const sanitized = Object.fromEntries(
-      COST_FIELDS.map(f => [f, data[f] === '' || data[f] == null ? null : parseFloat(data[f]) || 0])
+      COST_FIELDS.map(f => [f, data[f] === '' || data[f] == null ? 0 : parseFloat(data[f]) || 0])
     )
-    const payload = { ...data, ...sanitized, contract_cost: contractCost, encumbrance: encumbranceVal }
+    const quotationDate = data.quotation_date === '' ? null : data.quotation_date
+    const payload = { ...data, ...sanitized, contract_cost: contractCost, encumbrance: encumbranceVal, quotation_date: quotationDate }
     if (editingProject) {
       updateMutation.mutate({ id: editingProject.id, data: payload })
     } else {
