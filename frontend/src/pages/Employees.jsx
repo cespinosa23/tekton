@@ -202,10 +202,14 @@ export default function Employees() {
   }
 
   const handleSave = () => {
+    const payload = {
+      ...formData,
+      date_hired: formData.date_hired === '' ? null : formData.date_hired,
+    }
     if (editingEmployee) {
-      updateMutation.mutate({ id: editingEmployee.id, data: formData, oldEmail: editingEmployee.email || '' })
+      updateMutation.mutate({ id: editingEmployee.id, data: payload, oldEmail: editingEmployee.email || '' })
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 
