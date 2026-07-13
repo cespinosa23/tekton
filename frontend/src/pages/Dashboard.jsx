@@ -6,6 +6,7 @@ import {
   isSameMonth, isToday, isSameDay, parseISO
 } from 'date-fns'
 import Layout from '../components/Layout'
+import WeatherCard from '../components/WeatherCard'
 import {
   getProjects, getTransactions, getEmployees, getAttendance,
   getCalendarDays, createCalendarDay, updateCalendarDay
@@ -265,7 +266,7 @@ export default function Dashboard() {
     <Layout>
       <div className="p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-sm text-gray-500 mt-1">Overview of Tekton Electrical Services operations</p>
@@ -279,8 +280,11 @@ export default function Dashboard() {
           </select>
         </div>
 
+        {/* Weather */}
+        <WeatherCard />
+
         {/* Stat cards */}
-        <div className={`grid gap-4 ${canSeeFinancials ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : canSeeTotalExpenses ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
+        <div className={`grid gap-4 mt-4 ${canSeeFinancials ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : canSeeTotalExpenses ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
           {stats.map(({ label, value, icon: Icon, color, clickable }) => (
             <div
               key={label}
