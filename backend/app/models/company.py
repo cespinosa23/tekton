@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Text
 from app.db.database import Base
 
 class Company(Base):
@@ -7,7 +7,7 @@ class Company(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String(255), nullable=False)
     short_name = Column(String(100), nullable=True)
-    logo_url = Column(String(500), nullable=True)
+    logo_url = Column(Text, nullable=True)
     address = Column(String(255), nullable=True)
     contact_number = Column(String(50), nullable=True)
     email = Column(String(255), nullable=True)
@@ -15,4 +15,6 @@ class Company(Base):
     footer_text = Column(String(500), nullable=True)
     default_signatory = Column(String(100), nullable=True)
     signatory_position = Column(String(100), nullable=True)
+    pcab_license = Column(String(100), nullable=True)
+    signature_url = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)

@@ -14,6 +14,7 @@ export const WRITE_ROLES = {
   settings:     [],                         // Admin only
   archive:      [],                         // Admin only (restore + permanent delete)
   quotations:   ['Project Coordinator', 'Project Manager'],
+  billing:      [],                         // Admin only
 }
 
 // Nav paths visible only to the listed roles (plus Admin).
@@ -29,4 +30,5 @@ export const NAV_ROLES = {
   '/projects':      ['Project Coordinator', 'Project Manager'],
   '/attendance':    ['Project Coordinator', 'Project Manager'],
   '/reports':       [],                     // Admin only
+  '/billings':      [],                     // Admin only
 }

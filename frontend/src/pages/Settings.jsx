@@ -57,7 +57,8 @@ export default function Settings() {
   // Company state
   const emptyCompanyForm = {
     company_name: '', short_name: '', address: '', contact_number: '',
-    email: '', website: '', footer_text: '', default_signatory: '', signatory_position: ''
+    email: '', website: '', footer_text: '', default_signatory: '', signatory_position: '',
+    pcab_license: '', logo_url: '', signature_url: '',
   }
   const [companyFormOpen, setCompanyFormOpen] = useState(false)
   const [editingCompany, setEditingCompany] = useState(null)
@@ -546,6 +547,9 @@ export default function Settings() {
                             footer_text: company.footer_text || '',
                             default_signatory: company.default_signatory || '',
                             signatory_position: company.signatory_position || '',
+                            pcab_license: company.pcab_license || '',
+                            logo_url: company.logo_url || '',
+                            signature_url: company.signature_url || '',
                           })
                           setCompanyFormOpen(true)
                         }}
@@ -659,6 +663,7 @@ export default function Settings() {
                 ['contact_number', 'Contact Number', 'text'],
                 ['email', 'Email', 'email'],
                 ['website', 'Website', 'url'],
+                ['pcab_license', 'PCAB License', 'text'],
                 ['default_signatory', 'Default Signatory', 'text'],
                 ['signatory_position', 'Signatory Position', 'text'],
               ].map(([field, label, type]) => (
@@ -674,6 +679,32 @@ export default function Settings() {
                 <textarea value={companyForm.footer_text} rows={2}
                   onChange={e => setCompanyForm(p => ({ ...p, footer_text: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  ['logo_url', 'Logo'],
+                  ['signature_url', 'Signature'],
+                ].map(([field, label]) => (
+                  <div key={field}>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                    <input type="file" accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => setCompanyForm(p => ({ ...p, [field]: reader.result }))
+                        reader.readAsDataURL(file)
+                      }}
+                      className="w-full text-xs text-gray-600 file:mr-2 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs hover:file:bg-gray-200" />
+                    {companyForm[field] && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <img src={companyForm[field]} alt={label} className="h-12 max-w-[120px] object-contain border border-gray-200 rounded bg-white" />
+                        <button type="button" onClick={() => setCompanyForm(p => ({ ...p, [field]: '' }))}
+                          className="text-xs text-gray-400 hover:text-red-500">Remove</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t flex-shrink-0">

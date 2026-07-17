@@ -24,6 +24,7 @@ import app.models.supplier   # noqa
 import app.models.transaction  # noqa
 import app.models.quotation  # noqa
 import app.models.setting    # noqa
+import app.models.billing    # noqa
 
 target_metadata = Base.metadata
 

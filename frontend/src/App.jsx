@@ -16,6 +16,8 @@ import Transactions from './pages/transactions/index'
 import Archive from './pages/Archive'
 import Quotations from './pages/Quotations'
 import Reports from './pages/Reports'
+import BillingPrint from './pages/BillingPrint'
+import Billings from './pages/Billings'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -41,6 +43,8 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectView /></ProtectedRoute>} />
+      <Route path="/projects/:id/billing/:billingId/print" element={<ProtectedRoute><BillingPrint /></ProtectedRoute>} />
+      <Route path="/billings" element={<ProtectedRoute><Billings /></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />

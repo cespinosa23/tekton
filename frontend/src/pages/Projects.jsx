@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
+import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 
 
 const SCOPES = [
@@ -159,9 +160,9 @@ function PaymentsView({ projects }) {
         const projectTx = transactions.filter(t => t.project_id === project.id)
         const projectAtt = attendance.filter(a => a.project_id === project.id)
 
-        const contractCost = parseFloat(project.contract_cost) || 0
+        const totalContract = parseFloat(project.contract_cost) || 0
         const encumbrance = parseFloat(project.encumbrance) || 0
-        const totalContract = contractCost + encumbrance
+        const contractCost = totalContract - encumbrance // pure scope cost, excluding encumbrance, for the chart segment below
 
         const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
         const materialsCost = projectTx
@@ -311,37 +312,20 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
     .filter(s => !s.hasRemarks)
     .every(s => formData[`scope_${s.key}`])
 
-  const formatCostDisplay = (raw) => {
-    if (raw === '' || raw === undefined || raw === null) return ''
-    const str = String(raw)
-    const parts = str.split('.')
-    const intFormatted = (parseInt(parts[0], 10) || 0).toLocaleString('en-US')
-    if (parts.length === 1) return intFormatted
-    return intFormatted + '.' + parts[1]  // preserve decimal as-typed (trailing zeros allowed while typing)
-  }
-
-  const normalizeCost = (raw) => {
-    if (raw === '' || raw === '.' || raw === undefined) return ''
-    const num = parseFloat(raw)
-    if (isNaN(num)) return ''
-    return String(num)  // parseFloat removes trailing zeros: "100.50" → "100.5"
-  }
-
   const costInput = (field, enabled, hasError) => (
     <input
       type="text"
       disabled={!enabled}
-      value={enabled ? formatCostDisplay(formData[field]) : ''}
+      value={enabled ? formatNumberDisplay(formData[field]) : ''}
       placeholder="Required"
       onChange={e => {
-        const raw = e.target.value.replace(/,/g, '')
-        if (!/^\d*\.?\d*$/.test(raw)) return
-        if (/^0\d/.test(raw)) return  // block leading zeros like "01..."
-        setFormData(p => ({ ...p, [field]: raw }))
+        const sanitized = sanitizeNumberInput(e.target.value)
+        if (sanitized === null) return
+        setFormData(p => ({ ...p, [field]: sanitized }))
       }}
       onBlur={() => {
         if (!enabled) return
-        setFormData(p => ({ ...p, [field]: normalizeCost(p[field]) }))
+        setFormData(p => ({ ...p, [field]: normalizeNumberInput(p[field]) }))
       }}
       className={`w-36 px-3 py-1.5 text-right border rounded-md text-sm focus:outline-none focus:ring-2 ${
         !enabled
@@ -577,10 +561,9 @@ export default function Projects() {
   })
 
   const handleSave = (data) => {
+    // Contract cost includes every checked scope, encumbrance included — mirrors the live "Total Contract Cost" shown in the form.
     const contractCost = FORM_SCOPES
-      .filter(s => s.key !== 'encumbrance' && s.key !== 'others')
       .reduce((sum, s) => sum + (data[`scope_${s.key}`] ? parseFloat(data[s.costField]) || 0 : 0), 0)
-      + (data.scope_others ? parseFloat(data.scope_others_cost) || 0 : 0)
     const encumbranceVal = data.scope_encumbrance ? parseFloat(data.encumbrance) || 0 : 0
     const COST_FIELDS = ['scope_wiring_permit_cost', 'scope_electrical_plan_cost', 'scope_installation_cost', 'scope_supply_cost', 'scope_meralco_cost', 'scope_others_cost']
     const sanitized = Object.fromEntries(
@@ -621,8 +604,8 @@ export default function Projects() {
       case 'oldest':    return a.id - b.id
       case 'name_az':   return (a.project_name || '').localeCompare(b.project_name || '')
       case 'name_za':   return (b.project_name || '').localeCompare(a.project_name || '')
-      case 'cost_high': return (parseFloat(b.contract_cost) + parseFloat(b.encumbrance || 0)) - (parseFloat(a.contract_cost) + parseFloat(a.encumbrance || 0))
-      case 'cost_low':  return (parseFloat(a.contract_cost) + parseFloat(a.encumbrance || 0)) - (parseFloat(b.contract_cost) + parseFloat(b.encumbrance || 0))
+      case 'cost_high': return (parseFloat(b.contract_cost) || 0) - (parseFloat(a.contract_cost) || 0)
+      case 'cost_low':  return (parseFloat(a.contract_cost) || 0) - (parseFloat(b.contract_cost) || 0)
       case 'date_new':  return new Date(b.quotation_date || 0) - new Date(a.quotation_date || 0)
       case 'date_old':  return new Date(a.quotation_date || 0) - new Date(b.quotation_date || 0)
       default:          return b.id - a.id

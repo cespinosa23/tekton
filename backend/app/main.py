@@ -29,8 +29,10 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate, Transa
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationRead
 from app.schemas.setting import SettingCreate, SettingUpdate, SettingRead
 from app.models import material_type  # noqa
+from app.models import billing  # noqa
 from app.api import material_types
 from app.api import transactions as transactions_router
+from app.api import billing as billing_router
 
 app = FastAPI(title="Tekton")
 
@@ -59,5 +61,6 @@ app.include_router(make_crud_router("/materials", "materials", Material, Materia
 app.include_router(make_crud_router("/inventory", "inventory", Inventory, InventoryCreate, InventoryUpdate, InventoryRead, write_roles=["Admin"]))
 app.include_router(make_crud_router("/suppliers", "suppliers", Supplier, SupplierCreate, SupplierUpdate, SupplierRead, write_roles=["Admin"]))
 app.include_router(transactions_router.router)
+app.include_router(billing_router.router)
 app.include_router(make_crud_router("/quotations", "quotations", Quotation, QuotationCreate, QuotationUpdate, QuotationRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))

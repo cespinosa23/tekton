@@ -12,6 +12,8 @@ class CompanyCreate(BaseModel):
     footer_text: Optional[str] = None
     default_signatory: Optional[str] = None
     signatory_position: Optional[str] = None
+    pcab_license: Optional[str] = None
+    signature_url: Optional[str] = None
     is_active: bool = True
 
 class CompanyUpdate(CompanyCreate):

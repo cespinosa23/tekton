@@ -60,9 +60,7 @@ export default function Reports() {
     const projectTx = transactions.filter(t => t.project_id === project.id)
     const projectAtt = attendance.filter(a => a.project_id === project.id)
 
-    const contractCost = parseFloat(project.contract_cost) || 0
-    const encumbrance = parseFloat(project.encumbrance) || 0
-    const totalContract = contractCost + encumbrance
+    const totalContract = parseFloat(project.contract_cost) || 0
 
     const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
     const materialsCost = projectTx
