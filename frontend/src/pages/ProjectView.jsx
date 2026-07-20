@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
 import { getEmployees } from '../api/employees'
-import { getBillings, createBilling, setBillingPaid } from '../api/billing'
+import { getBillings, createBilling, setBillingPaid, resetProjectBilling } from '../api/billing'
 import { getCompanies } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
@@ -13,7 +13,7 @@ import { formatBillingSerial } from '../utils/billingSerial'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
-  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer
+  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle
 } from 'lucide-react'
 
 const SCOPES = [
@@ -56,6 +56,7 @@ export default function ProjectView() {
   const [billingError, setBillingError] = useState('')
   const [printPickerFor, setPrintPickerFor] = useState(null)
   const [printCompanyId, setPrintCompanyId] = useState('')
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const { isAdmin, hasRole, user } = useAuth()
   const hideFinancials = hasRole('Project Coordinator') || hasRole('Project Manager')
@@ -104,6 +105,14 @@ export default function ProjectView() {
       paid_date: nextPaid ? new Date().toISOString().split('T')[0] : null,
     })
   }
+
+  const resetBillingMutation = useMutation({
+    mutationFn: resetProjectBilling,
+    onSuccess: () => {
+      setShowResetConfirm(false)
+      queryClient.invalidateQueries({ queryKey: ['billings'] })
+    },
+  })
 
   if (!project) return (
     <Layout>
@@ -542,9 +551,9 @@ export default function ProjectView() {
                           <td className="px-4 py-3 text-right font-medium text-emerald-600">{fmt(b.amount)}</td>
                           <td className="px-4 py-3 text-center">
                             {isAdmin() ? (
-                              <button onClick={() => handleTogglePaid(b)} disabled={paidMutation.isPending}
-                                title={b.is_paid && b.paid_date ? `Paid on ${b.paid_date}` : 'Mark as paid'}
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+                              <button onClick={() => handleTogglePaid(b)} disabled={paidMutation.isPending || parseFloat(b.amount) === 0}
+                                title={parseFloat(b.amount) === 0 ? 'Zero-amount billing — always paid' : b.is_paid && b.paid_date ? `Paid on ${b.paid_date}` : 'Mark as paid'}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                   b.is_paid ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                 }`}>
                                 {b.is_paid ? <CheckCircle size={12} /> : <Clock size={12} />}
@@ -624,6 +633,17 @@ export default function ProjectView() {
                       title={!allBilledPaid ? 'All billings must be marked Paid first' : undefined}
                       className="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       Release Retention
+                    </button>
+                  </div>
+                )}
+
+                {/* Reset Billing */}
+                {isAdmin() && (
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-xs text-gray-400">Made a mistake in the setup? You can reset billing and start over.</p>
+                    <button onClick={() => setShowResetConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors">
+                      <AlertTriangle size={13} /> Reset Billing
                     </button>
                   </div>
                 )}
@@ -721,6 +741,31 @@ export default function ProjectView() {
           </div>
         )}
       </div>
+
+      {/* Reset Billing Confirm */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowResetConfirm(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+              <AlertTriangle size={18} className="text-red-600" />
+              <h3 className="text-sm font-semibold text-gray-900">Reset Billing?</h3>
+            </div>
+            <div className="px-5 py-4 space-y-2 text-sm text-gray-600">
+              <p>This clears all billing history for <span className="font-medium text-gray-900">{project.project_name}</span> — the down payment, every progress billing, and any retention release.</p>
+              <p className="text-red-600 font-medium">This cannot be undone from this screen.</p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button onClick={() => resetBillingMutation.mutate(project.id)} disabled={resetBillingMutation.isPending}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50">
+                Reset Billing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Print Company Picker */}
       {printPickerFor && (

@@ -20,6 +20,10 @@ def _next_sequence(db: Session, project_id: int) -> int:
     return (last.sequence_number + 1) if last else 1
 
 
+def _is_zero_amount(amount) -> bool:
+    return round(float(amount or 0), 2) == 0
+
+
 @router.get("/", response_model=list[BillingRead])
 def list_billings(skip: int = 0, limit: int = 200, db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(Billing).filter(Billing.archived == False).offset(skip).limit(limit).all()
@@ -64,6 +68,8 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
             scope_description=payload.scope_description,
             amount=dp_amount,
             notes=payload.notes,
+            is_paid=_is_zero_amount(dp_amount),
+            paid_date=payload.billing_date if _is_zero_amount(dp_amount) else None,
         )
 
     elif payload.billing_type == "progress":
@@ -98,6 +104,8 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
             previous_percentage=previous_percentage,
             amount=amount,
             notes=payload.notes,
+            is_paid=_is_zero_amount(amount),
+            paid_date=payload.billing_date if _is_zero_amount(amount) else None,
         )
 
     elif payload.billing_type == "retention_release":
@@ -124,6 +132,8 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
             billing_date=payload.billing_date,
             amount=dp_row.retention_amount,
             notes=payload.notes,
+            is_paid=_is_zero_amount(dp_row.retention_amount),
+            paid_date=payload.billing_date if _is_zero_amount(dp_row.retention_amount) else None,
         )
 
     else:
@@ -140,6 +150,9 @@ def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Dep
     billing = db.query(Billing).filter(Billing.id == item_id).first()
     if not billing:
         raise HTTPException(status_code=404, detail="Billing not found")
+
+    if not payload.is_paid and _is_zero_amount(billing.amount):
+        raise HTTPException(status_code=400, detail="A zero-amount billing is always considered paid")
 
     billing.is_paid = payload.is_paid
     billing.paid_date = payload.paid_date if payload.is_paid else None
@@ -164,4 +177,17 @@ def archive_billing(item_id: int, db: Session = Depends(get_db), current_user=De
 
     billing.archived = True
     billing.archived_by = current_user.email
+    db.commit()
+
+
+@router.post("/project/{project_id}/reset", status_code=status.HTTP_204_NO_CONTENT)
+def reset_project_billing(project_id: int, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
+    """Archive every billing entry for a project so it can be set up from scratch."""
+    rows = _project_billings(db, project_id).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No billing entries found for this project")
+
+    for row in rows:
+        row.archived = True
+        row.archived_by = current_user.email
     db.commit()

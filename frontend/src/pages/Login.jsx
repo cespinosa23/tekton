@@ -20,9 +20,12 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
+      // Read straight from the form instead of React state: browser autofill can
+      // populate the inputs without firing onChange in time, leaving state stale.
+      const form = new FormData(e.target)
       const params = new URLSearchParams()
-      params.append('username', email)
-      params.append('password', password)
+      params.append('username', form.get('email') || email)
+      params.append('password', form.get('password') || password)
       const { data: tokenData } = await client.post('/auth/login', params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       })
@@ -71,13 +74,13 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                <input type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="you@example.com" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                <input type="password" name="password" value={password} onChange={e => setPassword(e.target.value)} required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="••••••••" />
               </div>

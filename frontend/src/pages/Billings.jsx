@@ -117,9 +117,9 @@ export default function Billings() {
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-emerald-600">{fmt(b.amount)}</td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => handleTogglePaid(b)} disabled={paidMutation.isPending}
-                        title={b.is_paid && b.paid_date ? `Paid on ${b.paid_date}` : 'Mark as paid'}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+                      <button onClick={() => handleTogglePaid(b)} disabled={paidMutation.isPending || parseFloat(b.amount) === 0}
+                        title={parseFloat(b.amount) === 0 ? 'Zero-amount billing — always paid' : b.is_paid && b.paid_date ? `Paid on ${b.paid_date}` : 'Mark as paid'}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           b.is_paid ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}>
                         {b.is_paid ? <CheckCircle size={12} /> : <Clock size={12} />}

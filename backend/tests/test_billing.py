@@ -245,3 +245,92 @@ def test_down_payment_stores_scope_description(client, admin_token):
     }, headers=headers)
     assert resp.status_code == 201, resp.text
     assert resp.json()["scope_description"] == "Installation of Service Entrance"
+
+
+def test_zero_amount_down_payment_is_auto_paid(client, admin_token):
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    resp = client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "down_payment",
+        "billing_date": "2026-01-01",
+        "dp_amount": 0,
+        "retention_amount": 0,
+    }, headers=headers)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["amount"] == 0
+    assert body["is_paid"] is True
+    assert body["paid_date"] == "2026-01-01"
+
+
+def test_zero_amount_billing_cannot_be_unpaid(client, admin_token):
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    dp_resp = client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "down_payment",
+        "billing_date": "2026-01-01",
+        "dp_amount": 0,
+        "retention_amount": 0,
+    }, headers=headers)
+    billing_id = dp_resp.json()["id"]
+
+    resp = client.put(f"/billing/{billing_id}/paid", json={"is_paid": False}, headers=headers)
+    assert resp.status_code == 400
+
+
+def test_reset_project_billing(client, admin_token):
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "down_payment",
+        "billing_date": "2026-01-01",
+        "dp_amount": 30000,
+        "retention_amount": 10000,
+    }, headers=headers)
+    client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "progress",
+        "billing_date": "2026-02-01",
+        "current_percentage": 50,
+    }, headers=headers)
+
+    resp = client.post(f"/billing/project/{project_id}/reset", headers=headers)
+    assert resp.status_code == 204
+
+    resp = client.get("/billing/", headers=headers)
+    assert all(b["project_id"] != project_id for b in resp.json())
+
+    # Project is clean — a fresh down payment can be recorded again
+    resp = client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "down_payment",
+        "billing_date": "2026-03-01",
+        "dp_amount": 5000,
+        "retention_amount": 0,
+    }, headers=headers)
+    assert resp.status_code == 201, resp.text
+
+
+def test_reset_project_billing_requires_admin(client, admin_token, engineer_token):
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    client.post("/billing/", json={
+        "project_id": project_id,
+        "billing_type": "down_payment",
+        "billing_date": "2026-01-01",
+        "dp_amount": 30000,
+        "retention_amount": 10000,
+    }, headers=headers)
+
+    resp = client.post(f"/billing/project/{project_id}/reset",
+                        headers={"Authorization": f"Bearer {engineer_token}"})
+    assert resp.status_code == 403
+
+
+def test_reset_project_billing_with_no_billings_404s(client, admin_token):
+    project_id = _create_project(100000)
+    resp = client.post(f"/billing/project/{project_id}/reset", headers=_auth(admin_token))
+    assert resp.status_code == 404

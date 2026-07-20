@@ -18,3 +18,7 @@ export const setBillingPaid = async ({ id, is_paid, paid_date }) => {
   const { data } = await client.put(`/billing/${id}/paid`, { is_paid, paid_date })
   return data
 }
+
+export const resetProjectBilling = async (projectId) => {
+  await client.post(`/billing/project/${projectId}/reset`)
+}

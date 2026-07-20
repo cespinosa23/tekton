@@ -223,9 +223,9 @@ export default function Inventory() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Material / Specs" field="material_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Brand" field="brand" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Starting</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">In</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Out</th>
@@ -241,6 +241,11 @@ export default function Inventory() {
               ) : sorted.map(item => (
                 <tr key={`${item.material_id}_${item.brand}`} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
+                    {item.material_type
+                      ? <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">{item.material_type}</span>
+                      : '-'}
+                  </td>
+                  <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{item.material_name}</p>
                     <p className="text-xs text-gray-400">{item.unit}</p>
                   </td>
@@ -248,11 +253,6 @@ export default function Inventory() {
                     {item.brand
                       ? <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">{item.brand}</span>
                       : <span className="text-gray-400 text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {item.material_type
-                      ? <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">{item.material_type}</span>
-                      : '-'}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{item.starting_quantity}</span>
