@@ -77,14 +77,12 @@ export default function BillingPrint() {
   const hasPendingMarker = cumulativeBillings.some(b => !b.is_paid)
 
   const contractCost = parseFloat(project.contract_cost) || 0
-  const requestedPct = contractCost > 0 ? (parseFloat(targetBilling.amount) / contractCost) * 100 : 0
-  const pctDisplay = Number.isInteger(requestedPct) ? requestedPct.toString() : requestedPct.toFixed(1)
 
   const bodyText = targetBilling.billing_type === 'down_payment'
     ? 'we would like to request your good office for the downpayment as stated in the terms of payment.'
     : targetBilling.billing_type === 'retention_release'
       ? 'we would like to request your good office for the release of retention as stated in the terms of payment.'
-      : `we would like to request your good office for the ${pctDisplay}% progress billing as stated in the terms of payment.`
+      : `we would like to request your good office for the ${targetBilling.current_percentage}% progress billing as stated in the terms of payment.`
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
