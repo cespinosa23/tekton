@@ -9,7 +9,7 @@ class Company(Base):
     short_name = Column(String(100), nullable=True)
     logo_url = Column(Text, nullable=True)
     address = Column(String(255), nullable=True)
-    contact_number = Column(String(50), nullable=True)
+    contact_number = Column(String(255), nullable=True)
     email = Column(String(255), nullable=True)
     website = Column(String(255), nullable=True)
     footer_text = Column(String(500), nullable=True)

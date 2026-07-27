@@ -177,7 +177,7 @@ export default function QuotePreview({ quote }) {
 
       {/* Footer */}
       {quote.company_footer && (
-        <div className="mt-8 pt-4 border-t border-gray-100 text-center text-xs text-gray-400">
+        <div className="mt-8 pt-4 border-t border-gray-100 text-center text-xs text-gray-400 whitespace-pre-line">
           {quote.company_footer}
         </div>
       )}

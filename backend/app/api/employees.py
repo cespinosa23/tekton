@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from decimal import Decimal
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.employee import Employee
@@ -45,13 +46,20 @@ def get_employee(
     return employee
 
 
+def _is_admin(user: User) -> bool:
+    return any(ur.role.name == "Admin" for ur in user.roles)
+
+
 @router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
 def create_employee(
     payload: EmployeeCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(["Admin", "Project Coordinator"])),
 ):
-    employee = Employee(**payload.model_dump())
+    data = payload.model_dump()
+    if not _is_admin(current_user):
+        data["daily_salary"] = Decimal("0")
+    employee = Employee(**data)
     db.add(employee)
     db.commit()
     db.refresh(employee)
@@ -72,7 +80,11 @@ def update_employee(
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if not _is_admin(current_user):
+        data.pop("daily_salary", None)
+
+    for field, value in data.items():
         setattr(employee, field, value)
 
     db.commit()

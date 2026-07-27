@@ -146,7 +146,7 @@ python3 -c "
 from app.db.database import SessionLocal
 from app.models.role import Role
 db = SessionLocal()
-for name in ['Admin','HR','Engineer','Accounting','Liaison','Others']:
+for name in ['Admin','HR','Engineer','Accounting','Liaison','Others','Project Coordinator','Project Manager']:
     if not db.query(Role).filter(Role.name == name).first():
         db.add(Role(name=name))
 db.commit()

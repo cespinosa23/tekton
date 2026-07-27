@@ -60,7 +60,7 @@ def run():
 
         # ── ROLES ─────────────────────────────────────────────────────────────
         print("Seeding roles...")
-        role_names = ["Admin", "Engineer", "Accounting", "HR", "Liaison", "Others"]
+        role_names = ["Admin", "Engineer", "Accounting", "HR", "Liaison", "Others", "Project Coordinator", "Project Manager"]
         roles = {}
         for name in role_names:
             r = db.query(Role).filter_by(name=name).first()

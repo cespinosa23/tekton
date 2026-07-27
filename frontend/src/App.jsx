@@ -25,6 +25,12 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />
 }
 
+function PublicOnlyRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return user ? <Navigate to="/dashboard" replace /> : children
+}
+
 function Placeholder({ title }) {
   return (
     <Layout>
@@ -39,7 +45,7 @@ function Placeholder({ title }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectView /></ProtectedRoute>} />

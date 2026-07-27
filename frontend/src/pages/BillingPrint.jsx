@@ -117,13 +117,20 @@ export default function BillingPrint() {
                   {company.pcab_license && <p className="text-xs text-gray-500 mt-0.5">PCAB License: {company.pcab_license}</p>}
                 </div>
               </div>
-              <div className="text-right text-xs text-gray-600 space-y-1 flex-shrink-0">
+              <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
                 {company.email && (
-                  <p className="flex items-center justify-end gap-1.5"><Mail size={12} />{company.email}</p>
+                  <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{company.email}</p>
                 )}
-                {company.contact_number && (
-                  <p className="flex items-center justify-end gap-1.5"><Phone size={12} />{company.contact_number}</p>
-                )}
+                {company.contact_number && (() => {
+                  const numbers = company.contact_number.split('\n').map(s => s.trim()).filter(Boolean)
+                  const lines = []
+                  for (let i = 0; i < numbers.length; i += 2) {
+                    lines.push(numbers.slice(i, i + 2).join(' / '))
+                  }
+                  return lines.map((line, i) => (
+                    <p key={i} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
+                  ))
+                })()}
               </div>
             </div>
 
@@ -192,7 +199,9 @@ export default function BillingPrint() {
             <div>
               <p className="mb-2">By:</p>
               {company.signature_url ? (
-                <img src={company.signature_url} alt="Signature" className="h-16 mb-1" />
+                <div className="h-16 w-40 mb-1 flex items-end justify-start overflow-hidden">
+                  <img src={company.signature_url} alt="Signature" className="max-h-full max-w-full object-contain" />
+                </div>
               ) : (
                 <div className="h-16" />
               )}
@@ -201,7 +210,7 @@ export default function BillingPrint() {
             </div>
 
             {company.footer_text && (
-              <p className="text-center text-xs text-gray-400 mt-10">{company.footer_text}</p>
+              <p className="text-center text-xs text-gray-400 mt-10 whitespace-pre-line">{company.footer_text}</p>
             )}
           </>
         )}

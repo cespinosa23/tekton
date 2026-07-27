@@ -527,7 +527,7 @@ export default function Settings() {
                         )}
                       </div>
                       {company.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin size={11} />{company.address}</p>}
-                      {company.contact_number && <p className="text-xs text-gray-500 mt-0.5">{company.contact_number}</p>}
+                      {company.contact_number && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{company.contact_number}</p>}
                       {company.email && <p className="text-xs text-gray-500 mt-0.5">{company.email}</p>}
                       {company.default_signatory && (
                         <p className="text-xs text-gray-400 mt-1 italic">{company.default_signatory}{company.signatory_position ? ` — ${company.signatory_position}` : ''}</p>
@@ -660,7 +660,6 @@ export default function Settings() {
                 ['company_name', 'Company Name *', 'text'],
                 ['short_name', 'Short Name', 'text'],
                 ['address', 'Address', 'text'],
-                ['contact_number', 'Contact Number', 'text'],
                 ['email', 'Email', 'email'],
                 ['website', 'Website', 'url'],
                 ['pcab_license', 'PCAB License', 'text'],
@@ -674,6 +673,33 @@ export default function Settings() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                 </div>
               ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Contact Numbers</label>
+                <div className="space-y-2">
+                  {(companyForm.contact_number ? companyForm.contact_number.split('\n') : ['']).map((line, i, lines) => (
+                    <div key={i} className="flex gap-2">
+                      <input type="text" value={line}
+                        placeholder="e.g. (02) 8713 3162 or 0908 899 3504 / 0921 479 3256"
+                        onChange={e => {
+                          const next = [...lines]
+                          next[i] = e.target.value
+                          setCompanyForm(p => ({ ...p, contact_number: next.join('\n') }))
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                      {lines.length > 1 && (
+                        <button type="button"
+                          onClick={() => setCompanyForm(p => ({ ...p, contact_number: lines.filter((_, idx) => idx !== i).join('\n') }))}
+                          className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setCompanyForm(p => ({ ...p, contact_number: (p.contact_number || '') + '\n' }))}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                    <Plus size={14} /> Add another number
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Footer Text</label>
                 <textarea value={companyForm.footer_text} rows={2}
@@ -711,10 +737,14 @@ export default function Settings() {
               <button onClick={closeCompanyForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
               <button
                 onClick={() => {
+                  const payload = {
+                    ...companyForm,
+                    contact_number: companyForm.contact_number.split('\n').map(s => s.trim()).filter(Boolean).join('\n'),
+                  }
                   if (editingCompany) {
-                    updateCompanyMutation.mutate({ id: editingCompany.id, data: companyForm })
+                    updateCompanyMutation.mutate({ id: editingCompany.id, data: payload })
                   } else {
-                    createCompanyMutation.mutate(companyForm)
+                    createCompanyMutation.mutate(payload)
                   }
                 }}
                 disabled={!companyForm.company_name}
