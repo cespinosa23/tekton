@@ -20,6 +20,7 @@ class Attendance(Base):
     overtime_multiplier = Column(Numeric(5, 2), default=1.15)
     regular_salary = Column(Numeric(12, 2), default=0)
     overtime_salary = Column(Numeric(12, 2), default=0)
+    tip = Column(Numeric(12, 2), default=0)
     total_salary = Column(Numeric(12, 2), default=0)
     status = Column(String(50), default="Present")
     remarks = Column(String(500), nullable=True)

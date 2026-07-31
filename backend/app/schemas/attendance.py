@@ -19,6 +19,7 @@ class AttendanceCreate(BaseModel):
     overtime_multiplier: Optional[Decimal] = Decimal("1.15")
     regular_salary: Optional[Decimal] = Decimal("0")
     overtime_salary: Optional[Decimal] = Decimal("0")
+    tip: Optional[Decimal] = Decimal("0")
     total_salary: Optional[Decimal] = Decimal("0")
     status: str = "Present"
     remarks: Optional[str] = None
@@ -39,6 +40,7 @@ class AttendanceUpdate(BaseModel):
     overtime_multiplier: Optional[Decimal] = None
     regular_salary: Optional[Decimal] = None
     overtime_salary: Optional[Decimal] = None
+    tip: Optional[Decimal] = None
     total_salary: Optional[Decimal] = None
     status: Optional[str] = None
     remarks: Optional[str] = None
@@ -60,6 +62,7 @@ class AttendanceRead(BaseModel):
     overtime_multiplier: Optional[Decimal] = None
     regular_salary: Optional[Decimal] = None
     overtime_salary: Optional[Decimal] = None
+    tip: Optional[Decimal] = None
     total_salary: Optional[Decimal] = None
     status: Optional[str] = None
     remarks: Optional[str] = None

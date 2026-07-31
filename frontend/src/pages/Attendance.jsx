@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, addDays, addWeeks, addMonths, addYears } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
+import ProjectCombobox from '../components/ProjectCombobox'
 import {
   getAttendance, getEmployees, getProjects,
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
-import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search, Split } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
@@ -36,9 +37,18 @@ const emptyForm = {
   overtime_multiplier: 1.15,
   regular_salary: 0,
   overtime_salary: 0,
+  tip: 0,
   total_salary: 0,
   status: 'Present',
   remarks: '',
+}
+
+const formatTime12 = (t) => {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 === 0 ? 12 : h % 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`
 }
 
 const calculateHours = (timeIn, timeOut, isRegular = false) => {
@@ -60,11 +70,12 @@ const calculateSalaries = (data, employee) => {
   const hourlyRate = employee.daily_salary / 8
   const regularSalary = hourlyRate * (data.regular_hours || 0)
   const overtimeSalary = hourlyRate * (data.overtime_multiplier || 1.15) * (data.overtime_hours || 0)
+  const tip = parseFloat(data.tip) || 0
   return {
     ...data,
     regular_salary: parseFloat(regularSalary.toFixed(2)),
     overtime_salary: parseFloat(overtimeSalary.toFixed(2)),
-    total_salary: parseFloat((regularSalary + overtimeSalary).toFixed(2)),
+    total_salary: parseFloat((regularSalary + overtimeSalary + tip).toFixed(2)),
   }
 }
 
@@ -118,8 +129,8 @@ export default function Attendance() {
     }, emp))
   }
 
-  const handleProjectChange = (e) => {
-    const proj = projects.find(x => x.id === parseInt(e.target.value))
+  const handleProjectChange = (id) => {
+    const proj = projects.find(x => x.id === id)
     setFormData(prev => ({ ...prev, project_id: proj?.id || '', project_name: proj?.project_name || '' }))
   }
 
@@ -141,6 +152,30 @@ export default function Attendance() {
     })
   }
 
+  const handleStatusChange = (status) => {
+    setFormData(prev => {
+      let updated = { ...prev, status }
+      if (status === 'Absent' || status === 'Leave') {
+        // No work happened this day — zero out and lock regular + OT hours/pay.
+        updated = {
+          ...updated,
+          regular_time_in: '', regular_time_out: '', regular_hours: 0,
+          overtime_time_in: '', overtime_time_out: '', overtime_hours: 0,
+          regular_salary: 0, overtime_salary: 0, tip: 0, total_salary: 0,
+        }
+      } else if (status === 'Half-day') {
+        updated = { ...updated, regular_time_in: '08:00', regular_time_out: '12:00' }
+        updated.regular_hours = calculateHours(updated.regular_time_in, updated.regular_time_out, true)
+        updated = calculateSalaries(updated, employees.find(e => e.id === prev.employee_id))
+      } else if (status === 'Present' && (prev.status === 'Absent' || prev.status === 'Leave' || prev.status === 'Half-day')) {
+        updated = { ...updated, regular_time_in: '08:00', regular_time_out: '17:00' }
+        updated.regular_hours = calculateHours(updated.regular_time_in, updated.regular_time_out, true)
+        updated = calculateSalaries(updated, employees.find(e => e.id === prev.employee_id))
+      }
+      return updated
+    })
+  }
+
   const handleEdit = (att) => {
     setEditingAttendance(att)
     setFormData({
@@ -150,8 +185,8 @@ export default function Attendance() {
       project_id: att.project_id || '',
       project_name: att.project_name || '',
       date: att.date || format(new Date(), 'yyyy-MM-dd'),
-      regular_time_in: att.regular_time_in || '08:00',
-      regular_time_out: att.regular_time_out || '17:00',
+      regular_time_in: att.regular_time_in || '',
+      regular_time_out: att.regular_time_out || '',
       regular_hours: att.regular_hours || 0,
       overtime_time_in: att.overtime_time_in || '',
       overtime_time_out: att.overtime_time_out || '',
@@ -159,6 +194,7 @@ export default function Attendance() {
       overtime_multiplier: att.overtime_multiplier || 1.15,
       regular_salary: att.regular_salary || 0,
       overtime_salary: att.overtime_salary || 0,
+      tip: att.tip || 0,
       total_salary: att.total_salary || 0,
       status: att.status || 'Present',
       remarks: att.remarks || '',
@@ -195,6 +231,9 @@ export default function Attendance() {
           })
         )
         queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        setSelectedDate(new Date(formData.date + 'T00:00:00'))
+        setEmployeeFilter('all')
+        setProjectFilter('all')
         closeForm()
         toast.success(`Attendance logged for ${selectedEmployees.length} employee(s)`)
       } catch {
@@ -237,6 +276,9 @@ export default function Attendance() {
     createMutation.mutate(payload, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        setSelectedDate(new Date(splitFormData.date + 'T00:00:00'))
+        setEmployeeFilter('all')
+        setProjectFilter('all')
         setSplitRecord(null)
         toast.success('Split assignment logged')
       },
@@ -451,7 +493,7 @@ export default function Attendance() {
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{att.regular_hours || 0}h</p>
                     {att.regular_time_in && att.regular_time_out && (
-                      <p className="text-xs text-gray-400">{att.regular_time_in} - {att.regular_time_out}</p>
+                      <p className="text-xs text-gray-400">{formatTime12(att.regular_time_in)} - {formatTime12(att.regular_time_out)}</p>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -459,7 +501,7 @@ export default function Attendance() {
                       <div>
                         <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-xs font-medium">{att.overtime_hours}h</span>
                         {att.overtime_time_in && att.overtime_time_out && (
-                          <p className="text-xs text-gray-400 mt-0.5">{att.overtime_time_in} - {att.overtime_time_out}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{formatTime12(att.overtime_time_in)} - {formatTime12(att.overtime_time_out)}</p>
                         )}
                       </div>
                     ) : '-'}
@@ -467,8 +509,14 @@ export default function Attendance() {
                   {!hideSalary && (
                   <td className="px-4 py-3 text-right">
                     <p className="font-semibold text-emerald-600">₱{(parseFloat(att.total_salary) || 0).toLocaleString()}</p>
-                    {att.regular_salary > 0 && att.overtime_salary > 0 && (
-                      <p className="text-xs text-gray-400">Reg: ₱{parseFloat(att.regular_salary).toLocaleString()} + OT: ₱{parseFloat(att.overtime_salary).toLocaleString()}</p>
+                    {(att.regular_salary > 0 || att.overtime_salary > 0 || att.tip > 0) && (
+                      <p className="text-xs text-gray-400">
+                        {[
+                          att.regular_salary > 0 && `Reg: ₱${parseFloat(att.regular_salary).toLocaleString()}`,
+                          att.overtime_salary > 0 && `OT: ₱${parseFloat(att.overtime_salary).toLocaleString()}`,
+                          att.tip > 0 && `Tip: ₱${parseFloat(att.tip).toLocaleString()}`,
+                        ].filter(Boolean).join(' + ')}
+                      </p>
                     )}
                   </td>
                   )}
@@ -479,6 +527,11 @@ export default function Attendance() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {canWrite('attendance') && att.status !== 'Absent' && att.status !== 'Leave' && (
+                        <button onClick={() => openSplit(att)} title="Add split assignment" className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-teal-600">
+                          <Split size={15} />
+                        </button>
+                      )}
                       {canWrite('attendance') && (
                         <button onClick={() => handleEdit(att)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
                           <Pencil size={15} />
@@ -535,13 +588,7 @@ export default function Attendance() {
                     {!formData.is_office_based && (
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
-                        <select value={formData.project_id} onChange={handleProjectChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                          <option value="">Select project...</option>
-                          {projects.map(proj => (
-                            <option key={proj.id} value={proj.id}>{proj.project_name}</option>
-                          ))}
-                        </select>
+                        <ProjectCombobox value={formData.project_id} onValueChange={handleProjectChange} projects={projects} />
                       </div>
                     )}
                   </div>
@@ -552,13 +599,7 @@ export default function Attendance() {
                       {!formData.is_office_based && (
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
-                          <select value={formData.project_id} onChange={handleProjectChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                            <option value="">Select project...</option>
-                            {projects.map(proj => (
-                              <option key={proj.id} value={proj.id}>{proj.project_name}</option>
-                            ))}
-                          </select>
+                          <ProjectCombobox value={formData.project_id} onValueChange={handleProjectChange} projects={projects} />
                         </div>
                       )}
                       <div className={formData.is_office_based ? 'col-span-2' : ''}>
@@ -631,19 +672,34 @@ export default function Attendance() {
 
                 {/* Regular Hours */}
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Regular Hours</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-700">Regular Hours</p>
+                    {formData.status !== 'Absent' && formData.status !== 'Leave' && (
+                      <button type="button"
+                        onClick={() => setFormData(prev => calculateSalaries(
+                          { ...prev, regular_time_in: '', regular_time_out: '', regular_hours: 0 },
+                          employees.find(e => e.id === prev.employee_id)
+                        ))}
+                        className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                    )}
+                  </div>
+                  {(formData.status === 'Absent' || formData.status === 'Leave') && (
+                    <p className="text-xs text-gray-500 mb-3">No hours logged while marked {formData.status}.</p>
+                  )}
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
                       <input type="time" value={formData.regular_time_in}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
                         onChange={e => updateRegularHours('regular_time_in', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time Out</label>
                       <input type="time" value={formData.regular_time_out}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
                         onChange={e => updateRegularHours('regular_time_out', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Hours</label>
@@ -663,19 +719,31 @@ export default function Attendance() {
 
                 {/* Overtime Hours */}
                 <div className="border rounded-lg p-4 bg-purple-50">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Overtime Hours</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-700">Overtime Hours</p>
+                    {formData.status !== 'Absent' && formData.status !== 'Leave' && (
+                      <button type="button"
+                        onClick={() => setFormData(prev => calculateSalaries(
+                          { ...prev, overtime_time_in: '', overtime_time_out: '', overtime_hours: 0, tip: 0 },
+                          employees.find(e => e.id === prev.employee_id)
+                        ))}
+                        className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-4 mb-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
                       <input type="time" value={formData.overtime_time_in}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
                         onChange={e => updateOvertimeHours('overtime_time_in', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time Out</label>
                       <input type="time" value={formData.overtime_time_out}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
                         onChange={e => updateOvertimeHours('overtime_time_out', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Hours</label>
@@ -687,16 +755,29 @@ export default function Attendance() {
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">OT Multiplier</label>
                       <input type="number" step="0.01" value={formData.overtime_multiplier}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
                         onChange={e => setFormData(prev => {
                           const updated = { ...prev, overtime_multiplier: parseFloat(e.target.value) || 1.15 }
                           return calculateSalaries(updated, employees.find(x => x.id === prev.employee_id))
                         })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Tip</label>
+                      <input type="number" step="0.01" min="0" value={formData.tip}
+                        disabled={formData.status === 'Absent' || formData.status === 'Leave'}
+                        placeholder="0.00"
+                        onChange={e => setFormData(prev => {
+                          const updated = { ...prev, tip: parseFloat(e.target.value) || 0 }
+                          return calculateSalaries(updated, employees.find(x => x.id === prev.employee_id))
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
                   </div>
-                  {!hideSalary && editingAttendance && formData.overtime_salary > 0 && (
+                  {!hideSalary && editingAttendance && (formData.overtime_salary > 0 || formData.tip > 0) && (
                     <p className="mt-3 text-sm text-purple-700">
                       Overtime Salary ({formData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(formData.overtime_salary).toLocaleString()}</span>
+                      {formData.tip > 0 && <> + Tip: <span className="font-semibold">₱{parseFloat(formData.tip).toLocaleString()}</span></>}
                     </p>
                   )}
                 </div>
@@ -712,7 +793,7 @@ export default function Attendance() {
                 {/* Status */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                  <select value={formData.status} onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                  <select value={formData.status} onChange={e => handleStatusChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
                     <option>Present</option>
                     <option>Absent</option>
@@ -819,23 +900,26 @@ export default function Attendance() {
                 {!splitFormData.is_office_based && (
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Project *</label>
-                    <select value={splitFormData.project_id}
-                      onChange={e => {
-                        const proj = projects.find(x => x.id === parseInt(e.target.value))
+                    <ProjectCombobox value={splitFormData.project_id}
+                      onValueChange={id => {
+                        const proj = projects.find(x => x.id === id)
                         setSplitFormData(prev => ({ ...prev, project_id: proj?.id || '', project_name: proj?.project_name || '' }))
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                      <option value="">Select project...</option>
-                      {projects.map(proj => (
-                        <option key={proj.id} value={proj.id}>{proj.project_name}</option>
-                      ))}
-                    </select>
+                      projects={projects} />
                   </div>
                 )}
 
                 {/* Regular Hours */}
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Regular Hours</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-700">Regular Hours</p>
+                    <button type="button"
+                      onClick={() => setSplitFormData(prev => calculateSalaries(
+                        { ...prev, regular_time_in: '', regular_time_out: '', regular_hours: 0 },
+                        employees.find(e => e.id === prev.employee_id)
+                      ))}
+                      className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                  </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
@@ -864,7 +948,15 @@ export default function Attendance() {
 
                 {/* Overtime Hours */}
                 <div className="border rounded-lg p-4 bg-purple-50">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Overtime Hours</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-700">Overtime Hours</p>
+                    <button type="button"
+                      onClick={() => setSplitFormData(prev => calculateSalaries(
+                        { ...prev, overtime_time_in: '', overtime_time_out: '', overtime_hours: 0, tip: 0 },
+                        employees.find(e => e.id === prev.employee_id)
+                      ))}
+                      className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                  </div>
                   <div className="grid grid-cols-3 gap-4 mb-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time In</label>
@@ -894,10 +986,20 @@ export default function Attendance() {
                         })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Tip</label>
+                      <input type="number" step="0.01" min="0" value={splitFormData.tip} placeholder="0.00"
+                        onChange={e => setSplitFormData(prev => {
+                          const updated = { ...prev, tip: parseFloat(e.target.value) || 0 }
+                          return calculateSalaries(updated, employees.find(x => x.id === prev.employee_id))
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
                   </div>
-                  {splitFormData.overtime_salary > 0 && (
+                  {(splitFormData.overtime_salary > 0 || splitFormData.tip > 0) && (
                     <p className="mt-3 text-sm text-purple-700">
                       Overtime Salary ({splitFormData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(splitFormData.overtime_salary).toLocaleString()}</span>
+                      {splitFormData.tip > 0 && <> + Tip: <span className="font-semibold">₱{parseFloat(splitFormData.tip).toLocaleString()}</span></>}
                     </p>
                   )}
                 </div>
@@ -920,7 +1022,13 @@ export default function Attendance() {
               <div className="flex justify-end gap-2 px-6 py-4 border-t">
                 <button onClick={() => setSplitRecord(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
                 <button onClick={handleSplitSave}
-                  disabled={(!splitFormData.is_office_based && !splitFormData.project_id) || !splitFormData.regular_time_in || !splitFormData.regular_time_out}
+                  disabled={
+                    (!splitFormData.is_office_based && !splitFormData.project_id) ||
+                    !(
+                      (splitFormData.regular_time_in && splitFormData.regular_time_out) ||
+                      (splitFormData.overtime_time_in && splitFormData.overtime_time_out)
+                    )
+                  }
                   className="px-4 py-2 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800 disabled:opacity-50">
                   Log Split Assignment
                 </button>

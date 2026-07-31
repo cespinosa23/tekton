@@ -12,18 +12,18 @@ def make_crud_router(
     write_auth = Depends(require_role(write_roles)) if write_roles else Depends(get_current_user)
 
     @router.get("/", response_model=list[ReadSchema])
-    def list_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
-        q = db.query(Model)
+    def list_items(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+        q = db.query(Model).order_by(Model.id.asc())
         if allow_archive and hasattr(Model, "archived"):
             q = q.filter(Model.archived == False)
         return q.offset(skip).limit(limit).all()
 
     # Must be registered BEFORE /{item_id} — otherwise "archived" is captured as the id
     @router.get("/archived", response_model=list[ReadSchema])
-    def list_archived(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    def list_archived(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
         if not (allow_archive and hasattr(Model, "archived")):
             return []
-        return db.query(Model).filter(Model.archived == True).offset(skip).limit(limit).all()
+        return db.query(Model).filter(Model.archived == True).order_by(Model.id.asc()).offset(skip).limit(limit).all()
 
     @router.get("/{item_id}", response_model=ReadSchema)
     def get_item(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
