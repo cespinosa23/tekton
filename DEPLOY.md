@@ -164,7 +164,7 @@ from app.models.user import User
 from app.models.role import Role, UserRole
 from app.core.security import hash_password
 db = SessionLocal()
-user = User(email='admin@yourdomain.com', hashed_password=hash_password('ChangeMe123!'), is_active=True)
+user = User(email='caloy.summon@gmail.com', hashed_password=hash_password('T3kt0n2026!'), is_active=True)
 db.add(user)
 db.flush()
 role = db.query(Role).filter(Role.name == 'Admin').first()
