@@ -939,7 +939,7 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white" />
                     </div>
                   </div>
-                  {splitFormData.regular_salary > 0 && (
+                  {!hideSalary && splitFormData.regular_salary > 0 && (
                     <p className="mt-2 text-sm text-gray-600">
                       Regular Salary: <span className="font-semibold text-emerald-600">₱{parseFloat(splitFormData.regular_salary).toLocaleString()}</span>
                     </p>
@@ -996,7 +996,7 @@ export default function Attendance() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                     </div>
                   </div>
-                  {(splitFormData.overtime_salary > 0 || splitFormData.tip > 0) && (
+                  {!hideSalary && (splitFormData.overtime_salary > 0 || splitFormData.tip > 0) && (
                     <p className="mt-3 text-sm text-purple-700">
                       Overtime Salary ({splitFormData.overtime_multiplier}x): <span className="font-semibold">₱{parseFloat(splitFormData.overtime_salary).toLocaleString()}</span>
                       {splitFormData.tip > 0 && <> + Tip: <span className="font-semibold">₱{parseFloat(splitFormData.tip).toLocaleString()}</span></>}
@@ -1004,7 +1004,7 @@ export default function Attendance() {
                   )}
                 </div>
 
-                {splitFormData.total_salary > 0 && (
+                {!hideSalary && splitFormData.total_salary > 0 && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
                     <span className="font-medium text-gray-900">Total Salary:</span>
                     <span className="text-2xl font-bold text-emerald-600">₱{parseFloat(splitFormData.total_salary).toLocaleString()}</span>

@@ -92,13 +92,17 @@ nano .env
 | `SECRET_KEY` | **A different key than production** — run `python3 -c "import secrets; print(secrets.token_hex(64))"` again. Never reuse production's key; otherwise a staging login token would also work against production. |
 | `FRONTEND_URL` | `http://209.74.82.224:8080` |
 | `ALLOWED_ORIGINS` | `http://209.74.82.224:8080` |
-| `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` | Same as production, **but see the warning below** |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` / `MAIL_PORT` | Same as production, **but see the warning below** |
 
-> **Email warning:** if you reuse production's Gmail credentials, password-reset and
-> invite emails sent from staging will go to **real email addresses**. Be careful
-> during testing not to trigger those flows against real users. If you want to avoid
-> this entirely, point `MAIL_USERNAME`/`MAIL_PASSWORD` at a separate throwaway Gmail
-> account instead.
+> **Email warning:** `app/core/email.py` sends through a fixed SMTP host
+> (`mail.spacemail.com`), so `MAIL_USERNAME`/`MAIL_PASSWORD` must be a real mailbox
+> hosted there — a Gmail address/app-password will simply fail to authenticate, it's
+> not a valid alternative. If you reuse production's real mailbox credentials,
+> password-reset and invite emails sent from staging will go to **real email
+> addresses** (the recipient is whatever email you type into the app, regardless of
+> which mailbox sends it) — be careful during testing not to trigger those flows
+> against real users. If you want to avoid this entirely, set up a separate throwaway
+> mailbox on the same Spacemail-hosted domain instead.
 
 ### Run Migrations
 

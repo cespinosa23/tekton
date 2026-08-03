@@ -127,8 +127,14 @@ Fill in every value. Pay attention to these:
 | `SECRET_KEY` | Run: `python3 -c "import secrets; print(secrets.token_hex(64))"` and paste the output |
 | `FRONTEND_URL` | `http://YOUR_VM_IP` |
 | `ALLOWED_ORIGINS` | `http://YOUR_VM_IP` |
-| `MAIL_USERNAME` | Your Gmail address |
-| `MAIL_PASSWORD` | A Gmail [App Password](https://myaccount.google.com/apppasswords) (not your regular password) |
+| `MAIL_USERNAME` | A real mailbox address hosted on Spacemail (e.g. `itadmin@yourdomain.com`) — **not Gmail**, see note below |
+| `MAIL_PASSWORD` | That mailbox's password |
+| `MAIL_PORT` | `587` |
+
+> **Why not Gmail:** `app/core/email.py` hard-codes the SMTP host as `mail.spacemail.com`.
+> Gmail credentials (even an App Password) will fail to authenticate there, since it's the
+> wrong server entirely — `MAIL_USERNAME`/`MAIL_PASSWORD` must belong to a mailbox actually
+> hosted on Spacemail.
 
 Save and exit: `Ctrl+O`, Enter, `Ctrl+X`
 
