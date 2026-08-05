@@ -124,8 +124,8 @@ export default function BillingPrint() {
                 )}
                 <div>
                   <h1 className="text-2xl font-bold leading-tight" style={{ color: company.letterhead_color || '#1e40af' }}>{company.company_name?.toUpperCase()}</h1>
-                  {company.short_name && <p className="text-lg font-medium" style={{ color: company.letterhead_color || '#1e40af' }}>{company.short_name}</p>}
-                  {company.pcab_license && <p className="text-[10px] mt-0.5" style={{ color: company.letterhead_color || '#1e40af' }}>PCAB License: {company.pcab_license}</p>}
+                  {company.short_name && <p className="text-lg font-medium leading-tight" style={{ color: company.letterhead_color || '#1e40af' }}>{company.short_name}</p>}
+                  {company.pcab_license && <p className="text-[10px] leading-tight mt-0" style={{ color: company.letterhead_color || '#1e40af' }}>PCAB License: {company.pcab_license}</p>}
                 </div>
               </div>
               <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
