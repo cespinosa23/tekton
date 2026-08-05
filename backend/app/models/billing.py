@@ -17,6 +17,11 @@ class Billing(Base):
     retention_amount = Column(Numeric(12, 2), nullable=True)
     scope_description = Column(String(500), nullable=True)
 
+    account_type = Column(String(20), nullable=True)  # 'Company Owned' | 'Personal'
+    salutation = Column(String(20), nullable=True)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+
     amount = Column(Numeric(12, 2), default=0)
     notes = Column(String(500), nullable=True)
 

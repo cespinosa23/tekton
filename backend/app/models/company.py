@@ -10,6 +10,7 @@ class Company(Base):
     logo_url = Column(Text, nullable=True)
     address = Column(String(255), nullable=True)
     contact_number = Column(String(255), nullable=True)
+    telephone_number = Column(String(255), nullable=True)
     email = Column(String(255), nullable=True)
     website = Column(String(255), nullable=True)
     footer_text = Column(String(500), nullable=True)
@@ -17,4 +18,5 @@ class Company(Base):
     signatory_position = Column(String(100), nullable=True)
     pcab_license = Column(String(100), nullable=True)
     signature_url = Column(Text, nullable=True)
+    letterhead_color = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)

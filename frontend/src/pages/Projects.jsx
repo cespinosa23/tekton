@@ -526,7 +526,7 @@ export default function Projects() {
   const [editingProject, setEditingProject] = useState(null)
   const [deleteProject, setDeleteProject] = useState(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('Active')
   const [sortBy, setSortBy] = useState('newest')
   const [activeTab, setActiveTab] = useState('progress')
 

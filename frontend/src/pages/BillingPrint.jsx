@@ -5,7 +5,7 @@ import { getProjects } from '../api/projects'
 import { getBillings } from '../api/billing'
 import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
-import { ArrowLeft, Printer, Mail, Phone } from 'lucide-react'
+import { ArrowLeft, Printer, Mail, Phone, Smartphone } from 'lucide-react'
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -84,6 +84,17 @@ export default function BillingPrint() {
       ? 'we would like to request your good office for the release of retention as stated in the terms of payment.'
       : `we would like to request your good office for the ${targetBilling.current_percentage}% progress billing as stated in the terms of payment.`
 
+  const handlePrint = () => {
+    const originalTitle = document.title
+    document.title = `${project.project_name} - ${formatBillingSerial(targetBilling)}`.replace(/[/\\?%*:|"<>]/g, '-')
+    const restore = () => {
+      document.title = originalTitle
+      window.removeEventListener('afterprint', restore)
+    }
+    window.addEventListener('afterprint', restore)
+    window.print()
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
       <style>{'@media print { @page { size: A4; margin: 15mm; } }'}</style>
@@ -93,7 +104,7 @@ export default function BillingPrint() {
         <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900">
           <ArrowLeft size={16} /> Back
         </button>
-        <button onClick={() => window.print()}
+        <button onClick={handlePrint}
           className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700">
           <Printer size={15} /> Print
         </button>
@@ -112,15 +123,25 @@ export default function BillingPrint() {
                   <img src={company.logo_url} alt="" className="h-16 w-16 object-contain" />
                 )}
                 <div>
-                  <h1 className="text-2xl font-bold text-blue-800 leading-tight">{company.company_name?.toUpperCase()}</h1>
-                  {company.short_name && <p className="text-sm font-medium text-blue-600">{company.short_name}</p>}
-                  {company.pcab_license && <p className="text-xs text-gray-500 mt-0.5">PCAB License: {company.pcab_license}</p>}
+                  <h1 className="text-2xl font-bold leading-tight" style={{ color: company.letterhead_color || '#1e40af' }}>{company.company_name?.toUpperCase()}</h1>
+                  {company.short_name && <p className="text-lg font-medium" style={{ color: company.letterhead_color || '#1e40af' }}>{company.short_name}</p>}
+                  {company.pcab_license && <p className="text-[10px] mt-0.5" style={{ color: company.letterhead_color || '#1e40af' }}>PCAB License: {company.pcab_license}</p>}
                 </div>
               </div>
               <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
                 {company.email && (
                   <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{company.email}</p>
                 )}
+                {company.telephone_number && (() => {
+                  const numbers = company.telephone_number.split('\n').map(s => s.trim()).filter(Boolean)
+                  const lines = []
+                  for (let i = 0; i < numbers.length; i += 2) {
+                    lines.push(numbers.slice(i, i + 2).join(' / '))
+                  }
+                  return lines.map((line, i) => (
+                    <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
+                  ))
+                })()}
                 {company.contact_number && (() => {
                   const numbers = company.contact_number.split('\n').map(s => s.trim()).filter(Boolean)
                   const lines = []
@@ -128,7 +149,7 @@ export default function BillingPrint() {
                     lines.push(numbers.slice(i, i + 2).join(' / '))
                   }
                   return lines.map((line, i) => (
-                    <p key={i} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
+                    <p key={i} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
                   ))
                 })()}
               </div>
@@ -139,7 +160,11 @@ export default function BillingPrint() {
 
             {/* Client */}
             <div className="mb-6">
-              <p className="font-bold">{project.owner_company_name}</p>
+              <p className="font-bold">
+                {dpRow?.account_type === 'Personal'
+                  ? [dpRow.salutation, dpRow.first_name, dpRow.last_name].filter(Boolean).join(' ')
+                  : project.owner_company_name}
+              </p>
               {project.address && <p>{project.address}</p>}
             </div>
 
@@ -148,12 +173,20 @@ export default function BillingPrint() {
               <p className="font-bold w-24">BILLING NO</p>
               <p>: {formatBillingSerial(targetBilling)}</p>
             </div>
+            {dpRow?.account_type === 'Company Owned' && (
+              <div className="flex mb-1">
+                <p className="font-bold w-24">THROUGH</p>
+                <p>: {[dpRow.salutation, dpRow.first_name, dpRow.last_name].filter(Boolean).join(' ')}</p>
+              </div>
+            )}
             <div className="flex mb-6">
               <p className="font-bold w-24">SUBJECT</p>
               <p className="font-bold">: {SUBJECTS[targetBilling.billing_type]}</p>
             </div>
 
-            <p className="mb-4">Dear Sir/Ma&apos;am,</p>
+            <p className="mb-4">
+              Dear {(dpRow?.account_type === 'Company Owned' || dpRow?.account_type === 'Personal') ? [dpRow.salutation, dpRow.last_name].filter(Boolean).join(' ') : 'Sir/Ma’am'},
+            </p>
             <p className="mb-4">
               In line with our service quotation dated {project.quotation_date ? format(new Date(project.quotation_date + 'T00:00:00'), 'd MMMM yyyy') : '-'} and your subsequent approval, {bodyText}
             </p>
@@ -210,7 +243,9 @@ export default function BillingPrint() {
             </div>
 
             {company.footer_text && (
-              <p className="text-center text-xs text-gray-400 mt-10 whitespace-pre-line">{company.footer_text}</p>
+              <p className="text-center text-xs text-gray-400 mt-10 leading-snug whitespace-pre-line">
+                {company.footer_text.replace(/\n\s*\n+/g, '\n')}
+              </p>
             )}
           </>
         )}

@@ -11,6 +11,10 @@ class BillingCreate(BaseModel):
     retention_amount: Optional[float] = 0
     scope_description: Optional[str] = None
     current_percentage: Optional[float] = None
+    account_type: Optional[str] = None
+    salutation: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 class BillingRead(BaseModel):
     id: int
@@ -23,6 +27,10 @@ class BillingRead(BaseModel):
     dp_amount: Optional[float] = None
     retention_amount: Optional[float] = None
     scope_description: Optional[str] = None
+    account_type: Optional[str] = None
+    salutation: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     amount: float
     notes: Optional[str] = None
     is_paid: bool = False

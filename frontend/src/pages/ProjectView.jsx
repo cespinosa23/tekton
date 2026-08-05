@@ -6,7 +6,7 @@ import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
 import { getEmployees } from '../api/employees'
 import { getBillings, createBilling, setBillingPaid, resetProjectBilling } from '../api/billing'
-import { getCompanies } from '../api/settings'
+import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import { formatBillingSerial } from '../utils/billingSerial'
@@ -51,7 +51,11 @@ export default function ProjectView() {
   const [activeTab, setActiveTab] = useState('transactions')
   const [scopeNotes, setScopeNotes] = useState({})
   const [selectedTx, setSelectedTx] = useState(null)
-  const [dpForm, setDpForm] = useState({ billing_date: '', dp_amount: '', retention_amount: '', scope_description: '', notes: '' })
+  const emptyDpForm = {
+    billing_date: '', dp_amount: '', retention_amount: '', scope_description: '', notes: '',
+    account_type: '', salutation: '', first_name: '', last_name: '',
+  }
+  const [dpForm, setDpForm] = useState(emptyDpForm)
   const [progressForm, setProgressForm] = useState({ billing_date: '', current_percentage: '', notes: '' })
   const [billingError, setBillingError] = useState('')
   const [printPickerFor, setPrintPickerFor] = useState(null)
@@ -69,6 +73,8 @@ export default function ProjectView() {
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: billings = [] } = useQuery({ queryKey: ['billings'], queryFn: getBillings })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
+  const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
+  const salutations = settings.filter(s => s.category === 'Salutation' && s.is_active && !s.archived)
 
   const project = projects.find(p => p.id === parseInt(id))
 
@@ -155,8 +161,12 @@ export default function ProjectView() {
       retention_amount: parseFloat(dpForm.retention_amount) || 0,
       scope_description: dpForm.scope_description || null,
       notes: dpForm.notes || null,
+      account_type: dpForm.account_type || null,
+      salutation: dpForm.salutation || null,
+      first_name: dpForm.first_name || null,
+      last_name: dpForm.last_name || null,
     }, {
-      onSuccess: () => setDpForm({ billing_date: '', dp_amount: '', retention_amount: '', scope_description: '', notes: '' }),
+      onSuccess: () => setDpForm(emptyDpForm),
     })
   }
 
@@ -444,6 +454,43 @@ export default function ProjectView() {
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Set Up Down Payment & Retention</h3>
                   <form onSubmit={handleCreateDp} className="space-y-4">
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Type of Account</label>
+                        <div className="flex items-center gap-4 h-[30px]">
+                          {['Company Owned', 'Personal'].map(opt => (
+                            <label key={opt} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                              <input type="radio" name="account_type" value={opt} required
+                                checked={dpForm.account_type === opt}
+                                onChange={e => setDpForm({ ...dpForm, account_type: e.target.value })}
+                                className="text-gray-900 focus:ring-gray-400" />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Salutation</label>
+                        <select required value={dpForm.salutation}
+                          onChange={e => setDpForm({ ...dpForm, salutation: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+                          <option value="">Select...</option>
+                          {salutations.map(s => <option key={s.id} value={s.value}>{s.value}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                        <input type="text" required value={dpForm.first_name}
+                          onChange={e => setDpForm({ ...dpForm, first_name: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+                        <input type="text" required value={dpForm.last_name}
+                          onChange={e => setDpForm({ ...dpForm, last_name: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Down Payment Amount</label>

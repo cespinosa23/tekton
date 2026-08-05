@@ -54,6 +54,8 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
     if payload.billing_type == "down_payment":
         if dp_row:
             raise HTTPException(status_code=400, detail="Down payment already recorded for this project")
+        if not payload.account_type or not payload.salutation or not payload.first_name or not payload.last_name:
+            raise HTTPException(status_code=400, detail="Type of Account, Salutation, First Name, and Last Name are required")
         dp_amount = payload.dp_amount or 0
         retention_amount = payload.retention_amount or 0
         billing = Billing(
@@ -66,6 +68,10 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
             dp_amount=dp_amount,
             retention_amount=retention_amount,
             scope_description=payload.scope_description,
+            account_type=payload.account_type,
+            salutation=payload.salutation,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
             amount=dp_amount,
             notes=payload.notes,
             is_paid=_is_zero_amount(dp_amount),

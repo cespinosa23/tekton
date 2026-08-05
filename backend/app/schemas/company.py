@@ -7,6 +7,7 @@ class CompanyCreate(BaseModel):
     logo_url: Optional[str] = None
     address: Optional[str] = None
     contact_number: Optional[str] = None
+    telephone_number: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
     footer_text: Optional[str] = None
@@ -14,6 +15,7 @@ class CompanyCreate(BaseModel):
     signatory_position: Optional[str] = None
     pcab_license: Optional[str] = None
     signature_url: Optional[str] = None
+    letterhead_color: Optional[str] = None
     is_active: bool = True
 
 class CompanyUpdate(CompanyCreate):

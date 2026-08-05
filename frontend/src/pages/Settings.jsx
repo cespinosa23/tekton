@@ -12,7 +12,7 @@ import {
 } from '../api/settings'
 import {
   Plus, Trash2, Pencil, Check, X,
-  Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle, LogOut, ShieldAlert
+  Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle, LogOut, ShieldAlert, UserCircle
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -23,6 +23,7 @@ const CATEGORIES = [
   { key: 'Material Unit', label: 'Material Unit', icon: Ruler, description: 'Units of measurement' },
   { key: 'Meralco Branch', label: 'Meralco Branch', icon: Building2, description: 'Meralco branches' },
   { key: 'Referred By', label: 'Referred By', icon: Users, description: 'Sources of project referrals' },
+  { key: 'Salutation', label: 'Salutation', icon: UserCircle, description: 'Titles used in salutation dropdowns (Mr., Ms., Engr., etc.)' },
 ]
 
 export default function Settings() {
@@ -56,9 +57,10 @@ export default function Settings() {
 
   // Company state
   const emptyCompanyForm = {
-    company_name: '', short_name: '', address: '', contact_number: '',
+    company_name: '', short_name: '', address: '', contact_number: '', telephone_number: '',
     email: '', website: '', footer_text: '', default_signatory: '', signatory_position: '',
     pcab_license: '', logo_url: '', signature_url: '',
+    letterhead_color: '',
   }
   const [companyFormOpen, setCompanyFormOpen] = useState(false)
   const [editingCompany, setEditingCompany] = useState(null)
@@ -528,6 +530,7 @@ export default function Settings() {
                       </div>
                       {company.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin size={11} />{company.address}</p>}
                       {company.contact_number && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{company.contact_number}</p>}
+                      {company.telephone_number && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{company.telephone_number}</p>}
                       {company.email && <p className="text-xs text-gray-500 mt-0.5">{company.email}</p>}
                       {company.default_signatory && (
                         <p className="text-xs text-gray-400 mt-1 italic">{company.default_signatory}{company.signatory_position ? ` — ${company.signatory_position}` : ''}</p>
@@ -542,6 +545,7 @@ export default function Settings() {
                             short_name: company.short_name || '',
                             address: company.address || '',
                             contact_number: company.contact_number || '',
+                            telephone_number: company.telephone_number || '',
                             email: company.email || '',
                             website: company.website || '',
                             footer_text: company.footer_text || '',
@@ -550,6 +554,7 @@ export default function Settings() {
                             pcab_license: company.pcab_license || '',
                             logo_url: company.logo_url || '',
                             signature_url: company.signature_url || '',
+                            letterhead_color: company.letterhead_color || '',
                           })
                           setCompanyFormOpen(true)
                         }}
@@ -674,12 +679,40 @@ export default function Settings() {
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Contact Numbers</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Telephone</label>
+                <p className="text-xs text-gray-400 mb-2">Landline numbers — kept separate from the cellphone numbers below</p>
+                <div className="space-y-2">
+                  {(companyForm.telephone_number ? companyForm.telephone_number.split('\n') : ['']).map((line, i, lines) => (
+                    <div key={i} className="flex gap-2">
+                      <input type="text" value={line}
+                        placeholder="e.g. (02) 8123 4567"
+                        onChange={e => {
+                          const next = [...lines]
+                          next[i] = e.target.value
+                          setCompanyForm(p => ({ ...p, telephone_number: next.join('\n') }))
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                      {lines.length > 1 && (
+                        <button type="button"
+                          onClick={() => setCompanyForm(p => ({ ...p, telephone_number: lines.filter((_, idx) => idx !== i).join('\n') }))}
+                          className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setCompanyForm(p => ({ ...p, telephone_number: (p.telephone_number || '') + '\n' }))}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                    <Plus size={14} /> Add another number
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Cellphone Numbers</label>
                 <div className="space-y-2">
                   {(companyForm.contact_number ? companyForm.contact_number.split('\n') : ['']).map((line, i, lines) => (
                     <div key={i} className="flex gap-2">
                       <input type="text" value={line}
-                        placeholder="e.g. (02) 8713 3162 or 0908 899 3504 / 0921 479 3256"
+                        placeholder="e.g. 0908 899 3504 / 0921 479 3256"
                         onChange={e => {
                           const next = [...lines]
                           next[i] = e.target.value
@@ -732,6 +765,17 @@ export default function Settings() {
                   </div>
                 ))}
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Print Text Color</label>
+                <p className="text-xs text-gray-400 mb-2">Applies to the Company Name, Short Name, and PCAB License on the billing print view</p>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={companyForm.letterhead_color || '#1e40af'}
+                    onChange={e => setCompanyForm(p => ({ ...p, letterhead_color: e.target.value }))}
+                    className="h-9 w-9 p-0.5 border border-gray-300 rounded cursor-pointer" />
+                  <button type="button" onClick={() => setCompanyForm(p => ({ ...p, letterhead_color: '' }))}
+                    className="text-xs text-gray-400 hover:text-red-500">Reset</button>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t flex-shrink-0">
               <button onClick={closeCompanyForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
@@ -740,6 +784,7 @@ export default function Settings() {
                   const payload = {
                     ...companyForm,
                     contact_number: companyForm.contact_number.split('\n').map(s => s.trim()).filter(Boolean).join('\n'),
+                    telephone_number: companyForm.telephone_number.split('\n').map(s => s.trim()).filter(Boolean).join('\n'),
                   }
                   if (editingCompany) {
                     updateCompanyMutation.mutate({ id: editingCompany.id, data: payload })
