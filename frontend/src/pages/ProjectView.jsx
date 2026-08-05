@@ -552,6 +552,15 @@ export default function ProjectView() {
               )
             ) : (
               <>
+                {/* Billed To */}
+                {dpRow.account_type && (
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <User size={15} className="text-gray-400" />
+                    <span>Billed To: <span className="font-medium text-gray-900">{[dpRow.salutation, dpRow.first_name, dpRow.last_name].filter(Boolean).join(' ')}</span></span>
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">{dpRow.account_type}</span>
+                  </div>
+                )}
+
                 {/* Summary */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
