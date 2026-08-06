@@ -39,6 +39,7 @@ class TransactionCreate(BaseModel):
     reference_number: Optional[str] = None
     remarks: Optional[str] = None
     adjustment_direction: Optional[str] = None
+    billing_id: Optional[int] = None
 
 class TransactionUpdate(TransactionCreate):
     transaction_type: Optional[str] = None

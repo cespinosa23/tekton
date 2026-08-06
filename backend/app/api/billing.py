@@ -4,11 +4,18 @@ from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.billing import Billing
 from app.models.project import Project
+from app.models.transaction import Transaction
 from app.schemas.billing import BillingCreate, BillingRead, BillingPaidUpdate
 
 _write_auth = require_role(["Admin"])
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+
+_SERIAL_PREFIXES = {"down_payment": "DP", "progress": "PB", "retention_release": "RR"}
+
+
+def _billing_serial(billing: Billing) -> str:
+    return f"{_SERIAL_PREFIXES.get(billing.billing_type, 'BR')}-{str(billing.id).zfill(6)}"
 
 
 def _project_billings(db: Session, project_id: int):
@@ -152,7 +159,7 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
 
 
 @router.put("/{item_id}/paid", response_model=BillingRead)
-def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Depends(get_db), _=Depends(_write_auth)):
+def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
     billing = db.query(Billing).filter(Billing.id == item_id).first()
     if not billing:
         raise HTTPException(status_code=404, detail="Billing not found")
@@ -162,6 +169,29 @@ def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Dep
 
     billing.is_paid = payload.is_paid
     billing.paid_date = payload.paid_date if payload.is_paid else None
+
+    if payload.is_paid and not _is_zero_amount(billing.amount):
+        already_linked = db.query(Transaction).filter(
+            Transaction.billing_id == billing.id, Transaction.archived == False
+        ).first()
+        if not already_linked:
+            project = db.query(Project).filter(Project.id == billing.project_id).first()
+            dp_row = _project_billings(db, billing.project_id).filter(Billing.billing_type == "down_payment").first()
+            db.add(Transaction(
+                transaction_type="Payment",
+                transaction_date=billing.paid_date,
+                project_id=billing.project_id,
+                project_name=project.project_name if project else None,
+                amount=billing.amount,
+                description=dp_row.scope_description if dp_row else None,
+                reference_number=_billing_serial(billing),
+                billing_id=billing.id,
+            ))
+    elif not payload.is_paid:
+        db.query(Transaction).filter(
+            Transaction.billing_id == billing.id, Transaction.archived == False
+        ).update({"archived": True, "archived_by": current_user.email})
+
     db.commit()
     db.refresh(billing)
     return billing
@@ -183,6 +213,9 @@ def archive_billing(item_id: int, db: Session = Depends(get_db), current_user=De
 
     billing.archived = True
     billing.archived_by = current_user.email
+    db.query(Transaction).filter(
+        Transaction.billing_id == billing.id, Transaction.archived == False
+    ).update({"archived": True, "archived_by": current_user.email})
     db.commit()
 
 
@@ -192,6 +225,11 @@ def reset_project_billing(project_id: int, db: Session = Depends(get_db), curren
     rows = _project_billings(db, project_id).all()
     if not rows:
         raise HTTPException(status_code=404, detail="No billing entries found for this project")
+
+    billing_ids = [row.id for row in rows]
+    db.query(Transaction).filter(
+        Transaction.billing_id.in_(billing_ids), Transaction.archived == False
+    ).update({"archived": True, "archived_by": current_user.email}, synchronize_session=False)
 
     for row in rows:
         row.archived = True

@@ -527,6 +527,7 @@ export default function Projects() {
   const [deleteProject, setDeleteProject] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Active')
+  const [pmFilter, setPmFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [activeTab, setActiveTab] = useState('progress')
 
@@ -595,7 +596,8 @@ export default function Projects() {
       p.owner_company_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.address?.toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesPM = pmFilter === 'all' || p.project_manager === pmFilter
+    return matchesSearch && matchesStatus && matchesPM
   })
 
   const sortedFiltered = [...filtered].sort((a, b) => {
@@ -642,6 +644,16 @@ export default function Projects() {
             <option>Active</option><option>Inactive</option><option>Completed</option>
             <option>On Hold</option><option>Cancelled</option>
           </select>
+          {!isPM && (
+            <select value={pmFilter} onChange={e => setPmFilter(e.target.value)}
+              className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="all">All Project Managers</option>
+              {projectManagers.map(e => {
+                const name = [e.first_name, e.middle_name, e.last_name].filter(Boolean).join(' ')
+                return <option key={e.id} value={name}>{name}</option>
+              })}
+            </select>
+          )}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
             <option value="newest">Newest Added</option>

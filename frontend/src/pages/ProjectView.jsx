@@ -100,7 +100,10 @@ export default function ProjectView() {
 
   const paidMutation = useMutation({
     mutationFn: setBillingPaid,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['billings'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billings'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    },
   })
 
   const handleTogglePaid = (billing) => {
@@ -117,6 +120,7 @@ export default function ProjectView() {
     onSuccess: () => {
       setShowResetConfirm(false)
       queryClient.invalidateQueries({ queryKey: ['billings'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
     },
   })
 

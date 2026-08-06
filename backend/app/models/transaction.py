@@ -21,3 +21,4 @@ class Transaction(Base):
     reference_number = Column(String(100), nullable=True)
     remarks = Column(String(500), nullable=True)
     adjustment_direction = Column(String(10), nullable=True)  # 'add' or 'deduct'
+    billing_id = Column(Integer, ForeignKey("billings.id"), nullable=True)
