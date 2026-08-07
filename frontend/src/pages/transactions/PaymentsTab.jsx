@@ -52,7 +52,12 @@ export default function PaymentsTab() {
 
   const archiveMutation = useMutation({
     mutationFn: archiveTransaction,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); setDeleteTx(null); toast.success('Payment archived') },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['billings'] })
+      setDeleteTx(null)
+      toast.success('Payment archived')
+    },
     onError: () => toast.error('Failed to archive payment'),
   })
 

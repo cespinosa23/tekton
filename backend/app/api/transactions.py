@@ -3,8 +3,34 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.transaction import Transaction
+from app.models.billing import Billing
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionRead
 from app.core.inventory import sync_inventory
+
+
+def _revert_linked_billing(db: Session, tx: Transaction):
+    """Removing a payment transaction that was auto-generated from a billing
+    means that billing is no longer actually paid — reflect that instead of
+    silently leaving the billing marked Paid with no transaction behind it."""
+    if not tx.billing_id:
+        return
+    billing = db.query(Billing).filter(Billing.id == tx.billing_id).first()
+    if billing and billing.is_paid:
+        billing.is_paid = False
+        billing.paid_date = None
+
+
+def _reapply_linked_billing(db: Session, tx: Transaction):
+    """Restoring an archived payment transaction is the inverse of archiving it —
+    put the linked billing back to Paid, recovering paid_date from the transaction's
+    own date (that's exactly what it was set from when the transaction was created).
+    Skips a billing that's itself been reset/archived in the meantime."""
+    if not tx.billing_id:
+        return
+    billing = db.query(Billing).filter(Billing.id == tx.billing_id, Billing.archived == False).first()
+    if billing and not billing.is_paid:
+        billing.is_paid = True
+        billing.paid_date = tx.transaction_date
 
 _write_auth = require_role(["Admin", "Project Coordinator"])
 
@@ -80,6 +106,7 @@ def archive_transaction(item_id: int, db: Session = Depends(get_db), current_use
     material_ids = get_material_ids(tx.materials or [])
     tx.archived = True
     tx.archived_by = current_user.email
+    _revert_linked_billing(db, tx)
     db.commit()
 
     # Sync inventory after archive
@@ -91,7 +118,23 @@ def restore_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(r
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if tx.billing_id:
+        duplicate = db.query(Transaction).filter(
+            Transaction.billing_id == tx.billing_id,
+            Transaction.archived == False,
+            Transaction.id != tx.id,
+        ).first()
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail="This billing already has a newer payment transaction on record — "
+                       "restoring this one would double-count the payment. Archive the "
+                       "current transaction first if you really want to bring this one back.",
+            )
+
     tx.archived = False
+    _reapply_linked_billing(db, tx)
     db.commit()
     db.refresh(tx)
     for mid in get_material_ids(tx.materials or []):
@@ -105,6 +148,7 @@ def permanent_delete_transaction(item_id: int, db: Session = Depends(get_db), _=
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     material_ids = get_material_ids(tx.materials or [])
+    _revert_linked_billing(db, tx)
     db.delete(tx)
     db.commit()
     for mid in material_ids:

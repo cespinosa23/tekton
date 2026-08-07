@@ -162,13 +162,13 @@ export default function Archive() {
   const restoreEmp  = makeMutation(restoreEmployee,    [['archived', 'employees'], ['employees']],       'Employee restored')
   const restorePrj  = makeMutation(restoreProject,     [['archived', 'projects'],  ['projects']],        'Project restored')
   const restoreMat  = makeMutation(restoreMaterial,    [['archived', 'materials'], ['materials']],       'Material restored')
-  const restoreTx   = makeMutation(restoreTransaction, [['archived', 'transactions'], ['transactions']], 'Transaction restored')
+  const restoreTx   = makeMutation(restoreTransaction, [['archived', 'transactions'], ['transactions'], ['billings']], 'Transaction restored')
   const restoreSup  = makeMutation(restoreSupplier,    [['archived', 'suppliers'], ['suppliers']],       'Supplier restored')
 
   const deleteEmp  = makeMutation(permanentDeleteEmployee,    [['archived', 'employees']],    'Employee permanently deleted')
   const deletePrj  = makeMutation(permanentDeleteProject,     [['archived', 'projects']],     'Project permanently deleted')
   const deleteMat  = makeMutation(permanentDeleteMaterial,    [['archived', 'materials']],    'Material permanently deleted')
-  const deleteTx   = makeMutation(permanentDeleteTransaction, [['archived', 'transactions']], 'Transaction permanently deleted')
+  const deleteTx   = makeMutation(permanentDeleteTransaction, [['archived', 'transactions'], ['billings']], 'Transaction permanently deleted')
   const deleteSup  = makeMutation(permanentDeleteSupplier,    [['archived', 'suppliers']],    'Supplier permanently deleted')
 
   // ── Handlers ─────────────────────────────────────────────────────────
