@@ -27,6 +27,10 @@ class Quotation(Base):
     battery_brand = Column(String(100), nullable=True)
     panel_brand = Column(String(100), nullable=True)
     scope_of_works = Column(String(2000), nullable=True)
+    # Each entry: { sow_type_id, sow_type_name, sub_items: [...], costing: {...} }
+    # costing is per scope type, not shared across the whole quotation.
+    scope_of_work_items = Column(JSON, nullable=True)
+
     terms_of_payment = Column(String(2000), nullable=True)
     bill_of_materials = Column(JSON, nullable=True)
     other_scope_costs = Column(JSON, nullable=True)

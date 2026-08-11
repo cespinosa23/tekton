@@ -69,9 +69,38 @@ export default function QuotePreview({ quote }) {
         </Section>
       )}
 
-      {/* Scope of Works */}
+      {/* Scope of Work (structured) */}
+      {quote.scope_of_work_items?.length > 0 && (
+        <Section title="Scope of Work">
+          <div className="space-y-4">
+            {quote.scope_of_work_items.map(t => (
+              <div key={t.sow_type_id}>
+                <p className="font-semibold text-gray-900 text-sm mb-1.5">{t.sow_type_name}</p>
+                {t.sub_items?.length > 0 && (
+                  <ul className="space-y-1.5 pl-4">
+                    {t.sub_items.map(si => (
+                      <li key={si.item_id} className="text-sm text-gray-700 list-disc">
+                        {si.item_name}
+                        {si.notes?.length > 0 && (
+                          <ul className="pl-4 mt-1 space-y-0.5">
+                            {si.notes.map((note, i) => (
+                              <li key={i} className="text-xs text-gray-500 list-[circle]">{note}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Scope of Works (free-form) */}
       {quote.scope_of_works && (
-        <Section title="Scope of Works">
+        <Section title="Additional Notes">
           <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.scope_of_works}</pre>
         </Section>
       )}

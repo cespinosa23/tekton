@@ -9,6 +9,9 @@ import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
 import { useAuth } from '../context/AuthContext'
 import { Search, CheckCircle, Clock, Printer, ArrowUpRight, X } from 'lucide-react'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
 
 const BILLING_TYPE_LABELS = { down_payment: 'Down Payment', progress: 'Progress Billing', retention_release: 'Retention Release' }
 
@@ -43,7 +46,17 @@ export default function Billings() {
   }
 
   const rows = billings
-    .map(b => ({ ...b, project: projects.find(p => p.id === b.project_id) }))
+    .map(b => {
+      const project = projects.find(p => p.id === b.project_id)
+      return {
+        ...b,
+        project,
+        project_name: project?.project_name || '',
+        owner_company_name: project?.owner_company_name || '',
+        serial: formatBillingSerial(b),
+        type_label: BILLING_TYPE_LABELS[b.billing_type] || b.billing_type,
+      }
+    })
     .filter(b => b.project)
     .filter(b => {
       const term = search.toLowerCase()
@@ -56,7 +69,9 @@ export default function Billings() {
         (statusFilter === 'unpaid' && !b.is_paid)
       return matchesSearch && matchesStatus
     })
-    .sort((a, b) => b.id - a.id)
+
+  const { sortKey, sortDir, toggle, sorted } = useSortable(rows, 'id', 'desc')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   if (!isAdmin()) {
     return (
@@ -69,6 +84,7 @@ export default function Billings() {
   return (
     <Layout>
       <div className="p-8">
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Billings</h1>
           <p className="text-sm text-gray-500 mt-1">Every billing entry across all projects, in one place</p>
@@ -88,9 +104,10 @@ export default function Billings() {
             <option value="unpaid">Unpaid</option>
           </select>
         </div>
+        </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg">
           {rows.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Search size={40} className="mx-auto mb-3 opacity-50" />
@@ -98,15 +115,20 @@ export default function Billings() {
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: toolbarHeight }}>
                 <tr>
-                  {['Serial', 'Project', 'Client', 'Type', 'Date', 'Amount', 'Paid', ''].map(h => (
-                    <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${h === 'Amount' ? 'text-right' : h === 'Paid' ? 'text-center' : 'text-left'}`}>{h}</th>
-                  ))}
+                  <SortableHeader label="Serial" field="serial" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Project" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Client" field="owner_company_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Type" field="type_label" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Date" field="billing_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Amount" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                  <SortableHeader label="Paid" field="is_paid" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rows.map(b => (
+                {sorted.map(b => (
                   <tr key={b.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-600 text-xs font-mono">{formatBillingSerial(b)}</td>
                     <td className="px-4 py-3 text-gray-900 font-medium">{b.project.project_name}</td>

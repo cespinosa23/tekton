@@ -23,7 +23,10 @@ export default function MaterialCombobox({ value, onValueChange, materials = [] 
       <button type="button" onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400">
         {selected ? (
-          <span className="truncate text-left">{selected.rating_size}</span>
+          <span className="truncate text-left">
+            {selected.rating_size}
+            {selected.material_type && <span className="text-gray-400 ml-1 text-xs">— {selected.material_type}</span>}
+          </span>
         ) : (
           <span className="text-gray-400">Select material...</span>
         )}
@@ -45,7 +48,10 @@ export default function MaterialCombobox({ value, onValueChange, materials = [] 
                 onClick={() => { onValueChange(mat.id); setOpen(false); setSearch('') }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50">
                 <Check size={14} className={value === mat.id ? 'text-gray-900' : 'opacity-0'} />
-                <p className="text-sm text-gray-900">{mat.rating_size}</p>
+                <div>
+                  <p className="text-sm text-gray-900">{mat.rating_size}</p>
+                  {mat.material_type && <p className="text-xs text-gray-400">{mat.material_type}{mat.brand ? ` · ${mat.brand}` : ''}</p>}
+                </div>
               </button>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { Plus, Search, Pencil, Trash2, Archive, X } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
 
 const emptyForm = { rating_size: '', material_type: '', unit: '', description: '', min_stock: '', max_stock: '' }
 
@@ -74,9 +75,10 @@ export default function Materials() {
   const handleSave = () => {
     const isDuplicate = materials.some(m =>
       m.rating_size?.toLowerCase() === formData.rating_size?.toLowerCase() &&
+      m.material_type === formData.material_type &&
       (!editingMaterial || m.id !== editingMaterial.id)
     )
-    if (isDuplicate) { toast.error('A material with this name already exists.'); return }
+    if (isDuplicate) { toast.error('A material with this name and type already exists.'); return }
     const payload = {
       ...formData,
       min_stock: formData.min_stock === '' ? 0 : parseInt(formData.min_stock, 10),
@@ -96,48 +98,51 @@ export default function Materials() {
     return matchesSearch && matchesType
   })
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'rating_size')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   return (
     <Layout>
       <div className="p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Materials Master List</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage materials reference for the system</p>
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Materials Master List</h1>
+              <p className="text-sm text-gray-500 mt-1">Manage materials reference for the system</p>
+            </div>
+            {canWrite('materials') && (
+              <button
+                onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
+                className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+              >
+                <Plus size={16} /> Add Material
+              </button>
+            )}
           </div>
-          {canWrite('materials') && (
-            <button
-              onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
-              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-            >
-              <Plus size={16} /> Add Material
-            </button>
-          )}
-        </div>
 
-        {/* Filters */}
-        <div className="flex gap-3 mb-6">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-              placeholder="Search materials..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+          {/* Filters */}
+          <div className="flex gap-3 mb-6">
+            <div className="relative flex-1 max-w-sm">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                placeholder="Search materials..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="all">All Types</option>
+              {materialTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
           </div>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
-            <option value="all">All Types</option>
-            {materialTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-          </select>
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: toolbarHeight }}>
               <tr>
                 <SortableHeader label="Material / Specs" field="rating_size" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />

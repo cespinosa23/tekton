@@ -81,9 +81,22 @@ export async function downloadQuoteAsDocx(quote) {
     children.push(blank())
   }
 
-  // Scope of Works
+  // Scope of Work (structured)
+  if (quote.scope_of_work_items?.length > 0) {
+    children.push(sectionTitle('SCOPE OF WORK'))
+    quote.scope_of_work_items.forEach(t => {
+      children.push(ph(t.sow_type_name, { bold: true }))
+      ;(t.sub_items || []).forEach(si => {
+        children.push(ph(`   •  ${si.item_name}`))
+        ;(si.notes || []).forEach(note => children.push(ph(`        -  ${note}`, { italics: true, size: 20 })))
+      })
+    })
+    children.push(blank())
+  }
+
+  // Scope of Works (free-form)
   if (quote.scope_of_works) {
-    children.push(sectionTitle('SCOPE OF WORKS'))
+    children.push(sectionTitle('ADDITIONAL NOTES'))
     quote.scope_of_works.split('\n').forEach(line => children.push(ph(line)))
     children.push(blank())
   }

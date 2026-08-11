@@ -10,6 +10,8 @@ import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import { formatBillingSerial } from '../utils/billingSerial'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
@@ -78,6 +80,30 @@ export default function ProjectView() {
 
   const project = projects.find(p => p.id === parseInt(id))
 
+  // Hooks below must run unconditionally on every render — they're declared here,
+  // before the "project not found" early returns, using optional chaining so they
+  // stay safe while `project` is still undefined during the first render.
+  const projectTx = transactions.filter(t => t.project_id === project?.id)
+  const { sortKey: txSortKey, sortDir: txSortDir, toggle: txToggle, sorted: sortedProjectTx } = useSortable(projectTx, 'transaction_date', 'desc')
+  const projectAtt = attendance.filter(a => a.project_id === project?.id)
+  const { sortKey: attSortKey, sortDir: attSortDir, toggle: attToggle, sorted: sortedProjectAtt } = useSortable(projectAtt, 'date', 'desc')
+
+  const BILLING_TYPE_LABELS = { down_payment: 'Down Payment', progress: 'Progress Billing', retention_release: 'Retention Release' }
+  const projectBillingsRaw = billings.filter(b => b.project_id === project?.id)
+  const projectBillings = projectBillingsRaw.map(b => ({
+    ...b,
+    serial: formatBillingSerial(b),
+    type_label: BILLING_TYPE_LABELS[b.billing_type] || b.billing_type,
+  })).sort((a, b) => a.sequence_number - b.sequence_number)
+  const { sortKey: billingSortKey, sortDir: billingSortDir, toggle: billingToggle, sorted: sortedProjectBillings } = useSortable(projectBillings, 'sequence_number')
+  const dpRow = projectBillings.find(b => b.billing_type === 'down_payment')
+  const progressRows = projectBillings.filter(b => b.billing_type === 'progress')
+  const retentionRow = projectBillings.find(b => b.billing_type === 'retention_release')
+  const latestProgress = progressRows[progressRows.length - 1]
+  const deductibleBase = dpRow ? (parseFloat(project?.contract_cost) || 0) - (parseFloat(dpRow.dp_amount) || 0) - (parseFloat(dpRow.retention_amount) || 0) : 0
+  const totalBilled = projectBillings.reduce((s, b) => s + (b.is_paid ? parseFloat(b.amount) || 0 : 0), 0)
+  const allBilledPaid = dpRow?.is_paid && progressRows.every(b => b.is_paid)
+
   // PM can only view their own projects
   const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
   const myFullName = myEmployee
@@ -139,21 +165,6 @@ export default function ProjectView() {
       <div className="p-8 text-center text-gray-400">You don't have access to this project.</div>
     </Layout>
   )
-
-  const projectTx = transactions.filter(t => t.project_id === project.id)
-  const projectAtt = attendance.filter(a => a.project_id === project.id)
-
-  const projectBillings = billings.filter(b => b.project_id === project.id)
-    .sort((a, b) => a.sequence_number - b.sequence_number)
-  const dpRow = projectBillings.find(b => b.billing_type === 'down_payment')
-  const progressRows = projectBillings.filter(b => b.billing_type === 'progress')
-  const retentionRow = projectBillings.find(b => b.billing_type === 'retention_release')
-  const latestProgress = progressRows[progressRows.length - 1]
-  const deductibleBase = dpRow ? (parseFloat(project.contract_cost) || 0) - (parseFloat(dpRow.dp_amount) || 0) - (parseFloat(dpRow.retention_amount) || 0) : 0
-  const totalBilled = projectBillings.reduce((s, b) => s + (b.is_paid ? parseFloat(b.amount) || 0 : 0), 0)
-  const allBilledPaid = dpRow?.is_paid && progressRows.every(b => b.is_paid)
-
-  const BILLING_TYPE_LABELS = { down_payment: 'Down Payment', progress: 'Progress Billing', retention_release: 'Retention Release' }
 
   const handleCreateDp = (e) => {
     e.preventDefault()
@@ -403,13 +414,15 @@ export default function ProjectView() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {['#', 'Date', 'Type', 'Description', 'Amount'].map(h => (
-                        <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
-                      ))}
+                      <SortableHeader label="#" field="id" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Date" field="transaction_date" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Type" field="transaction_type" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Description" field="description" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Amount" field="amount" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {projectTx.map(tx => (
+                    {sortedProjectTx.map(tx => (
                       <tr key={tx.id}
                         className="hover:bg-gray-50 cursor-pointer"
                         onClick={() => setSelectedTx(tx)}>
@@ -591,13 +604,18 @@ export default function ProjectView() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        {['#', 'Serial', 'Type', 'Date', 'Progress', 'Amount', 'Paid', ''].map(h => (
-                          <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${h === 'Amount' ? 'text-right' : h === 'Paid' ? 'text-center' : 'text-left'}`}>{h}</th>
-                        ))}
+                        <SortableHeader label="#" field="sequence_number" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                        <SortableHeader label="Serial" field="serial" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                        <SortableHeader label="Type" field="type_label" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                        <SortableHeader label="Date" field="billing_date" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Progress</th>
+                        <SortableHeader label="Amount" field="amount" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                        <SortableHeader label="Paid" field="is_paid" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                        <th className="px-4 py-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {projectBillings.map(b => (
+                      {sortedProjectBillings.map(b => (
                         <tr key={b.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-gray-400 text-xs font-mono">{b.sequence_number}</td>
                           <td className="px-4 py-3 text-gray-600 text-xs font-mono">{formatBillingSerial(b)}</td>
@@ -729,13 +747,16 @@ export default function ProjectView() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {['Date', 'Employee', 'Regular Hours', 'OT Hours', 'Salary', 'Status'].map(h => (
-                        <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide ${h === 'Salary' ? 'text-right' : 'text-left'}`}>{h}</th>
-                      ))}
+                      <SortableHeader label="Date" field="date" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Employee" field="employee_name" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Regular Hours" field="regular_hours" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="OT Hours" field="overtime_hours" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                      <SortableHeader label="Salary" field="total_salary" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                      <SortableHeader label="Status" field="status" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {projectAtt.map(att => (
+                    {sortedProjectAtt.map(att => (
                       <tr key={att.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-gray-600">
                           {att.date ? format(new Date(att.date + 'T00:00:00'), 'MMM d, yyyy') : '-'}

@@ -7,6 +7,8 @@ import {
   getCompanies, createCompany, updateCompany, deleteCompany,
   getMaterialTypes, createMaterialType, updateMaterialType,
   archiveMaterialType, addBrandToType, removeBrandFromType,
+  getSowTypes, createSowType, updateSowType,
+  archiveSowType, addItemToSowType, removeItemFromSowType,
   getSuppliers, createSupplier, updateSupplier, archiveSupplier,
   resetAllData, getSystemUsers, forceLogoutUser
 } from '../api/settings'
@@ -15,6 +17,8 @@ import {
   Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle, LogOut, ShieldAlert, UserCircle
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useSortable } from '../hooks/useSortable'
+import { SortableHeader } from '../components/SortableHeader'
 
 const CATEGORIES = [
   { key: 'Brand', label: 'Brand', icon: Tag, description: 'Master list of material brands' },
@@ -48,6 +52,13 @@ export default function Settings() {
   const [expandedType, setExpandedType] = useState(null)
   const [newBrandName, setNewBrandName] = useState('')
 
+  // Scope of Work Types state
+  const [newSowTypeName, setNewSowTypeName] = useState('')
+  const [editingSowTypeId, setEditingSowTypeId] = useState(null)
+  const [editSowTypeName, setEditSowTypeName] = useState('')
+  const [expandedSowType, setExpandedSowType] = useState(null)
+  const [newSowItemName, setNewSowItemName] = useState('')
+
   // Danger Zone state
   const [resetOpen, setResetOpen] = useState(false)
   const [resetText, setResetText] = useState('')
@@ -68,6 +79,7 @@ export default function Settings() {
 
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
+  const { data: sowTypes = [] } = useQuery({ queryKey: ['sowTypes'], queryFn: getSowTypes })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
 
   const createMutation = useMutation({
@@ -118,6 +130,36 @@ export default function Settings() {
     onError: () => toast.error('Failed to remove brand'),
   })
 
+  const createSowTypeMutation = useMutation({
+    mutationFn: createSowType,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }); setNewSowTypeName(''); toast.success('Scope of Work type added') },
+    onError: () => toast.error('Failed to add Scope of Work type'),
+  })
+
+  const updateSowTypeMutation = useMutation({
+    mutationFn: updateSowType,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }); setEditingSowTypeId(null); setEditSowTypeName('') },
+    onError: () => toast.error('Failed to update'),
+  })
+
+  const archiveSowTypeMutation = useMutation({
+    mutationFn: archiveSowType,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }); toast.success('Scope of Work type archived') },
+    onError: () => toast.error('Failed to archive'),
+  })
+
+  const addSowItemMutation = useMutation({
+    mutationFn: addItemToSowType,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }); setNewSowItemName('') },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to add item'),
+  })
+
+  const removeSowItemMutation = useMutation({
+    mutationFn: removeItemFromSowType,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }) },
+    onError: () => toast.error('Failed to remove item'),
+  })
+
   const closeCompanyForm = () => { setCompanyFormOpen(false); setEditingCompany(null); setCompanyForm(emptyCompanyForm) }
 
   const createCompanyMutation = useMutation({
@@ -166,7 +208,9 @@ export default function Settings() {
   const activeCategory = CATEGORIES.find(c => c.key === activeTab)
 
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: getSuppliers })
-  const { data: systemUsers = [] } = useQuery({ queryKey: ['systemUsers'], queryFn: getSystemUsers })
+  const { data: systemUsersRaw = [] } = useQuery({ queryKey: ['systemUsers'], queryFn: getSystemUsers })
+  const systemUsers = systemUsersRaw.map(u => ({ ...u, roles_display: u.roles.map(r => r.role.name).join(', ') }))
+  const { sortKey: userSortKey, sortDir: userSortDir, toggle: userToggle, sorted: sortedUsers } = useSortable(systemUsers, 'email')
 
   const createSupplierMutation = useMutation({
     mutationFn: createSupplier,
@@ -206,7 +250,7 @@ export default function Settings() {
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
+          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['sow_types', 'Scope of Work Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
             <button key={val} onClick={() => setMainTab(val)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -386,6 +430,107 @@ export default function Settings() {
                                     className="text-gray-400 hover:text-red-500 ml-0.5">
                                     <X size={11} />
                                   </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Scope of Work Types Tab */}
+        {mainTab === 'sow_types' && (
+          <div className="max-w-2xl">
+            <div className="bg-white border border-gray-200 rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Scope of Work Types</h3>
+                  <p className="text-xs text-gray-400">Each SOW type can have multiple sub-items</p>
+                </div>
+              </div>
+              <div className="p-6">
+                {/* Add new type */}
+                <div className="flex gap-2 mb-6">
+                  <input value={newSowTypeName} onChange={e => setNewSowTypeName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
+                    placeholder="Add new Scope of Work type..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  <button onClick={() => newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
+                    disabled={!newSowTypeName.trim()}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700 disabled:opacity-50">
+                    <Plus size={15} /> Add
+                  </button>
+                </div>
+
+                {/* SOW types list */}
+                <div className="space-y-2">
+                  {sowTypes.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">No Scope of Work types yet.</div>
+                  ) : sowTypes.map(st => (
+                    <div key={st.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                      {/* Type header */}
+                      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 group">
+                        {editingSowTypeId === st.id ? (
+                          <>
+                            <input value={editSowTypeName} onChange={e => setEditSowTypeName(e.target.value)} autoFocus
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                            <button onClick={() => updateSowTypeMutation.mutate({ id: st.id, data: { name: editSowTypeName } })}
+                              className="p-1 rounded hover:bg-emerald-100 text-emerald-600"><Check size={15} /></button>
+                            <button onClick={() => setEditingSowTypeId(null)}
+                              className="p-1 rounded hover:bg-gray-200 text-gray-500"><X size={15} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
+                              className="flex-1 text-left">
+                              <span className="text-sm font-semibold text-gray-800">{st.name}</span>
+                              <span className="text-xs text-gray-400 ml-2">({st.items.length} items)</span>
+                            </button>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => { setEditingSowTypeId(st.id); setEditSowTypeName(st.name) }}
+                                className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"><Pencil size={13} /></button>
+                              <button onClick={() => archiveSowTypeMutation.mutate(st.id)}
+                                className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                            </div>
+                            <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
+                              className="text-xs text-gray-400 px-2">
+                              {expandedSowType === st.id ? '▲' : '▼'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Sub-items section */}
+                      {expandedSowType === st.id && (
+                        <div className="px-4 py-3 border-t border-gray-100">
+                          {/* Add sub-item */}
+                          <div className="flex gap-2 mb-3 items-start">
+                            <textarea value={newSowItemName} onChange={e => setNewSowItemName(e.target.value)}
+                              rows={2} placeholder="Add sub-item… (can be a full sentence or paragraph)"
+                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                            <button
+                              onClick={() => newSowItemName.trim() && addSowItemMutation.mutate({ typeId: st.id, item_name: newSowItemName.trim() })}
+                              disabled={!newSowItemName.trim()}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-md text-xs hover:bg-gray-700 disabled:opacity-50 flex-shrink-0">
+                              <Plus size={13} /> Add
+                            </button>
+                          </div>
+                          {/* Sub-item list */}
+                          {st.items.length === 0 ? (
+                            <p className="text-xs text-gray-400 py-2">No sub-items yet — add one above.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {st.items.map(item => (
+                                <div key={item.id} className="flex items-start gap-2 px-3 py-2 bg-gray-100 rounded-md text-xs text-gray-700">
+                                  <span className="flex-1 whitespace-pre-wrap">{item.item_name}</span>
+                                  <button onClick={() => removeSowItemMutation.mutate({ typeId: st.id, itemId: item.id })}
+                                    className="text-gray-400 hover:text-red-500 flex-shrink-0"><X size={13} /></button>
                                 </div>
                               ))}
                             </div>
@@ -615,14 +760,14 @@ export default function Settings() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Email</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Roles</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                    <SortableHeader label="Email" field="email" sortKey={userSortKey} sortDir={userSortDir} onSort={userToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                    <SortableHeader label="Roles" field="roles_display" sortKey={userSortKey} sortDir={userSortDir} onSort={userToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                    <SortableHeader label="Status" field="is_active" sortKey={userSortKey} sortDir={userSortDir} onSort={userToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {systemUsers.map(u => (
+                  {sortedUsers.map(u => (
                     <tr key={u.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{u.email}</td>
                       <td className="px-4 py-3 text-gray-500">

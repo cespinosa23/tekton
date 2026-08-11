@@ -1,7 +1,8 @@
 import { Plus, Trash2 } from 'lucide-react'
+import MaterialCombobox from '../MaterialCombobox'
 
 const empty = () => ({
-  material: '', quantity: 1, unit: '', unit_price: 0, markup_pct: 0,
+  material_id: null, material: '', quantity: 1, unit: '', unit_price: 0, markup_pct: 0,
   adjusted_unit_price: 0, subtotal: 0,
 })
 
@@ -20,10 +21,12 @@ export default function BOMEditor({ items = [], onChange, materials = [] }) {
     onChange(items.map((item, i) => i !== index ? item : calcRow({ ...item, [field]: value })))
   }
 
-  const updateMaterial = (index, value) => {
-    const mat = materials.find(m => m.rating_size === value)
-    const updated = { ...items[index], material: value }
-    if (mat) updated.unit = mat.unit
+  // Selecting by id — never by name — so two materials sharing a name but
+  // differing in material_type can never resolve to the wrong one.
+  const updateMaterial = (index, materialId) => {
+    const mat = materials.find(m => m.id === materialId)
+    const updated = { ...items[index], material_id: materialId }
+    if (mat) { updated.material = mat.rating_size; updated.unit = mat.unit }
     onChange(items.map((item, i) => i !== index ? item : calcRow(updated)))
   }
 
@@ -33,13 +36,6 @@ export default function BOMEditor({ items = [], onChange, materials = [] }) {
 
   return (
     <div className="space-y-3">
-      {/* Datalist for material autocomplete */}
-      <datalist id="bom-materials-list">
-        {materials.map(m => (
-          <option key={m.id} value={m.rating_size} />
-        ))}
-      </datalist>
-
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -50,15 +46,17 @@ export default function BOMEditor({ items = [], onChange, materials = [] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((row, i) => (
+            {items.map((row, i) => {
+              // Older saved quotations only have the free-text `material` name, no id yet —
+              // best-effort resolve one for display until the user actively reselects.
+              const displayId = row.material_id ?? materials.find(m => m.rating_size === row.material)?.id ?? null
+              return (
               <tr key={i} className="bg-white">
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.material}
-                    list="bom-materials-list"
-                    onChange={e => updateMaterial(i, e.target.value)}
-                    className={`${inp} min-w-[180px]`}
-                    placeholder="Material or type to search…"
+                <td className="px-2 py-1.5 min-w-[220px]">
+                  <MaterialCombobox
+                    value={displayId}
+                    onValueChange={id => updateMaterial(i, id)}
+                    materials={materials}
                   />
                 </td>
                 <td className="px-2 py-1.5">
@@ -81,7 +79,8 @@ export default function BOMEditor({ items = [], onChange, materials = [] }) {
                   </button>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {items.length === 0 && (
               <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400 text-sm">No materials added yet.</td></tr>
             )}

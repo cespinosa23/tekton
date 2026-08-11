@@ -13,6 +13,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
 
 const STATUS_COLORS = {
   Present: 'bg-emerald-100 text-emerald-700',
@@ -324,6 +325,7 @@ export default function Attendance() {
   })
 
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'date', 'desc')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   const loggedOnDate = new Set(
     attendance.filter(a => a.date === formData.date).map(a => a.employee_id)
@@ -338,6 +340,7 @@ export default function Attendance() {
   return (
     <Layout>
       <div className="p-8">
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -455,11 +458,12 @@ export default function Attendance() {
           </div>
           )}
         </div>
+        </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: toolbarHeight }}>
               <tr>
                 <SortableHeader label="Date" field="date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Employee" field="employee_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />

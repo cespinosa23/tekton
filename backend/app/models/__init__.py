@@ -13,3 +13,4 @@ from app.models.setting import Setting
 from app.models.company import Company
 from app.models.calendar_day import CalendarDay
 from app.models.billing import Billing
+from app.models.sow_type import SowType, SowTypeItem

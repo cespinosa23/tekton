@@ -4,6 +4,7 @@ import PaymentsTab from './PaymentsTab'
 import MaterialsTab from './MaterialsTab'
 import ExpendituresTab from './ExpendituresTab'
 import { Banknote, Package, Receipt } from 'lucide-react'
+import { useElementHeight } from '../../hooks/useElementHeight'
 
 const TABS = [
   { key: 'payments', label: 'Payments', icon: Banknote, description: 'Customer payments received' },
@@ -13,10 +14,12 @@ const TABS = [
 
 export default function Transactions() {
   const [activeTab, setActiveTab] = useState('payments')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   return (
     <Layout>
       <div className="p-8">
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
@@ -40,11 +43,12 @@ export default function Transactions() {
             )
           })}
         </div>
+        </div>
 
         {/* Tab Content */}
-        {activeTab === 'payments' && <PaymentsTab />}
-        {activeTab === 'materials' && <MaterialsTab />}
-        {activeTab === 'expenditures' && <ExpendituresTab />}
+        {activeTab === 'payments' && <PaymentsTab stickyOffset={toolbarHeight} />}
+        {activeTab === 'materials' && <MaterialsTab stickyOffset={toolbarHeight} />}
+        {activeTab === 'expenditures' && <ExpendituresTab stickyOffset={toolbarHeight} />}
       </div>
     </Layout>
   )

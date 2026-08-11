@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Receipt } from 'lucide-react'
 import { useSortable } from '../../hooks/useSortable'
 import { SortableHeader } from '../../components/SortableHeader'
+import { useElementHeight } from '../../hooks/useElementHeight'
 import { fmt } from './constants'
 import ProjectCombobox from '../../components/ProjectCombobox'
 import {
@@ -25,7 +26,7 @@ const emptyForm = {
   remarks: '',
 }
 
-export default function ExpendituresTab() {
+export default function ExpendituresTab({ stickyOffset = 0 }) {
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
@@ -94,13 +95,14 @@ export default function ExpendituresTab() {
     tx.expenditure_category?.toLowerCase().includes(search.toLowerCase())
   )
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'transaction_date', 'desc')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   const set = (field) => (e) => setFormData(p => ({ ...p, [field]: e.target.value }))
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div ref={toolbarRef} className="sticky z-20 bg-gray-50 flex items-center justify-between pb-4" style={{ top: stickyOffset }}>
         <div className="relative max-w-sm flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
@@ -113,15 +115,15 @@ export default function ExpendituresTab() {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-lg">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: stickyOffset + toolbarHeight }}>
             <tr>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">#</th>
+              <SortableHeader label="#" field="id" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Date" field="transaction_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Project / Office" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Category" field="expenditure_category" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Description</th>
+              <SortableHeader label="Description" field="description" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Amount" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
             </tr>

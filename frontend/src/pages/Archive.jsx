@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { RotateCcw, Trash2, X, AlertTriangle } from 'lucide-react'
+import { RotateCcw, Trash2, X, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -68,6 +68,27 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel, loading }) {
 }
 
 function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, canRestore, restoring, deleting }) {
+  const [sortIdx, setSortIdx] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
+
+  const toggle = (i) => {
+    if (sortIdx === i) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortIdx(i); setSortDir('asc') }
+  }
+
+  const sorted = useMemo(() => {
+    if (sortIdx === null) return rows
+    return [...rows].sort((a, b) => {
+      let av = a.sortValues[sortIdx] ?? ''
+      let bv = b.sortValues[sortIdx] ?? ''
+      if (typeof av === 'string') av = av.toLowerCase()
+      if (typeof bv === 'string') bv = bv.toLowerCase()
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [rows, sortIdx, sortDir])
+
   if (rows.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400 text-sm">
@@ -81,9 +102,17 @@ function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, canRestore
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
-            {columns.map(col => (
-              <th key={col} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {col}
+            {columns.map((col, i) => (
+              <th key={col} onClick={() => toggle(i)}
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer select-none group">
+                <div className="flex items-center gap-1">
+                  {col}
+                  <span className={sortIdx === i ? 'text-gray-700' : 'text-gray-300 group-hover:text-gray-400'}>
+                    {sortIdx === i
+                      ? (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
+                      : <ChevronsUpDown size={12} />}
+                  </span>
+                </div>
               </th>
             ))}
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -92,7 +121,7 @@ function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, canRestore
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map(({ id, cells }) => (
+          {sorted.map(({ id, cells }) => (
             <tr key={id} className="hover:bg-gray-50">
               {cells.map((cell, i) => (
                 <td key={i} className="px-4 py-3 text-gray-700">{cell}</td>
@@ -190,6 +219,13 @@ export default function Archive() {
 
   const employeeRows = archivedEmployees.map(e => ({
     id: e.id,
+    sortValues: [
+      `${e.first_name} ${e.middle_name ? e.middle_name + ' ' : ''}${e.last_name}`,
+      e.email || '',
+      e.status || '',
+      e.date_hired || '',
+      e.archived_by || '',
+    ],
     cells: [
       `${e.first_name} ${e.middle_name ? e.middle_name + ' ' : ''}${e.last_name}`,
       e.email || '-',
@@ -201,16 +237,25 @@ export default function Archive() {
 
   const projectRows = archivedProjects.map(p => ({
     id: p.id,
+    sortValues: [p.project_name || '', p.owner_company_name || '', p.status || '', p.archived_by || ''],
     cells: [p.project_name, p.owner_company_name || '-', p.status || '-', archivedBy(p.archived_by)],
   }))
 
   const materialRows = archivedMaterials.map(m => ({
     id: m.id,
+    sortValues: [m.rating_size || '', m.material_type || '', m.unit || '', m.archived_by || ''],
     cells: [m.rating_size, m.material_type || '-', m.unit || '-', archivedBy(m.archived_by)],
   }))
 
   const transactionRows = archivedTransactions.map(tx => ({
     id: tx.id,
+    sortValues: [
+      tx.transaction_type || '',
+      tx.transaction_date || '',
+      tx.project_name || (tx.is_office_expense ? 'Office' : ''),
+      Number(tx.amount) || 0,
+      tx.archived_by || '',
+    ],
     cells: [
       <span key="type" className={`px-2 py-0.5 rounded-full text-xs font-medium ${TX_TYPE_COLORS[tx.transaction_type] || 'bg-gray-100 text-gray-600'}`}>
         {tx.transaction_type}
@@ -226,6 +271,7 @@ export default function Archive() {
 
   const supplierRows = archivedSuppliers.map(s => ({
     id: s.id,
+    sortValues: [s.name || '', s.contact_person || '', s.contact_number || '', s.archived_by || ''],
     cells: [s.name, s.contact_person || '-', s.contact_number || '-', archivedBy(s.archived_by)],
   }))
 

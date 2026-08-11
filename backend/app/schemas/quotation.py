@@ -26,6 +26,7 @@ class QuotationCreate(BaseModel):
     battery_brand: Optional[str] = None
     panel_brand: Optional[str] = None
     scope_of_works: Optional[str] = None
+    scope_of_work_items: Optional[List[Any]] = None
     terms_of_payment: Optional[str] = None
     bill_of_materials: Optional[List[Any]] = None
     other_scope_costs: Optional[List[Any]] = None

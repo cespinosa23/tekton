@@ -66,6 +66,34 @@ export const removeBrandFromType = async ({ typeId, brandId }) => {
   await client.delete(`/material-types/${typeId}/brands/${brandId}`)
 }
 
+export const getSowTypes = async () => {
+  const { data } = await client.get('/sow-types/')
+  return data
+}
+
+export const createSowType = async (payload) => {
+  const { data } = await client.post('/sow-types/', payload)
+  return data
+}
+
+export const updateSowType = async ({ id, data: payload }) => {
+  const { data } = await client.put(`/sow-types/${id}`, payload)
+  return data
+}
+
+export const archiveSowType = async (id) => {
+  await client.delete(`/sow-types/${id}`)
+}
+
+export const addItemToSowType = async ({ typeId, item_name }) => {
+  const { data } = await client.post(`/sow-types/${typeId}/items`, { item_name })
+  return data
+}
+
+export const removeItemFromSowType = async ({ typeId, itemId }) => {
+  await client.delete(`/sow-types/${typeId}/items/${itemId}`)
+}
+
 export const getSuppliers = async () => {
   const { data } = await client.get('/suppliers/')
   return data

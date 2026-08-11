@@ -9,6 +9,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
 
 const ALL_ROLES = ['Engineer', 'Accounting', 'HR', 'Liaison', 'Project Coordinator', 'Project Manager', 'Admin', 'Others']
 
@@ -224,10 +225,12 @@ export default function Employees() {
     )
   })
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'first_name')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   return (
     <Layout>
       <div className="p-8">
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -267,11 +270,12 @@ export default function Employees() {
             <option value="Terminated">Terminated</option>
           </select>
         </div>
+        </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: toolbarHeight }}>
               <tr>
                 <SortableHeader label="Name" field="first_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Date Hired" field="date_hired" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />

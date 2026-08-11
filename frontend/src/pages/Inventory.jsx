@@ -6,6 +6,7 @@ import { getMaterials, getTransactions, getInventoryRecords, getMaterialTypes } 
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
 
 export default function Inventory() {
   const [search, setSearch] = useState('')
@@ -143,9 +144,13 @@ export default function Inventory() {
       item.brand?.toLowerCase().includes(search.toLowerCase())
     const matchesType = typeFilter === 'all' || item.material_type === typeFilter
     return matchesSearch && matchesType
-  })
+  }).map(item => ({
+    ...item,
+    status_rank: item.balance <= 0 ? 0 : item.balance < item.min_stock ? 1 : 2,
+  }))
 
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'material_name')
+  const [toolbarRef, toolbarHeight] = useElementHeight()
 
   const totalItems = filtered.reduce((sum, i) => sum + i.balance, 0)
   const totalValue = filtered.reduce((sum, i) => sum + i.total_value, 0)
@@ -154,6 +159,7 @@ export default function Inventory() {
   return (
     <Layout>
       <div className="p-8">
+        <div ref={toolbarRef} className="sticky top-0 z-20 bg-gray-50 flow-root">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
@@ -217,21 +223,22 @@ export default function Inventory() {
             {materialTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
         </div>
+        </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: toolbarHeight }}>
               <tr>
                 <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Material / Specs" field="material_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Brand" field="brand" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Starting</th>
-                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">In</th>
-                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Out</th>
+                <SortableHeader label="Starting" field="starting_quantity" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                <SortableHeader label="In" field="quantity_in" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                <SortableHeader label="Out" field="quantity_out" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
                 <SortableHeader label="Balance" field="balance" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
-                <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit Cost</th>
+                <SortableHeader label="Status" field="status_rank" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                <SortableHeader label="Unit Cost" field="latest_unit_cost" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
                 <SortableHeader label="Total Value" field="total_value" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
               </tr>
             </thead>
