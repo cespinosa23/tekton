@@ -12,6 +12,8 @@ import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '
 import { formatBillingSerial } from '../utils/billingSerial'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
+import { useElementHeight } from '../hooks/useElementHeight'
+import { scrollContentToTop } from '../utils/scroll'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
@@ -96,6 +98,7 @@ export default function ProjectView() {
     type_label: BILLING_TYPE_LABELS[b.billing_type] || b.billing_type,
   })).sort((a, b) => a.sequence_number - b.sequence_number)
   const { sortKey: billingSortKey, sortDir: billingSortDir, toggle: billingToggle, sorted: sortedProjectBillings } = useSortable(projectBillings, 'sequence_number')
+  const [tabsRef, tabsHeight] = useElementHeight()
   const dpRow = projectBillings.find(b => b.billing_type === 'down_payment')
   const progressRows = projectBillings.filter(b => b.billing_type === 'progress')
   const retentionRow = projectBillings.find(b => b.billing_type === 'retention_release')
@@ -353,6 +356,7 @@ export default function ProjectView() {
         </div>
 
         {/* Tabs */}
+        <div ref={tabsRef} className="sticky z-20 bg-gray-50 flow-root" style={{ top: 0 }}>
         <div className="flex gap-1 mb-6 border-b border-gray-200">
           {[
             ['transactions', 'Transactions'],
@@ -360,11 +364,12 @@ export default function ProjectView() {
             ...(!hidePayroll ? [['payroll', 'Payroll / Attendance']] : []),
             ['details', 'Details'],
           ].map(([val, label]) => (
-            <button key={val} onClick={() => setActiveTab(val)}
+            <button key={val} onClick={() => { setActiveTab(val); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
             </button>
           ))}
+        </div>
         </div>
 
         {/* Transactions Tab */}
@@ -404,7 +409,7 @@ export default function ProjectView() {
             </div>
 
             {/* Transaction History */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-lg">
               <div className="px-4 py-3 border-b border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-900">Transaction History</h3>
               </div>
@@ -412,7 +417,7 @@ export default function ProjectView() {
                 <div className="text-center py-8 text-gray-400 text-sm">No transactions recorded for this project.</div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: tabsHeight }}>
                     <tr>
                       <SortableHeader label="#" field="id" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                       <SortableHeader label="Date" field="transaction_date" sortKey={txSortKey} sortDir={txSortDir} onSort={txToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
@@ -597,12 +602,12 @@ export default function ProjectView() {
                 </div>
 
                 {/* History */}
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded-lg">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <h3 className="text-sm font-semibold text-gray-900">Billing History</h3>
                   </div>
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: tabsHeight }}>
                       <tr>
                         <SortableHeader label="#" field="sequence_number" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                         <SortableHeader label="Serial" field="serial" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
@@ -732,7 +737,7 @@ export default function ProjectView() {
 
         {/* Payroll Tab */}
         {!hidePayroll && activeTab === 'payroll' && (
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-lg">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900">Attendance Records</h3>
             </div>
@@ -745,7 +750,7 @@ export default function ProjectView() {
                   <span className="text-2xl font-bold text-purple-600">{fmt(laborCost)}</span>
                 </div>
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: tabsHeight }}>
                     <tr>
                       <SortableHeader label="Date" field="date" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                       <SortableHeader label="Employee" field="employee_name" sortKey={attSortKey} sortDir={attSortDir} onSort={attToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />

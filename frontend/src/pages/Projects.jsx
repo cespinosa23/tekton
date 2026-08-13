@@ -16,6 +16,7 @@ import {
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
+import { scrollContentToTop } from '../utils/scroll'
 
 
 const SCOPES = [
@@ -617,6 +618,7 @@ export default function Projects() {
   return (
     <Layout>
       <div className="p-8">
+        <div className="sticky top-0 z-20 bg-gray-50 flow-root">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -673,11 +675,12 @@ export default function Projects() {
             ['progress', 'Project Progress'],
             ...(isAdmin() || hasRole('Project Manager') ? [['payments', 'Payments View']] : []),
           ].map(([val, label]) => (
-            <button key={val} onClick={() => setActiveTab(val)}
+            <button key={val} onClick={() => { setActiveTab(val); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
             </button>
           ))}
+        </div>
         </div>
 
         {/* Progress Tab */}

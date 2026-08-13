@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
+import { scrollContentToTop } from '../utils/scroll'
 import { SortableHeader } from '../components/SortableHeader'
 
 const CATEGORIES = [
@@ -251,7 +252,7 @@ export default function Settings() {
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
           {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['sow_types', 'Scope of Work Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
-            <button key={val} onClick={() => setMainTab(val)}
+            <button key={val} onClick={() => { setMainTab(val); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
             </button>

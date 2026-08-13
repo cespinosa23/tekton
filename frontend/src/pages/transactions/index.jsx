@@ -5,6 +5,7 @@ import MaterialsTab from './MaterialsTab'
 import ExpendituresTab from './ExpendituresTab'
 import { Banknote, Package, Receipt } from 'lucide-react'
 import { useElementHeight } from '../../hooks/useElementHeight'
+import { scrollContentToTop } from '../../utils/scroll'
 
 const TABS = [
   { key: 'payments', label: 'Payments', icon: Banknote, description: 'Customer payments received' },
@@ -31,7 +32,7 @@ export default function Transactions() {
           {TABS.map(tab => {
             const Icon = tab.icon
             return (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              <button key={tab.key} onClick={() => { setActiveTab(tab.key); scrollContentToTop() }}
                 className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key
                     ? 'border-gray-900 text-gray-900'

@@ -6,6 +6,7 @@ import { RotateCcw, Trash2, X, AlertTriangle, ChevronUp, ChevronDown, ChevronsUp
 import Layout from '../components/Layout'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { scrollContentToTop } from '../utils/scroll'
 import {
   getArchivedEmployees, getArchivedProjects, getArchivedMaterials,
   getArchivedTransactions, getArchivedSuppliers,
@@ -300,7 +301,7 @@ export default function Archive() {
         {/* Tab strip */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
           {TABS.map(({ key, label }) => (
-            <button key={key} onClick={() => setActiveTab(key)}
+            <button key={key} onClick={() => { setActiveTab(key); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === key
                   ? 'border-gray-900 text-gray-900'
