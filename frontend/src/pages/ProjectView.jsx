@@ -13,7 +13,6 @@ import { formatBillingSerial } from '../utils/billingSerial'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
-import { scrollContentToTop } from '../utils/scroll'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
@@ -364,7 +363,7 @@ export default function ProjectView() {
             ...(!hidePayroll ? [['payroll', 'Payroll / Attendance']] : []),
             ['details', 'Details'],
           ].map(([val, label]) => (
-            <button key={val} onClick={() => { setActiveTab(val); scrollContentToTop() }}
+            <button key={val} onClick={() => setActiveTab(val)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
             </button>
