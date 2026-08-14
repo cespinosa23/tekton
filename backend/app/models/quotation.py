@@ -9,7 +9,7 @@ class Quotation(Base):
     status = Column(String(50), default="Draft")
     template_type = Column(String(50), default="Traditional")
     company_name = Column(String(255), nullable=True)
-    company_logo_url = Column(String(500), nullable=True)
+    company_logo_url = Column(Text, nullable=True)  # base64 data-URI, same as Company.logo_url
     company_address = Column(String(255), nullable=True)
     company_contact = Column(String(100), nullable=True)
     company_footer = Column(String(500), nullable=True)
