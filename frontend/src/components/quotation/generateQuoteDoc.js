@@ -3,6 +3,10 @@ import {
   AlignmentType, WidthType,
 } from 'docx'
 import { format } from 'date-fns'
+import { calcScopeCostTotal } from './CostTypeEditor'
+import { calcBomTotal } from './BOMEditor'
+
+const NAVY = '1B3A5C'
 
 function ph(text = '', opts = {}) {
   return new Paragraph({ children: [new TextRun({ text: String(text), ...opts })] })
@@ -31,6 +35,56 @@ function makeTable(headers, rows) {
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString()}`
 
+// Converts the RichTextEditor's sanitized HTML (b/i/ul/ol/p/div/br only) into
+// docx Paragraphs — ordered lists are rendered as plain "1. " prefixes rather
+// than real Word numbering.xml, which keeps this simple for a short editor.
+function htmlToDocxParagraphs(html) {
+  if (!html) return []
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const paragraphs = []
+
+  function runsFromInline(node, bold = false, italics = false) {
+    let runs = []
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (child.textContent) runs.push(new TextRun({ text: child.textContent, bold, italics }))
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase()
+        runs = runs.concat(runsFromInline(child, bold || tag === 'b' || tag === 'strong', italics || tag === 'i' || tag === 'em'))
+      }
+    })
+    return runs
+  }
+
+  function walk(node) {
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (child.textContent.trim()) paragraphs.push(ph(child.textContent))
+        return
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) return
+      const tag = child.tagName.toLowerCase()
+      if (tag === 'ul' || tag === 'ol') {
+        Array.from(child.children).forEach((li, i) => {
+          const runs = runsFromInline(li)
+          const prefix = tag === 'ol' ? `${i + 1}. ` : '•  '
+          paragraphs.push(new Paragraph({ children: [new TextRun({ text: prefix }), ...runs] }))
+        })
+      } else if (tag === 'br') {
+        paragraphs.push(blank())
+      } else if (tag === 'p' || tag === 'div' || tag === 'span') {
+        const runs = runsFromInline(child)
+        if (runs.length) paragraphs.push(new Paragraph({ children: runs }))
+      } else {
+        walk(child)
+      }
+    })
+  }
+
+  walk(doc.body)
+  return paragraphs
+}
+
 export async function downloadQuoteAsDocx(quote) {
   const children = []
 
@@ -47,18 +101,32 @@ export async function downloadQuoteAsDocx(quote) {
     spacing: { after: 240 },
   }))
 
-  // Addressee
-  if (quote.addressee_name) children.push(ph(`To: ${quote.addressee_name}`, { bold: true }))
-  if (quote.addressee_address) children.push(ph(quote.addressee_address))
-  children.push(blank())
-  if (quote.subject) children.push(ph(`RE: ${quote.subject}`, { bold: true }))
+  // Addressee — matches the standard service-quotation letter format
   if (quote.quotation_date) {
     try {
-      children.push(ph(`Date: ${format(new Date(quote.quotation_date + 'T00:00:00'), 'MMMM d, yyyy')}`))
+      children.push(ph(format(new Date(quote.quotation_date + 'T00:00:00'), 'd MMMM yyyy')))
     } catch {
-      children.push(ph(`Date: ${quote.quotation_date}`))
+      children.push(ph(quote.quotation_date))
     }
   }
+  children.push(blank())
+  if (quote.addressee_name) children.push(ph(quote.addressee_name.toUpperCase(), { bold: true }))
+  if (quote.addressee_address) children.push(ph(quote.addressee_address))
+  children.push(blank())
+  if (quote.attention_to) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: 'THROUGH', bold: true }), new TextRun({ text: `  :  ${quote.attention_to.toUpperCase()}` })],
+    }))
+  }
+  if (quote.subject) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: 'SUBJECT', bold: true }), new TextRun({ text: `  :  ${quote.subject.toUpperCase()}` })],
+    }))
+  }
+  children.push(blank())
+  const greetingName = quote.attention_to || quote.addressee_name
+  if (greetingName) children.push(ph(`Dear ${greetingName},`))
+  children.push(ph('In line with your service request, we would like to submit our offer below with the following details:'))
   children.push(blank())
 
   // Solar Details
@@ -81,43 +149,78 @@ export async function downloadQuoteAsDocx(quote) {
     children.push(blank())
   }
 
-  // Scope of Work (structured)
+  // Scope of Work — one row per scope type, priced from Costing (never a raw BOM readout)
   if (quote.scope_of_work_items?.length > 0) {
-    children.push(sectionTitle('SCOPE OF WORK'))
-    quote.scope_of_work_items.forEach(t => {
-      children.push(ph(t.sow_type_name, { bold: true }))
+    children.push(ph('I. SCOPE OF WORKS', { bold: true, size: 24 }))
+
+    const headerRow = new TableRow({
+      children: ['ITEM', 'SCOPE DESCRIPTION', 'COST (PHP)'].map(h => new TableCell({
+        shading: { fill: NAVY },
+        children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, color: 'FFFFFF' })] })],
+      })),
+    })
+
+    let scopeGrandTotal = 0
+    const dataRows = quote.scope_of_work_items.map((t, i) => {
+      const cost = calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || []))
+      scopeGrandTotal += cost
+
+      const descParagraphs = [ph(t.sow_type_name.toUpperCase(), { bold: true })]
       ;(t.sub_items || []).forEach(si => {
-        children.push(ph(`   •  ${si.item_name}`))
-        ;(si.notes || []).forEach(note => children.push(ph(`        -  ${note}`, { italics: true, size: 20 })))
+        descParagraphs.push(ph(`   •  ${si.item_name}`))
+        ;(si.notes || []).forEach(note => descParagraphs.push(ph(`        -  ${note}`, { italics: true, size: 20 })))
+      })
+
+      return new TableRow({
+        children: [
+          new TableCell({ children: [ph(String(i + 1))] }),
+          new TableCell({ children: descParagraphs }),
+          new TableCell({ children: [ph(peso(cost))] }),
+        ],
       })
     })
+
+    const totalRow = new TableRow({
+      children: [
+        new TableCell({
+          columnSpan: 2,
+          shading: { fill: NAVY },
+          children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'TOTAL COST', bold: true, color: 'FFFFFF' })] })],
+        }),
+        new TableCell({
+          shading: { fill: NAVY },
+          children: [new Paragraph({ children: [new TextRun({ text: peso(scopeGrandTotal), bold: true, color: 'FFFFFF' })] })],
+        }),
+      ],
+    })
+
+    children.push(new Table({ rows: [headerRow, ...dataRows, totalRow], width: { size: 100, type: WidthType.PERCENTAGE } }))
     children.push(blank())
   }
 
-  // Scope of Works (free-form)
-  if (quote.scope_of_works) {
-    children.push(sectionTitle('ADDITIONAL NOTES'))
-    quote.scope_of_works.split('\n').forEach(line => children.push(ph(line)))
-    children.push(blank())
-  }
-
-  // Bill of Materials
-  if (quote.bill_of_materials?.length > 0) {
-    children.push(sectionTitle('BILL OF MATERIALS'))
-    const headers = ['Material', 'Qty', 'Unit', 'Unit Price', 'Markup %', 'Adj. Unit Price', 'Subtotal']
-    const bomRows = quote.bill_of_materials.map(item => [
-      item.material || '',
-      String(item.quantity || 0),
-      item.unit || '',
-      peso(item.unit_price),
-      `${item.markup_pct || 0}%`,
-      peso(item.adjusted_unit_price),
-      peso(item.subtotal),
-    ])
-    const bomTotal = quote.bill_of_materials.reduce((s, i) => s + (i.subtotal || 0), 0)
-    bomRows.push(['TOTAL', '', '', '', '', '', peso(bomTotal)])
-    children.push(makeTable(headers, bomRows))
-    children.push(blank())
+  // Bill of Materials — reference list only (quantity/unit/description), no
+  // pricing here; final pricing lives in Costing (the Scope of Works table above)
+  const bomTypes = (quote.scope_of_work_items || []).filter(t => t.bom_items?.length > 0)
+  if (bomTypes.length > 0) {
+    children.push(ph('II. BILL OF MATERIALS', { bold: true, size: 24 }))
+    bomTypes.forEach(t => {
+      children.push(ph(t.sow_type_name.toUpperCase(), { bold: true }))
+      const headerRow = new TableRow({
+        children: ['QUANTITY', 'UNIT', 'DESCRIPTION'].map(h => new TableCell({
+          shading: { fill: NAVY },
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, color: 'FFFFFF' })] })],
+        })),
+      })
+      const dataRows = t.bom_items.map(item => new TableRow({
+        children: [
+          new TableCell({ children: [ph(String(item.quantity ?? ''))] }),
+          new TableCell({ children: [ph(item.unit || '')] }),
+          new TableCell({ children: [ph(item.material_name || item.material || '')] }),
+        ],
+      }))
+      children.push(new Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
+      children.push(blank())
+    })
   }
 
   // Other Scope Costs
@@ -144,17 +247,10 @@ export async function downloadQuoteAsDocx(quote) {
     children.push(blank())
   }
 
-  // Notes
-  if (quote.notes) {
-    children.push(sectionTitle('NOTES'))
-    quote.notes.split('\n').forEach(line => children.push(ph(line)))
-    children.push(blank())
-  }
-
-  // Exclusions
-  if (quote.exclusions) {
-    children.push(sectionTitle('EXCLUSIONS'))
-    quote.exclusions.split('\n').forEach(line => children.push(ph(line)))
+  // Other Notes and Exclusions (rich text)
+  if (quote.notes_and_exclusions) {
+    children.push(sectionTitle('OTHER NOTES AND EXCLUSIONS'))
+    children.push(...htmlToDocxParagraphs(quote.notes_and_exclusions))
     children.push(blank())
   }
 

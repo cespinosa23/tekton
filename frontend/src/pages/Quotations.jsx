@@ -5,26 +5,29 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import { getQuotations, createQuotation, updateQuotation, archiveQuotation } from '../api/quotations'
 import { getCompanies, getSowTypes } from '../api/settings'
-import { getMaterials } from '../api/materials'
+import { getMaterials, getMaterialTypes } from '../api/materials'
+import { getInventoryRecords } from '../api/inventory'
 import { usePermissions } from '../hooks/usePermissions'
-import BOMEditor from '../components/quotation/BOMEditor'
+import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
+import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
-import CostTypeEditor, { FORM_SCOPES, calcScopeCostTotal, calcAllScopeCostsTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
+import CostTypeEditor, { FORM_SCOPES, calcAllScopeCostsTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
 import OtherCostsEditor from '../components/quotation/OtherCostsEditor'
+import RichTextEditor from '../components/RichTextEditor'
 import QuotePreview from '../components/quotation/QuotePreview'
 import { downloadQuoteAsDocx } from '../components/quotation/generateQuoteDoc'
 import {
-  Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive, X,
+  Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
-  'Template & Company', 'Addressee', 'Solar Details', 'Scope of Works', 'Costing',
-  'Bill of Materials', 'Other Costs', 'Payment Terms', 'Notes & Exclusions', 'Preview',
+  'Template & Company', 'Addressee', 'Solar Details', 'Scope of Works',
+  'Bill of Materials', 'Costing', 'Others', 'Payment Terms', 'Preview',
 ]
 const STEPS_TRADITIONAL = [
-  'Template & Company', 'Addressee', 'Scope of Works', 'Costing',
-  'Bill of Materials', 'Other Costs', 'Payment Terms', 'Notes & Exclusions', 'Preview',
+  'Template & Company', 'Addressee', 'Scope of Works',
+  'Bill of Materials', 'Costing', 'Others', 'Payment Terms', 'Preview',
 ]
 
 const EMPTY_QUOTE = {
@@ -38,6 +41,7 @@ const EMPTY_QUOTE = {
   company_logo_url: '',
   addressee_name: '',
   addressee_address: '',
+  attention_to: '',
   subject: '',
   quotation_date: format(new Date(), 'yyyy-MM-dd'),
   signatory_name: '',
@@ -49,14 +53,11 @@ const EMPTY_QUOTE = {
   inverter_brand: '',
   battery_brand: '',
   panel_brand: '',
-  scope_of_works: '',
   scope_of_work_items: [],
   terms_of_payment: '',
-  bill_of_materials: [],
   other_scope_costs: [],
   mode_of_payment: '',
-  notes: '',
-  exclusions: '',
+  notes_and_exclusions: '',
   total_contract_cost: 0,
 }
 
@@ -114,6 +115,8 @@ export default function Quotations() {
   const { data: quotations = [], isLoading } = useQuery({ queryKey: ['quotations'], queryFn: getQuotations })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
   const { data: materials = [] } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
+  const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
+  const { data: inventoryRecords = [] } = useQuery({ queryKey: ['inventoryRecords'], queryFn: getInventoryRecords })
   const { data: sowTypes = [] } = useQuery({ queryKey: ['sowTypes'], queryFn: getSowTypes })
   const activeCompanies = companies.filter(c => c.is_active !== false)
   const activeMaterials = materials.filter(m => !m.archived)
@@ -136,20 +139,18 @@ export default function Quotations() {
     onError: () => toast.error('Failed to archive'),
   })
 
-  const baseSteps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
-  // Bill of Materials only applies if Supply of Materials was selected for any scope type in Costing
-  const anySupplySelected = (quoteData.scope_of_work_items || []).some(t => t.costing?.scope_supply)
-  const steps = baseSteps.filter(s => s !== 'Bill of Materials' || anySupplySelected)
+  const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
   const isPreviewStep = steps[step] === 'Preview'
   const isLocked = editingQuote?.status === 'Finalized'
 
   const set = (field, value) => setQuoteData(prev => ({ ...prev, [field]: value }))
 
+  // BOM total is already folded into calcAllScopeCostsTotal (Supply of Materials
+  // per scope type is auto-priced from that type's own BOM) — don't add it again here.
   const calcTotal = (data = quoteData) => {
-    const bom = (data.bill_of_materials || []).reduce((s, i) => s + (i.subtotal || 0), 0)
     const other = (data.other_scope_costs || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)
     const scopeCost = calcAllScopeCostsTotal(data.scope_of_work_items)
-    return bom + other + scopeCost
+    return other + scopeCost
   }
 
   // Auto-generate Q-YYYY-NNN based on existing quotations for the current year
@@ -235,6 +236,7 @@ export default function Quotations() {
       if (!quoteData.subject?.trim()) return 'Subject is required'
     }
     if (stepName === 'Costing' && !scopeCostValid) return 'Every checked Cost Type needs a Contract Cost'
+    if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source'
     return null
   }
 
@@ -244,6 +246,7 @@ export default function Quotations() {
     if (!quoteData.addressee_name?.trim()) errors.push('Client / Addressee Name is required')
     if (!quoteData.subject?.trim()) errors.push('Subject is required')
     if (!scopeCostValid) errors.push('Every checked Cost Type needs a Contract Cost')
+    if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source')
     return errors
   }
 
@@ -368,6 +371,10 @@ export default function Quotations() {
         <Field label="Address">
           <input value={quoteData.addressee_address} onChange={e => set('addressee_address', e.target.value)} className={inp} disabled={isLocked} />
         </Field>
+        <Field label="Through (Attention To)">
+          <input value={quoteData.attention_to} onChange={e => set('attention_to', e.target.value)}
+            placeholder="e.g. Engr. Jomar Tindugan" className={inp} disabled={isLocked} />
+        </Field>
         <div className="md:col-span-2">
           <Field label="Subject" required>
             <input value={quoteData.subject} onChange={e => set('subject', e.target.value)}
@@ -404,54 +411,66 @@ export default function Quotations() {
     )
 
     if (s === 'Scope of Works') return (
-      <div className="space-y-6">
-        <SowEditor
-          items={quoteData.scope_of_work_items}
-          onChange={items => set('scope_of_work_items', items)}
-          sowTypes={sowTypes}
-          disabled={isLocked}
-        />
-        <Field label="Additional Notes (free-form, optional)">
-          <textarea value={quoteData.scope_of_works} onChange={e => set('scope_of_works', e.target.value)}
-            rows={8} placeholder="Anything not covered by the selections above…"
-            className={`${inp} font-mono resize-y`} disabled={isLocked} />
-        </Field>
-      </div>
-    )
-
-    if (s === 'Costing') return (
-      <div className="space-y-4">
-        {(quoteData.scope_of_work_items || []).length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
-            No Scope of Work types selected yet — go back to Scope of Works first.
-          </div>
-        ) : quoteData.scope_of_work_items.map(t => (
-          <CostTypeEditor
-            key={t.sow_type_id}
-            label={t.sow_type_name}
-            data={t.costing || emptyCosting()}
-            disabled={isLocked}
-            onChange={(field, value) => setQuoteData(prev => ({
-              ...prev,
-              scope_of_work_items: prev.scope_of_work_items.map(x =>
-                x.sow_type_id !== t.sow_type_id ? x : { ...x, costing: { ...(x.costing || emptyCosting()), [field]: value } }
-              ),
-            }))}
-          />
-        ))}
-      </div>
-    )
-
-    if (s === 'Bill of Materials') return (
-      <BOMEditor
-        items={quoteData.bill_of_materials}
-        onChange={items => set('bill_of_materials', items)}
-        materials={activeMaterials}
+      <SowEditor
+        items={quoteData.scope_of_work_items}
+        onChange={items => set('scope_of_work_items', items)}
+        sowTypes={sowTypes}
+        disabled={isLocked}
       />
     )
 
-    if (s === 'Other Costs') return (
-      <OtherCostsEditor items={quoteData.other_scope_costs} onChange={items => set('other_scope_costs', items)} />
+    if (s === 'Costing') return (
+      (quoteData.scope_of_work_items || []).length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
+          No Scope of Work types selected yet — go back to Scope of Works first.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {quoteData.scope_of_work_items.map(t => (
+            <CostTypeEditor
+              key={t.sow_type_id}
+              label={t.sow_type_name}
+              data={t.costing || emptyCosting()}
+              bomTotal={calcBomTotal(t.bom_items || [])}
+              disabled={isLocked}
+              onChange={(field, value) => setQuoteData(prev => ({
+                ...prev,
+                scope_of_work_items: prev.scope_of_work_items.map(x =>
+                  x.sow_type_id !== t.sow_type_id ? x : { ...x, costing: { ...(x.costing || emptyCosting()), [field]: value } }
+                ),
+              }))}
+            />
+          ))}
+        </div>
+      )
+    )
+
+    if (s === 'Bill of Materials') return (
+      <BOMTabsEditor
+        scopeOfWorkItems={quoteData.scope_of_work_items}
+        onChange={(sowTypeId, items) => setQuoteData(prev => ({
+          ...prev,
+          scope_of_work_items: prev.scope_of_work_items.map(x =>
+            x.sow_type_id !== sowTypeId ? x : { ...x, bom_items: items }
+          ),
+        }))}
+        materials={activeMaterials}
+        materialTypes={materialTypes}
+        inventoryRecords={inventoryRecords}
+      />
+    )
+
+    if (s === 'Others') return (
+      <div className="space-y-6">
+        <div>
+          <p className="text-xs font-medium text-gray-700 mb-2">Other Costs</p>
+          <OtherCostsEditor items={quoteData.other_scope_costs} onChange={items => set('other_scope_costs', items)} />
+        </div>
+        <Field label="Other Notes and Exclusions">
+          <RichTextEditor value={quoteData.notes_and_exclusions} onChange={html => set('notes_and_exclusions', html)}
+            placeholder="Additional notes, and anything NOT included in this quotation…" disabled={isLocked} />
+        </Field>
+      </div>
     )
 
     if (s === 'Payment Terms') return (
@@ -464,19 +483,6 @@ export default function Quotations() {
         <Field label="Mode of Payment">
           <input value={quoteData.mode_of_payment} onChange={e => set('mode_of_payment', e.target.value)}
             placeholder="e.g. Bank Transfer, Check, Cash" className={inp} disabled={isLocked} />
-        </Field>
-      </div>
-    )
-
-    if (s === 'Notes & Exclusions') return (
-      <div className="space-y-5">
-        <Field label="Notes">
-          <textarea value={quoteData.notes} onChange={e => set('notes', e.target.value)}
-            rows={5} placeholder="Additional notes…" className={`${inp} resize-y`} disabled={isLocked} />
-        </Field>
-        <Field label="Exclusions">
-          <textarea value={quoteData.exclusions} onChange={e => set('exclusions', e.target.value)}
-            rows={5} placeholder="What is NOT included in this quotation…" className={`${inp} resize-y`} disabled={isLocked} />
         </Field>
       </div>
     )

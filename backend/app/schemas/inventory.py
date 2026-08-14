@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
 
 class InventoryCreate(BaseModel):
     material_id: int
@@ -18,6 +18,8 @@ class InventoryRead(BaseModel):
     brand: Optional[str] = None
     quantity: Optional[Decimal] = None
     latest_unit_cost: Optional[Decimal] = None
+    latest_cost_supplier: Optional[str] = None
+    latest_cost_date: Optional[date] = None
     last_updated: Optional[datetime] = None
     archived: bool = False
     model_config = {"from_attributes": True}

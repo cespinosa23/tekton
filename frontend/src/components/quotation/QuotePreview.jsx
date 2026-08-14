@@ -1,4 +1,7 @@
 import { format } from 'date-fns'
+import { calcScopeCostTotal } from './CostTypeEditor'
+import { calcBomTotal } from './BOMEditor'
+import { sanitizeRichText } from '../RichTextEditor'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -12,13 +15,24 @@ function Section({ title, children }) {
 }
 
 export default function QuotePreview({ quote }) {
-  const bomTotal = (quote.bill_of_materials || []).reduce((s, i) => s + (i.subtotal || 0), 0)
+  const scopeItems = quote.scope_of_work_items || []
+  // Final pricing per scope always comes from Costing (which already folds in
+  // that scope's own BOM-derived Supply cost, or a manual override) — never
+  // a raw BOM readout, so this must match calcAllScopeCostsTotal exactly.
+  const scopeRows = scopeItems.map(t => ({
+    ...t,
+    cost: calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || [])),
+  }))
+  const scopeGrandTotal = scopeRows.reduce((s, t) => s + t.cost, 0)
+  const bomTypes = scopeItems.filter(t => t.bom_items?.length > 0)
   const otherTotal = (quote.other_scope_costs || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)
 
   let dateDisplay = ''
   if (quote.quotation_date) {
-    try { dateDisplay = format(new Date(quote.quotation_date + 'T00:00:00'), 'MMMM d, yyyy') } catch { dateDisplay = quote.quotation_date }
+    try { dateDisplay = format(new Date(quote.quotation_date + 'T00:00:00'), 'd MMMM yyyy') } catch { dateDisplay = quote.quotation_date }
   }
+
+  const greetingName = quote.attention_to || quote.addressee_name
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-8 max-w-4xl mx-auto text-gray-800 font-sans print:shadow-none print:rounded-none">
@@ -35,18 +49,110 @@ export default function QuotePreview({ quote }) {
         <div className="text-right">
           <div className="inline-block bg-amber-500 text-white font-bold text-xl px-6 py-2 rounded-lg">QUOTATION</div>
           {quote.quote_number && <p className="text-sm text-gray-500 mt-2">#{quote.quote_number}</p>}
-          {dateDisplay && <p className="text-sm text-gray-500">{dateDisplay}</p>}
         </div>
       </div>
 
-      {/* Addressee */}
-      <Section title="Addressed To">
-        <p className="font-semibold text-gray-900">{quote.addressee_name || '—'}</p>
-        {quote.addressee_address && <p className="text-sm text-gray-600 mt-0.5">{quote.addressee_address}</p>}
-        {quote.subject && (
-          <p className="mt-2 font-medium text-gray-700"><span className="text-gray-500">RE: </span>{quote.subject}</p>
-        )}
-      </Section>
+      {/* Addressee — matches the standard service-quotation letter format */}
+      <div className="mb-6 text-sm text-gray-800 space-y-4">
+        {dateDisplay && <p>{dateDisplay}</p>}
+        <div>
+          <p className="font-bold uppercase">{quote.addressee_name || '—'}</p>
+          {quote.addressee_address && <p>{quote.addressee_address}</p>}
+        </div>
+        <div>
+          {quote.attention_to && (
+            <p><span className="inline-block w-24 font-semibold">THROUGH</span> : <span className="uppercase">{quote.attention_to}</span></p>
+          )}
+          {quote.subject && (
+            <p><span className="inline-block w-24 font-semibold">SUBJECT</span> : <span className="uppercase">{quote.subject}</span></p>
+          )}
+        </div>
+        {greetingName && <p>Dear {greetingName},</p>}
+        <p>In line with your service request, we would like to submit our offer below with the following details:</p>
+      </div>
+
+      {/* Scope of Work — one row per scope type, priced from Costing (never a raw BOM readout) */}
+      {scopeRows.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-2">I. SCOPE OF WORKS</h3>
+          <table className="w-full text-sm border border-gray-800">
+            <thead>
+              <tr className="bg-[#1b3a5c] text-white">
+                <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-14">ITEM</th>
+                <th className="border border-gray-800 px-3 py-2 font-semibold text-left">SCOPE DESCRIPTION</th>
+                <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-32">COST (PHP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scopeRows.map((t, i) => (
+                <tr key={t.sow_type_id}>
+                  <td className="border border-gray-800 px-3 py-2 text-center align-top">{i + 1}</td>
+                  <td className="border border-gray-800 px-3 py-2 align-top">
+                    <p className="font-bold uppercase mb-1">{t.sow_type_name}</p>
+                    {t.sub_items?.length > 0 && (
+                      <ul className="space-y-1 pl-4">
+                        {t.sub_items.map(si => (
+                          <li key={si.item_id} className="list-disc">
+                            {si.item_name}
+                            {si.notes?.length > 0 && (
+                              <ul className="pl-4 mt-0.5 space-y-0.5">
+                                {si.notes.map((note, ni) => (
+                                  <li key={ni} className="text-xs text-gray-500 list-[circle]">{note}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                  <td className="border border-gray-800 px-3 py-2 text-center align-top whitespace-nowrap">
+                    {Number(t.cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-[#1b3a5c] text-white font-bold">
+                <td colSpan={2} className="border border-gray-800 px-3 py-2 text-right">TOTAL COST</td>
+                <td className="border border-gray-800 px-3 py-2 text-center whitespace-nowrap">
+                  {scopeGrandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Bill of Materials — reference list only (quantity/unit/description), no pricing here; final pricing lives in Costing above */}
+      {bomTypes.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-2">II. BILL OF MATERIALS</h3>
+          <div className="space-y-4">
+            {bomTypes.map(t => (
+              <div key={t.sow_type_id}>
+                <p className="font-bold uppercase text-sm mb-1.5">{t.sow_type_name}</p>
+                <table className="w-full text-sm border border-gray-800">
+                  <thead>
+                    <tr className="bg-[#1b3a5c] text-white">
+                      <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-28">QUANTITY</th>
+                      <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-28">UNIT</th>
+                      <th className="border border-gray-800 px-3 py-2 font-semibold text-left">DESCRIPTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {t.bom_items.map((row, i) => (
+                      <tr key={i}>
+                        <td className="border border-gray-800 px-3 py-2 text-center">{row.quantity}</td>
+                        <td className="border border-gray-800 px-3 py-2 text-center">{row.unit}</td>
+                        <td className="border border-gray-800 px-3 py-2">{row.material_name || row.material}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Solar Details */}
       {quote.template_type === 'Solar' && (
@@ -65,76 +171,6 @@ export default function QuotePreview({ quote }) {
                 <p className="font-semibold text-gray-900">{val}</p>
               </div>
             ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Scope of Work (structured) */}
-      {quote.scope_of_work_items?.length > 0 && (
-        <Section title="Scope of Work">
-          <div className="space-y-4">
-            {quote.scope_of_work_items.map(t => (
-              <div key={t.sow_type_id}>
-                <p className="font-semibold text-gray-900 text-sm mb-1.5">{t.sow_type_name}</p>
-                {t.sub_items?.length > 0 && (
-                  <ul className="space-y-1.5 pl-4">
-                    {t.sub_items.map(si => (
-                      <li key={si.item_id} className="text-sm text-gray-700 list-disc">
-                        {si.item_name}
-                        {si.notes?.length > 0 && (
-                          <ul className="pl-4 mt-1 space-y-0.5">
-                            {si.notes.map((note, i) => (
-                              <li key={i} className="text-xs text-gray-500 list-[circle]">{note}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Scope of Works (free-form) */}
-      {quote.scope_of_works && (
-        <Section title="Additional Notes">
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.scope_of_works}</pre>
-        </Section>
-      )}
-
-      {/* Bill of Materials */}
-      {quote.bill_of_materials?.length > 0 && (
-        <Section title="Bill of Materials">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-100 text-gray-600">
-                  {['Material', 'Qty', 'Unit', 'Unit Price', 'Markup %', 'Adj. Unit Price', 'Subtotal'].map(h => (
-                    <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {quote.bill_of_materials.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td className="px-3 py-2">{row.material}</td>
-                    <td className="px-3 py-2">{row.quantity}</td>
-                    <td className="px-3 py-2">{row.unit}</td>
-                    <td className="px-3 py-2">{fmt(row.unit_price)}</td>
-                    <td className="px-3 py-2">{row.markup_pct}%</td>
-                    <td className="px-3 py-2">{fmt(row.adjusted_unit_price)}</td>
-                    <td className="px-3 py-2 font-semibold">{fmt(row.subtotal)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-amber-50 font-bold">
-                  <td colSpan={6} className="px-3 py-2 text-right text-gray-700">BOM Total:</td>
-                  <td className="px-3 py-2 text-amber-700">{fmt(bomTotal)}</td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </Section>
       )}
@@ -177,15 +213,11 @@ export default function QuotePreview({ quote }) {
         </Section>
       )}
 
-      {/* Notes & Exclusions */}
-      {quote.notes && (
-        <Section title="Notes">
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.notes}</pre>
-        </Section>
-      )}
-      {quote.exclusions && (
-        <Section title="Exclusions">
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.exclusions}</pre>
+      {/* Other Notes and Exclusions (rich text) */}
+      {quote.notes_and_exclusions && (
+        <Section title="Other Notes and Exclusions">
+          <div className="text-sm text-gray-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(quote.notes_and_exclusions) }} />
         </Section>
       )}
 

@@ -1,9 +1,12 @@
+import { useState } from 'react'
+import { Pencil, RotateCcw } from 'lucide-react'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../../utils/numberInput'
+import { calcBomTotal } from './BOMEditor'
 
 export const FORM_SCOPES = [
   { key: 'wiring_permit', label: 'Wiring Permit / CFEI Processing', costField: 'scope_wiring_permit_cost', mirror: 'cfei' },
   { key: 'electrical_plan', label: 'Electrical Plan Drafting', costField: 'scope_electrical_plan_cost' },
-  { key: 'supply', label: 'Supply of Materials', costField: 'scope_supply_cost', skipCost: true },
+  { key: 'supply', label: 'Supply of Materials', costField: 'scope_supply_cost', skipCost: true, auto: true },
   { key: 'installation', label: 'Installation Works', costField: 'scope_installation_cost' },
   { key: 'meralco', label: 'Meralco Application', costField: 'scope_meralco_cost' },
   { key: 'encumbrance', label: 'Encumbrance', costField: 'encumbrance' },
@@ -20,34 +23,94 @@ export const emptyCosting = () => ({
   scope_others: false, scope_others_cost: '', scope_others_text: '',
 })
 
+const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+// Supply of Materials is normally auto-priced from the scope type's own Bill
+// of Materials tab, but real-world pricing sometimes differs from a strict
+// qty×price BOM total (negotiated discounts, etc.) — scope_supply_cost holds
+// an optional manual override for THIS quotation only; it never touches BOM.
+export const supplyOverridden = (data) => data.scope_supply_cost !== '' && data.scope_supply_cost != null
+export const effectiveSupplyCost = (data, bomTotal) =>
+  supplyOverridden(data) ? (parseFloat(data.scope_supply_cost) || 0) : bomTotal
+
 // Per scope type — costing is not shared across the whole quotation.
-export function calcScopeCostTotal(data) {
-  return FORM_SCOPES.reduce((sum, s) => {
-    if (!data[`scope_${s.key}`] || s.skipCost) return sum
+export function calcScopeCostTotal(data, bomTotal = 0) {
+  const manual = FORM_SCOPES.reduce((sum, s) => {
+    if (s.auto || !data[`scope_${s.key}`] || s.skipCost) return sum
     return sum + (parseFloat(data[s.costField]) || 0)
   }, 0)
+  return manual + effectiveSupplyCost(data, bomTotal)
 }
 
-// Sum of every selected scope type's own costing.
+// Sum of every selected scope type's own costing (including its BOM-derived Supply cost).
 export function calcAllScopeCostsTotal(scopeOfWorkItems = []) {
-  return scopeOfWorkItems.reduce((sum, t) => sum + calcScopeCostTotal(t.costing || {}), 0)
+  return scopeOfWorkItems.reduce((sum, t) => sum + calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || [])), 0)
 }
 
-export default function CostTypeEditor({ label, data, onChange, disabled = false }) {
+// Shows the auto BOM-derived Supply amount, with a pencil icon that lets the
+// user override it for this quotation only — never writes back to the BOM.
+function SupplyAmountCell({ data, bomTotal, disabled, onChange }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const overridden = supplyOverridden(data)
+  const effective = effectiveSupplyCost(data, bomTotal)
+
+  const startEditing = () => {
+    setDraft(String(overridden ? data.scope_supply_cost : bomTotal))
+    setEditing(true)
+  }
+
+  const commit = () => {
+    onChange('scope_supply_cost', normalizeNumberInput(draft))
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input type="text" autoFocus
+        value={formatNumberDisplay(draft)}
+        onChange={e => {
+          const sanitized = sanitizeNumberInput(e.target.value)
+          if (sanitized === null) return
+          setDraft(sanitized)
+        }}
+        onBlur={commit}
+        onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+        className="w-28 px-2 py-1.5 text-right border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-1.5 w-36">
+      {overridden && !disabled && (
+        <button type="button" onClick={() => onChange('scope_supply_cost', '')} title="Reset to BOM total"
+          className="text-gray-300 hover:text-red-500"><RotateCcw size={12} /></button>
+      )}
+      <span className={`text-sm text-right ${effective > 0 ? 'text-gray-900 font-medium' : 'text-gray-300'}`}>{fmt(effective)}</span>
+      {overridden && <span className="text-[10px] text-amber-600 font-medium">edited</span>}
+      {!disabled && (
+        <button type="button" onClick={startEditing} title="Override this quotation's Supply cost (won't change the BOM)"
+          className="text-gray-300 hover:text-gray-600"><Pencil size={12} /></button>
+      )}
+    </div>
+  )
+}
+
+export default function CostTypeEditor({ label, data, onChange, bomTotal = 0, disabled = false }) {
   const toggleScope = (key, checked, mirror) => {
     onChange(`scope_${key}`, checked)
     if (mirror) onChange(`scope_${mirror}`, checked)
   }
 
   const handleSelectAll = (checked) => {
-    FORM_SCOPES.filter(s => !s.hasRemarks).forEach(s => {
+    FORM_SCOPES.filter(s => !s.hasRemarks && !s.auto).forEach(s => {
       onChange(`scope_${s.key}`, checked)
       if (s.mirror) onChange(`scope_${s.mirror}`, checked)
     })
   }
 
-  const allSelected = FORM_SCOPES.filter(s => !s.hasRemarks).every(s => data[`scope_${s.key}`])
-  const scopeTotal = calcScopeCostTotal(data)
+  const allSelected = FORM_SCOPES.filter(s => !s.hasRemarks && !s.auto).every(s => data[`scope_${s.key}`])
+  const scopeTotal = calcScopeCostTotal(data, bomTotal)
 
   const costInput = (field, checked, hasError) => (
     <input type="text" disabled={!checked || disabled}
@@ -86,22 +149,23 @@ export default function CostTypeEditor({ label, data, onChange, disabled = false
       </div>
       <div className="divide-y divide-gray-100">
         {FORM_SCOPES.map(scope => {
-          const checked = !!data[`scope_${scope.key}`]
+          const checked = scope.auto ? effectiveSupplyCost(data, bomTotal) > 0 : !!data[`scope_${scope.key}`]
           const costError = checked && !scope.skipCost && (data[scope.costField] === '' || data[scope.costField] == null)
           return (
             <div key={scope.key} className={`px-4 py-2.5 transition-colors ${checked ? 'bg-white' : 'bg-gray-50/50'}`}>
               <div className="flex items-center justify-between gap-4">
-                <label className="flex items-center gap-2.5 cursor-pointer flex-1">
-                  <input type="checkbox" checked={checked} disabled={disabled}
+                <label className={`flex items-center gap-2.5 flex-1 ${scope.auto ? '' : 'cursor-pointer'}`}>
+                  <input type="checkbox" checked={checked} disabled={disabled || scope.auto}
                     onChange={e => toggleScope(scope.key, e.target.checked, scope.mirror)}
                     className="w-4 h-4 rounded accent-gray-800 flex-shrink-0" />
                   <span className={`text-sm ${checked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                     {scope.label}
                   </span>
+                  {scope.auto && <span className="text-xs text-gray-400">(auto, from BOM)</span>}
                   {costError && <span className="text-xs text-red-500 ml-1">required</span>}
                 </label>
-                {scope.skipCost ? (
-                  checked && <span className="text-xs text-gray-400 italic w-36 text-right">From Bill of Materials</span>
+                {scope.auto ? (
+                  <SupplyAmountCell data={data} bomTotal={bomTotal} disabled={disabled} onChange={onChange} />
                 ) : (
                   costInput(scope.costField, checked, costError)
                 )}
