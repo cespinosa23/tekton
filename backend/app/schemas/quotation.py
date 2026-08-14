@@ -14,6 +14,7 @@ class QuotationCreate(BaseModel):
     company_footer: Optional[str] = None
     addressee_name: Optional[str] = None
     addressee_address: Optional[str] = None
+    attention_to: Optional[str] = None
     subject: Optional[str] = None
     quotation_date: Optional[date] = None
     signatory_name: Optional[str] = None
@@ -25,14 +26,11 @@ class QuotationCreate(BaseModel):
     inverter_brand: Optional[str] = None
     battery_brand: Optional[str] = None
     panel_brand: Optional[str] = None
-    scope_of_works: Optional[str] = None
     scope_of_work_items: Optional[List[Any]] = None
     terms_of_payment: Optional[str] = None
-    bill_of_materials: Optional[List[Any]] = None
     other_scope_costs: Optional[List[Any]] = None
     mode_of_payment: Optional[str] = None
-    notes: Optional[str] = None
-    exclusions: Optional[str] = None
+    notes_and_exclusions: Optional[str] = None
     total_contract_cost: Optional[Decimal] = Decimal("0")
 
 class QuotationUpdate(QuotationCreate):
