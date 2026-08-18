@@ -9,9 +9,14 @@ class Quotation(Base):
     status = Column(String(50), default="Draft")
     template_type = Column(String(50), default="Traditional")
     company_name = Column(String(255), nullable=True)
+    company_short_name = Column(String(100), nullable=True)
     company_logo_url = Column(Text, nullable=True)  # base64 data-URI, same as Company.logo_url
     company_address = Column(String(255), nullable=True)
-    company_contact = Column(String(100), nullable=True)
+    company_email = Column(String(255), nullable=True)
+    company_telephone_number = Column(String(255), nullable=True)
+    company_contact_number = Column(String(255), nullable=True)
+    company_pcab_license = Column(String(100), nullable=True)
+    company_letterhead_color = Column(String(20), nullable=True)
     company_footer = Column(String(500), nullable=True)
     addressee_name = Column(String(255), nullable=True)
     addressee_address = Column(String(255), nullable=True)
@@ -20,6 +25,7 @@ class Quotation(Base):
     quotation_date = Column(Date, nullable=True)
     signatory_name = Column(String(100), nullable=True)
     signatory_title = Column(String(100), nullable=True)
+    signatory_signature_url = Column(Text, nullable=True)  # base64 data-URI, same as Company.signature_url
     project_cost = Column(Numeric(12, 2), default=0)
     estimated_savings = Column(Numeric(12, 2), default=0)
     roi = Column(String(100), nullable=True)
@@ -32,8 +38,7 @@ class Quotation(Base):
     scope_of_work_items = Column(JSON, nullable=True)
 
     terms_of_payment = Column(String(2000), nullable=True)
-    other_scope_costs = Column(JSON, nullable=True)
-    mode_of_payment = Column(String(255), nullable=True)
+    mode_of_payment = Column(String(2000), nullable=True)
     # Rich-text HTML from RichTextEditor (bold/italic/lists only, sanitized on the frontend)
     notes_and_exclusions = Column(Text, nullable=True)
     total_contract_cost = Column(Numeric(12, 2), default=0)

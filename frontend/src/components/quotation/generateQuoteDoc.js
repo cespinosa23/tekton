@@ -1,12 +1,14 @@
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  AlignmentType, WidthType,
+  AlignmentType, WidthType, ImageRun, BorderStyle,
 } from 'docx'
 import { format } from 'date-fns'
 import { calcScopeCostTotal } from './CostTypeEditor'
 import { calcBomTotal } from './BOMEditor'
 
 const NAVY = '1B3A5C'
+const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER }
 
 function ph(text = '', opts = {}) {
   return new Paragraph({ children: [new TextRun({ text: String(text), ...opts })] })
@@ -23,17 +25,27 @@ function sectionTitle(text) {
   })
 }
 
-function makeTable(headers, rows) {
-  const headerRow = new TableRow({
-    children: headers.map(h => new TableCell({ children: [ph(h, { bold: true })] })),
-  })
-  const dataRows = rows.map(cells =>
-    new TableRow({ children: cells.map(c => new TableCell({ children: [ph(c)] })) })
-  )
-  return new Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } })
-}
-
 const peso = (n) => `₱${Number(n || 0).toLocaleString()}`
+const hexColor = (c) => (c || '#1e40af').replace('#', '').toUpperCase()
+
+// Company/signature images are stored as base64 data-URIs — decode to the
+// raw bytes ImageRun needs, and infer its type from the data-URI's mime.
+function dataUriToImage(dataUri) {
+  if (!dataUri || !dataUri.startsWith('data:')) return null
+  const match = dataUri.match(/^data:image\/(\w+);base64,(.+)$/)
+  if (!match) return null
+  const [, mime, base64] = match
+  const type = mime === 'jpg' ? 'jpeg' : mime
+  if (!['png', 'jpeg', 'gif', 'bmp'].includes(type)) return null
+  try {
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return { data: bytes, type }
+  } catch {
+    return null
+  }
+}
 
 // Converts the RichTextEditor's sanitized HTML (b/i/ul/ol/p/div/br only) into
 // docx Paragraphs — ordered lists are rendered as plain "1. " prefixes rather
@@ -88,18 +100,42 @@ function htmlToDocxParagraphs(html) {
 export async function downloadQuoteAsDocx(quote) {
   const children = []
 
-  // Header
-  if (quote.company_name) children.push(ph(quote.company_name, { bold: true, size: 32 }))
-  if (quote.company_address) children.push(ph(quote.company_address))
-  if (quote.company_contact) children.push(ph(quote.company_contact))
-  children.push(blank())
+  // Header — same letterhead as BillingPrint: logo/name/short name/PCAB on the
+  // left, email/telephone/cellphone on the right, as a borderless 2-col table.
+  const letterColor = hexColor(quote.company_letterhead_color)
+  const logoImage = dataUriToImage(quote.company_logo_url)
 
-  // Title
-  children.push(new Paragraph({
-    children: [new TextRun({ text: 'QUOTATION', bold: true, size: 36, underline: {} })],
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 240 },
+  const leftParagraphs = []
+  if (logoImage) {
+    leftParagraphs.push(new Paragraph({
+      children: [new ImageRun({ data: logoImage.data, type: logoImage.type, transformation: { width: 56, height: 56 } })],
+    }))
+  }
+  if (quote.company_name) leftParagraphs.push(ph(quote.company_name.toUpperCase(), { bold: true, size: 32, color: letterColor }))
+  if (quote.company_short_name) leftParagraphs.push(ph(quote.company_short_name, { bold: true, size: 24, color: letterColor }))
+  if (quote.company_pcab_license) leftParagraphs.push(ph(`PCAB License: ${quote.company_pcab_license}`, { size: 14, color: letterColor }))
+  if (leftParagraphs.length === 0) leftParagraphs.push(blank())
+
+  const phRight = (text = '', opts = {}) =>
+    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: String(text), ...opts })] })
+
+  const rightParagraphs = []
+  if (quote.company_email) rightParagraphs.push(phRight(quote.company_email, { size: 16 }))
+  ;(quote.company_telephone_number || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(line => rightParagraphs.push(phRight(line, { size: 16 })))
+  ;(quote.company_contact_number || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(line => rightParagraphs.push(phRight(line, { size: 16 })))
+  if (rightParagraphs.length === 0) rightParagraphs.push(blank())
+
+  children.push(new Table({
+    borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [new TableRow({
+      children: [
+        new TableCell({ borders: NO_BORDERS, width: { size: 65, type: WidthType.PERCENTAGE }, children: leftParagraphs }),
+        new TableCell({ borders: NO_BORDERS, width: { size: 35, type: WidthType.PERCENTAGE }, children: rightParagraphs }),
+      ],
+    })],
   }))
+  children.push(blank())
 
   // Addressee — matches the standard service-quotation letter format
   if (quote.quotation_date) {
@@ -149,9 +185,21 @@ export async function downloadQuoteAsDocx(quote) {
     children.push(blank())
   }
 
+  // Section numbering is dynamic — a quote with no BOM items shouldn't leave
+  // a gap ("I." then "III."), so each section only claims the next numeral
+  // if it actually renders. Must match QuotePreview's logic exactly.
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
+  const bomTypesForNumbering = (quote.scope_of_work_items || []).filter(t => t.bom_items?.length > 0)
+  const hasPaymentSection = !!(quote.terms_of_payment || quote.mode_of_payment)
+  let sectionCount = 0
+  const scopeNum = quote.scope_of_work_items?.length > 0 ? ROMAN[sectionCount++] : null
+  const bomNum = bomTypesForNumbering.length > 0 ? ROMAN[sectionCount++] : null
+  const notesNum = quote.notes_and_exclusions ? ROMAN[sectionCount++] : null
+  const paymentNum = hasPaymentSection ? ROMAN[sectionCount++] : null
+
   // Scope of Work — one row per scope type, priced from Costing (never a raw BOM readout)
   if (quote.scope_of_work_items?.length > 0) {
-    children.push(ph('I. SCOPE OF WORKS', { bold: true, size: 24 }))
+    children.push(ph(`${scopeNum}. SCOPE OF WORKS`, { bold: true, size: 24 }))
 
     const headerRow = new TableRow({
       children: ['ITEM', 'SCOPE DESCRIPTION', 'COST (PHP)'].map(h => new TableCell({
@@ -200,9 +248,9 @@ export async function downloadQuoteAsDocx(quote) {
 
   // Bill of Materials — reference list only (quantity/unit/description), no
   // pricing here; final pricing lives in Costing (the Scope of Works table above)
-  const bomTypes = (quote.scope_of_work_items || []).filter(t => t.bom_items?.length > 0)
+  const bomTypes = bomTypesForNumbering
   if (bomTypes.length > 0) {
-    children.push(ph('II. BILL OF MATERIALS', { bold: true, size: 24 }))
+    children.push(ph(`${bomNum}. BILL OF MATERIALS`, { bold: true, size: 24 }))
     bomTypes.forEach(t => {
       children.push(ph(t.sow_type_name.toUpperCase(), { bold: true }))
       const headerRow = new TableRow({
@@ -223,35 +271,26 @@ export async function downloadQuoteAsDocx(quote) {
     })
   }
 
-  // Other Scope Costs
-  if (quote.other_scope_costs?.length > 0) {
-    children.push(sectionTitle('OTHER SCOPE COSTS'))
-    const otherRows = quote.other_scope_costs.map(item => [item.description || '', peso(item.amount)])
-    const otherTotal = quote.other_scope_costs.reduce((s, i) => s + (i.amount || 0), 0)
-    otherRows.push(['TOTAL', peso(otherTotal)])
-    children.push(makeTable(['Description', 'Amount'], otherRows))
-    children.push(blank())
-  }
-
-  // Terms of Payment
-  if (quote.terms_of_payment) {
-    children.push(sectionTitle('TERMS OF PAYMENT'))
-    quote.terms_of_payment.split('\n').forEach(line => children.push(ph(line)))
-    children.push(blank())
-  }
-
-  // Mode of Payment
-  if (quote.mode_of_payment) {
-    children.push(sectionTitle('MODE OF PAYMENT'))
-    children.push(ph(quote.mode_of_payment))
-    children.push(blank())
-  }
-
   // Other Notes and Exclusions (rich text)
   if (quote.notes_and_exclusions) {
-    children.push(sectionTitle('OTHER NOTES AND EXCLUSIONS'))
+    children.push(ph(`${notesNum}. OTHER NOTES AND EXCLUSIONS`, { bold: true, size: 24 }))
     children.push(...htmlToDocxParagraphs(quote.notes_and_exclusions))
     children.push(blank())
+  }
+
+  // Terms of Payment — Payment Terms + Payment Method, as one numbered section
+  if (hasPaymentSection) {
+    children.push(ph(`${paymentNum}. TERMS OF PAYMENT`, { bold: true, size: 24 }))
+    if (quote.terms_of_payment) {
+      children.push(ph('Payment Terms', { bold: true }))
+      quote.terms_of_payment.split('\n').forEach(line => children.push(ph(line)))
+      children.push(blank())
+    }
+    if (quote.mode_of_payment) {
+      children.push(ph('Payment Method', { bold: true }))
+      quote.mode_of_payment.split('\n').forEach(line => children.push(ph(line)))
+      children.push(blank())
+    }
   }
 
   // Total
@@ -264,12 +303,36 @@ export async function downloadQuoteAsDocx(quote) {
   }))
   children.push(blank())
 
-  // Signatory
+  // Signatory + Client Acceptance
   children.push(blank())
-  children.push(blank())
-  if (quote.signatory_name) children.push(ph(quote.signatory_name, { bold: true }))
-  if (quote.signatory_title) children.push(ph(quote.signatory_title))
-  if (quote.company_name) children.push(ph(quote.company_name))
+  const sigImage = dataUriToImage(quote.signatory_signature_url)
+  const signatoryParagraphs = [ph('Authorized Signatory:', { bold: true })]
+  if (sigImage) {
+    signatoryParagraphs.push(new Paragraph({
+      children: [new ImageRun({ data: sigImage.data, type: sigImage.type, transformation: { width: 100, height: 45 } })],
+    }))
+  } else {
+    signatoryParagraphs.push(blank())
+  }
+  signatoryParagraphs.push(ph(quote.signatory_name || 'Authorized Signatory', { bold: true }))
+  if (quote.signatory_title) signatoryParagraphs.push(ph(quote.signatory_title))
+
+  const acceptanceParagraphs = [
+    ph('Client Acceptance:', { bold: true }),
+    blank(),
+    ph('Signature over Printed Name', { size: 16 }),
+  ]
+
+  children.push(new Table({
+    borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [new TableRow({
+      children: [
+        new TableCell({ borders: NO_BORDERS, width: { size: 50, type: WidthType.PERCENTAGE }, children: signatoryParagraphs }),
+        new TableCell({ borders: NO_BORDERS, width: { size: 50, type: WidthType.PERCENTAGE }, children: acceptanceParagraphs }),
+      ],
+    })],
+  }))
 
   // Footer
   if (quote.company_footer) {

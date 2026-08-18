@@ -12,7 +12,6 @@ import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEdito
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
 import CostTypeEditor, { FORM_SCOPES, calcAllScopeCostsTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
-import OtherCostsEditor from '../components/quotation/OtherCostsEditor'
 import RichTextEditor from '../components/RichTextEditor'
 import QuotePreview from '../components/quotation/QuotePreview'
 import { downloadQuoteAsDocx } from '../components/quotation/generateQuoteDoc'
@@ -35,8 +34,13 @@ const EMPTY_QUOTE = {
   quote_number: '',
   status: 'Draft',
   company_name: '',
+  company_short_name: '',
   company_address: '',
-  company_contact: '',
+  company_email: '',
+  company_telephone_number: '',
+  company_contact_number: '',
+  company_pcab_license: '',
+  company_letterhead_color: '',
   company_footer: '',
   company_logo_url: '',
   addressee_name: '',
@@ -46,6 +50,7 @@ const EMPTY_QUOTE = {
   quotation_date: format(new Date(), 'yyyy-MM-dd'),
   signatory_name: '',
   signatory_title: '',
+  signatory_signature_url: '',
   project_cost: 0,
   estimated_savings: 0,
   roi: '',
@@ -55,7 +60,6 @@ const EMPTY_QUOTE = {
   panel_brand: '',
   scope_of_work_items: [],
   terms_of_payment: '',
-  other_scope_costs: [],
   mode_of_payment: '',
   notes_and_exclusions: '',
   total_contract_cost: 0,
@@ -148,9 +152,7 @@ export default function Quotations() {
   // BOM total is already folded into calcAllScopeCostsTotal (Supply of Materials
   // per scope type is auto-priced from that type's own BOM) — don't add it again here.
   const calcTotal = (data = quoteData) => {
-    const other = (data.other_scope_costs || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)
-    const scopeCost = calcAllScopeCostsTotal(data.scope_of_work_items)
-    return other + scopeCost
+    return calcAllScopeCostsTotal(data.scope_of_work_items)
   }
 
   // Auto-generate Q-YYYY-NNN based on existing quotations for the current year
@@ -201,12 +203,18 @@ export default function Quotations() {
     setQuoteData(prev => ({
       ...prev,
       company_name: c.company_name || prev.company_name,
+      company_short_name: c.short_name || prev.company_short_name,
       company_address: c.address || prev.company_address,
-      company_contact: [c.contact_number, c.email].filter(Boolean).join(' · ') || prev.company_contact,
+      company_email: c.email || prev.company_email,
+      company_telephone_number: c.telephone_number || prev.company_telephone_number,
+      company_contact_number: c.contact_number || prev.company_contact_number,
+      company_pcab_license: c.pcab_license || prev.company_pcab_license,
+      company_letterhead_color: c.letterhead_color || prev.company_letterhead_color,
       company_logo_url: c.logo_url || prev.company_logo_url,
       company_footer: c.footer_text || prev.company_footer,
       signatory_name: c.default_signatory || prev.signatory_name,
       signatory_title: c.signatory_position || prev.signatory_title,
+      signatory_signature_url: c.signature_url || prev.signatory_signature_url,
     }))
   }
 
@@ -342,11 +350,30 @@ export default function Quotations() {
           <Field label="Company Name">
             <input value={quoteData.company_name} onChange={e => set('company_name', e.target.value)} className={inp} disabled={isLocked} />
           </Field>
+          <Field label="Short Name">
+            <input value={quoteData.company_short_name} onChange={e => set('company_short_name', e.target.value)} className={inp} disabled={isLocked} />
+          </Field>
           <Field label="Company Address">
             <input value={quoteData.company_address} onChange={e => set('company_address', e.target.value)} className={inp} disabled={isLocked} />
           </Field>
-          <Field label="Contact (Phone / Email)">
-            <input value={quoteData.company_contact} onChange={e => set('company_contact', e.target.value)} className={inp} disabled={isLocked} />
+          <Field label="PCAB License">
+            <input value={quoteData.company_pcab_license} onChange={e => set('company_pcab_license', e.target.value)} className={inp} disabled={isLocked} />
+          </Field>
+          <Field label="Email">
+            <input value={quoteData.company_email} onChange={e => set('company_email', e.target.value)} className={inp} disabled={isLocked} />
+          </Field>
+          <Field label="Telephone Number(s)">
+            <input value={quoteData.company_telephone_number} onChange={e => set('company_telephone_number', e.target.value)}
+              placeholder="One per line" className={inp} disabled={isLocked} />
+          </Field>
+          <Field label="Cellphone Number(s)">
+            <input value={quoteData.company_contact_number} onChange={e => set('company_contact_number', e.target.value)}
+              placeholder="One per line" className={inp} disabled={isLocked} />
+          </Field>
+          <Field label="Letterhead Color">
+            <input type="color" value={quoteData.company_letterhead_color || '#1e40af'}
+              onChange={e => set('company_letterhead_color', e.target.value)}
+              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer disabled:cursor-not-allowed" disabled={isLocked} />
           </Field>
           <Field label="Footer Text">
             <input value={quoteData.company_footer} onChange={e => set('company_footer', e.target.value)}
@@ -461,28 +488,25 @@ export default function Quotations() {
     )
 
     if (s === 'Others') return (
-      <div className="space-y-6">
-        <div>
-          <p className="text-xs font-medium text-gray-700 mb-2">Other Costs</p>
-          <OtherCostsEditor items={quoteData.other_scope_costs} onChange={items => set('other_scope_costs', items)} />
-        </div>
-        <Field label="Other Notes and Exclusions">
-          <RichTextEditor value={quoteData.notes_and_exclusions} onChange={html => set('notes_and_exclusions', html)}
-            placeholder="Additional notes, and anything NOT included in this quotation…" disabled={isLocked} />
-        </Field>
-      </div>
+      <Field label="Other Notes and Exclusions">
+        <RichTextEditor value={quoteData.notes_and_exclusions} onChange={html => set('notes_and_exclusions', html)}
+          placeholder="Additional notes, and anything NOT included in this quotation…" disabled={isLocked} />
+      </Field>
     )
 
     if (s === 'Payment Terms') return (
       <div className="space-y-5">
-        <Field label="Terms of Payment">
+        <Field label="Payment Terms">
           <textarea value={quoteData.terms_of_payment} onChange={e => set('terms_of_payment', e.target.value)}
-            rows={6} placeholder="e.g. 50% downpayment upon signing, 50% upon completion"
-            className={`${inp} resize-y`} disabled={isLocked} />
+            rows={6} placeholder={'1st Payment  :  50% - Down payment upon acceptance of quotation\n2nd Payment  :  30% - After completion of installation\n3rd Payment  :  20% - Upon release of Certificate of Final Electrical Inspection'}
+            className={`${inp} resize-y font-mono`} disabled={isLocked} />
+          <p className="text-xs text-gray-400 mt-1">Printed exactly as typed, line by line.</p>
         </Field>
-        <Field label="Mode of Payment">
-          <input value={quoteData.mode_of_payment} onChange={e => set('mode_of_payment', e.target.value)}
-            placeholder="e.g. Bank Transfer, Check, Cash" className={inp} disabled={isLocked} />
+        <Field label="Payment Method">
+          <textarea value={quoteData.mode_of_payment} onChange={e => set('mode_of_payment', e.target.value)}
+            rows={5} placeholder={'Cash, cheque, or bank deposit. Kindly remit payments to the following account:\nBank            :  Metropolitan Bank & Trust Company (METROBANK)\nAccount Name  :  Alfredo Y. Gomez Electrical Contractor\nAccount No.     :  306-7-306517020'}
+            className={`${inp} resize-y font-mono`} disabled={isLocked} />
+          <p className="text-xs text-gray-400 mt-1">Printed exactly as typed, line by line.</p>
         </Field>
       </div>
     )

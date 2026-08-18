@@ -5,6 +5,7 @@ import { getProjects } from '../api/projects'
 import { getBillings } from '../api/billing'
 import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
+import { formatPhoneLines } from '../utils/phoneFormat'
 import { ArrowLeft, Printer, Mail, Phone, Smartphone } from 'lucide-react'
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -132,26 +133,12 @@ export default function BillingPrint() {
                 {company.email && (
                   <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{company.email}</p>
                 )}
-                {company.telephone_number && (() => {
-                  const numbers = company.telephone_number.split('\n').map(s => s.trim()).filter(Boolean)
-                  const lines = []
-                  for (let i = 0; i < numbers.length; i += 2) {
-                    lines.push(numbers.slice(i, i + 2).join(' / '))
-                  }
-                  return lines.map((line, i) => (
-                    <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
-                  ))
-                })()}
-                {company.contact_number && (() => {
-                  const numbers = company.contact_number.split('\n').map(s => s.trim()).filter(Boolean)
-                  const lines = []
-                  for (let i = 0; i < numbers.length; i += 2) {
-                    lines.push(numbers.slice(i, i + 2).join(' / '))
-                  }
-                  return lines.map((line, i) => (
-                    <p key={i} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
-                  ))
-                })()}
+                {formatPhoneLines(company.telephone_number).map((line, i) => (
+                  <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
+                ))}
+                {formatPhoneLines(company.contact_number).map((line, i) => (
+                  <p key={`cell-${i}`} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
+                ))}
               </div>
             </div>
 

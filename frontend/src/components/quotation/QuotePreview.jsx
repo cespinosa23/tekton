@@ -1,7 +1,9 @@
 import { format } from 'date-fns'
+import { Mail, Phone, Smartphone } from 'lucide-react'
 import { calcScopeCostTotal } from './CostTypeEditor'
 import { calcBomTotal } from './BOMEditor'
 import { sanitizeRichText } from '../RichTextEditor'
+import { formatPhoneLines } from '../../utils/phoneFormat'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -25,7 +27,17 @@ export default function QuotePreview({ quote }) {
   }))
   const scopeGrandTotal = scopeRows.reduce((s, t) => s + t.cost, 0)
   const bomTypes = scopeItems.filter(t => t.bom_items?.length > 0)
-  const otherTotal = (quote.other_scope_costs || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)
+  const hasPaymentSection = !!(quote.terms_of_payment || quote.mode_of_payment)
+
+  // Section numbering is dynamic — a quote with no BOM items shouldn't leave
+  // a gap ("I." then "III."), so each section only claims the next numeral
+  // if it actually renders.
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
+  let sectionCount = 0
+  const scopeNum = scopeRows.length > 0 ? ROMAN[sectionCount++] : null
+  const bomNum = bomTypes.length > 0 ? ROMAN[sectionCount++] : null
+  const notesNum = quote.notes_and_exclusions ? ROMAN[sectionCount++] : null
+  const paymentNum = hasPaymentSection ? ROMAN[sectionCount++] : null
 
   let dateDisplay = ''
   if (quote.quotation_date) {
@@ -36,19 +48,34 @@ export default function QuotePreview({ quote }) {
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-8 max-w-4xl mx-auto text-gray-800 font-sans print:shadow-none print:rounded-none">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8 pb-6 border-b border-gray-200">
-        <div>
+      {/* Header — same letterhead as BillingPrint */}
+      <div className="flex items-start justify-between mb-6 pb-4 border-b-2 border-gray-800">
+        <div className="flex items-start gap-3">
           {quote.company_logo_url && (
-            <img src={quote.company_logo_url} alt="logo" className="h-14 mb-3 object-contain" onError={e => { e.target.style.display = 'none' }} />
+            <img src={quote.company_logo_url} alt="" className="h-16 w-16 object-contain" onError={e => { e.target.style.display = 'none' }} />
           )}
-          <h1 className="text-2xl font-bold text-gray-900">{quote.company_name || 'Company Name'}</h1>
-          {quote.company_address && <p className="text-sm text-gray-500 mt-1">{quote.company_address}</p>}
-          {quote.company_contact && <p className="text-sm text-gray-500">{quote.company_contact}</p>}
+          <div>
+            <h1 className="text-2xl font-bold leading-tight" style={{ color: quote.company_letterhead_color || '#1e40af' }}>
+              {(quote.company_name || 'Company Name').toUpperCase()}
+            </h1>
+            {quote.company_short_name && (
+              <p className="text-lg font-medium leading-tight" style={{ color: quote.company_letterhead_color || '#1e40af' }}>{quote.company_short_name}</p>
+            )}
+            {quote.company_pcab_license && (
+              <p className="text-[10px] leading-tight mt-0" style={{ color: quote.company_letterhead_color || '#1e40af' }}>PCAB License: {quote.company_pcab_license}</p>
+            )}
+          </div>
         </div>
-        <div className="text-right">
-          <div className="inline-block bg-amber-500 text-white font-bold text-xl px-6 py-2 rounded-lg">QUOTATION</div>
-          {quote.quote_number && <p className="text-sm text-gray-500 mt-2">#{quote.quote_number}</p>}
+        <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
+          {quote.company_email && (
+            <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{quote.company_email}</p>
+          )}
+          {formatPhoneLines(quote.company_telephone_number).map((line, i) => (
+            <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
+          ))}
+          {formatPhoneLines(quote.company_contact_number).map((line, i) => (
+            <p key={`cell-${i}`} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
+          ))}
         </div>
       </div>
 
@@ -74,7 +101,7 @@ export default function QuotePreview({ quote }) {
       {/* Scope of Work — one row per scope type, priced from Costing (never a raw BOM readout) */}
       {scopeRows.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">I. SCOPE OF WORKS</h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-2">{scopeNum}. SCOPE OF WORKS</h3>
           <table className="w-full text-sm border border-gray-800">
             <thead>
               <tr className="bg-[#1b3a5c] text-white">
@@ -125,7 +152,7 @@ export default function QuotePreview({ quote }) {
       {/* Bill of Materials — reference list only (quantity/unit/description), no pricing here; final pricing lives in Costing above */}
       {bomTypes.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">II. BILL OF MATERIALS</h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-2">{bomNum}. BILL OF MATERIALS</h3>
           <div className="space-y-4">
             {bomTypes.map(t => (
               <div key={t.sow_type_id}>
@@ -175,50 +202,32 @@ export default function QuotePreview({ quote }) {
         </Section>
       )}
 
-      {/* Other Scope Costs */}
-      {quote.other_scope_costs?.length > 0 && (
-        <Section title="Other Scope Costs">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="text-left px-3 py-2 font-medium">Description</th>
-                <th className="text-right px-3 py-2 font-medium">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {quote.other_scope_costs.map((row, i) => (
-                <tr key={i} className="border-b border-gray-100">
-                  <td className="px-3 py-2">{row.description}</td>
-                  <td className="px-3 py-2 text-right">{fmt(row.amount)}</td>
-                </tr>
-              ))}
-              <tr className="bg-amber-50 font-bold">
-                <td className="px-3 py-2 text-right text-gray-700">Total:</td>
-                <td className="px-3 py-2 text-right text-amber-700">{fmt(otherTotal)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </Section>
-      )}
-
-      {/* Payment */}
-      {quote.terms_of_payment && (
-        <Section title="Terms of Payment">
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.terms_of_payment}</pre>
-        </Section>
-      )}
-      {quote.mode_of_payment && (
-        <Section title="Mode of Payment">
-          <p className="text-sm text-gray-700">{quote.mode_of_payment}</p>
-        </Section>
-      )}
-
       {/* Other Notes and Exclusions (rich text) */}
       {quote.notes_and_exclusions && (
-        <Section title="Other Notes and Exclusions">
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-2">{notesNum}. OTHER NOTES AND EXCLUSIONS</h3>
           <div className="text-sm text-gray-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
             dangerouslySetInnerHTML={{ __html: sanitizeRichText(quote.notes_and_exclusions) }} />
-        </Section>
+        </div>
+      )}
+
+      {/* Terms of Payment */}
+      {hasPaymentSection && (
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-2">{paymentNum}. TERMS OF PAYMENT</h3>
+          {quote.terms_of_payment && (
+            <div className="mb-3">
+              <p className="font-semibold text-sm text-gray-900 mb-1">Payment Terms</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.terms_of_payment}</pre>
+            </div>
+          )}
+          {quote.mode_of_payment && (
+            <div>
+              <p className="font-semibold text-sm text-gray-900 mb-1">Payment Method</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.mode_of_payment}</pre>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Total */}
@@ -227,12 +236,24 @@ export default function QuotePreview({ quote }) {
         <span className="text-2xl font-bold">{fmt(quote.total_contract_cost)}</span>
       </div>
 
-      {/* Signatory */}
-      <div className="mt-10 pt-6 border-t border-gray-200">
-        <div className="mt-12 inline-block border-t-2 border-gray-800 pt-1 w-48">
-          <p className="font-bold text-gray-900">{quote.signatory_name || 'Authorized Signatory'}</p>
+      {/* Signatory + Client Acceptance */}
+      <div className="mt-10 pt-6 border-t border-gray-200 flex items-start justify-between gap-10">
+        <div>
+          <p className="text-sm font-semibold text-gray-900 mb-2">Authorized Signatory:</p>
+          {quote.signatory_signature_url ? (
+            <div className="h-16 w-40 mb-1 flex items-end justify-start overflow-hidden">
+              <img src={quote.signatory_signature_url} alt="Signature" className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="h-16" />
+          )}
+          <p className="font-bold text-gray-900 border-t border-gray-800 pt-1 inline-block min-w-[200px]">{quote.signatory_name || 'Authorized Signatory'}</p>
           {quote.signatory_title && <p className="text-sm text-gray-500">{quote.signatory_title}</p>}
-          {quote.company_name && <p className="text-sm text-gray-500">{quote.company_name}</p>}
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-900 mb-2">Client Acceptance:</p>
+          <div className="h-16" />
+          <p className="border-t border-gray-800 pt-1 inline-block min-w-[200px] text-xs text-gray-500">Signature over Printed Name</p>
         </div>
       </div>
 
