@@ -12,10 +12,16 @@ def sync_inventory(db: Session, material_id: int):
     - Incoming Materials → adds to stock
     - Outgoing Materials → deducts from stock
     - Materials Procurement (is_office_expense=False) → ignored (direct to project)
-    
-    latest_unit_cost = max unit cost from last 5 office procurement transactions
+    - Canvass → never affects stock; it's a market price check, not a purchase
+
+    latest_unit_cost = max unit cost from the last 5 procurement/canvass entries
+    (chronologically combined — a canvass competes in the same window a real
+    purchase would, so pricing always reflects whichever is most relevant).
     latest_cost_supplier / latest_cost_date = supplier and date of whichever of
-    those last 5 entries actually set that max (most recent one, if tied)
+    those last 5 entries actually set that max (most recent one, if tied).
+    latest_cost_is_canvass flags whether that max came from a canvass rather
+    than a real purchase, so callers never mistake a market quote for a
+    verified paid price.
     """
     transactions = db.query(Transaction).filter(
         Transaction.archived == False
@@ -51,6 +57,18 @@ def sync_inventory(db: Session, material_id: int):
                         "unit_cost": unit_cost,
                         "date": tx.transaction_date,
                         "supplier": tx.supplier,
+                        "is_canvass": False,
+                    })
+
+            elif tx.transaction_type == "Canvass":
+                # A market price check, never a purchase — no stock impact,
+                # but it still competes in the same last-5 cost window.
+                if unit_cost > 0:
+                    brand_data[brand]["procurement_entries"].append({
+                        "unit_cost": unit_cost,
+                        "date": tx.transaction_date,
+                        "supplier": tx.supplier,
+                        "is_canvass": True,
                     })
 
             elif tx.transaction_type == "Incoming Materials":
@@ -88,6 +106,7 @@ def sync_inventory(db: Session, material_id: int):
             latest_unit_cost=latest_unit_cost,
             latest_cost_supplier=top_entry["supplier"] if top_entry else None,
             latest_cost_date=top_entry["date"] if top_entry else None,
+            latest_cost_is_canvass=top_entry["is_canvass"] if top_entry else False,
         )
         db.add(inv)
 

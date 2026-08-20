@@ -20,6 +20,7 @@ class InventoryRead(BaseModel):
     latest_unit_cost: Optional[Decimal] = None
     latest_cost_supplier: Optional[str] = None
     latest_cost_date: Optional[date] = None
+    latest_cost_is_canvass: bool = False
     last_updated: Optional[datetime] = None
     archived: bool = False
     model_config = {"from_attributes": True}

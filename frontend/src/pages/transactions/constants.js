@@ -1,4 +1,4 @@
-import { Banknote, Receipt, ArrowDownCircle, ArrowUpCircle, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { Banknote, Receipt, ArrowDownCircle, ArrowUpCircle, ShoppingCart, SlidersHorizontal, Search } from 'lucide-react'
 
 export const TYPE_COLORS = {
   Payment: 'bg-green-100 text-green-700',
@@ -7,6 +7,7 @@ export const TYPE_COLORS = {
   'General Expenditure': 'bg-amber-100 text-amber-700',
   'Materials Procurement': 'bg-purple-100 text-purple-700',
   'Adjustment': 'bg-gray-100 text-gray-700',
+  'Canvass': 'bg-cyan-100 text-cyan-700',
 }
 
 export const TYPE_ICONS = {
@@ -16,6 +17,7 @@ export const TYPE_ICONS = {
   'General Expenditure': Receipt,
   'Materials Procurement': ShoppingCart,
   'Adjustment': SlidersHorizontal,
+  'Canvass': Search,
 }
 
 export const MATERIAL_DIRECTIONS = [
@@ -50,6 +52,14 @@ export const MATERIAL_DIRECTIONS = [
     icon: SlidersHorizontal,
     color: 'border-gray-300 bg-gray-50 text-gray-700',
     activeColor: 'border-gray-500 bg-gray-100 text-gray-800 ring-2 ring-gray-300',
+  },
+  {
+    value: 'Canvass',
+    label: 'Canvass',
+    description: 'Market price check — not a purchase',
+    icon: Search,
+    color: 'border-cyan-300 bg-cyan-50 text-cyan-700',
+    activeColor: 'border-cyan-500 bg-cyan-100 text-cyan-800 ring-2 ring-cyan-300',
   },
 ]
 

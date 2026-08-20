@@ -32,6 +32,7 @@ const TX_TYPE_COLORS = {
   'Outgoing Materials': 'bg-red-100 text-red-700',
   'Incoming Materials': 'bg-emerald-100 text-emerald-700',
   'General Expenditure': 'bg-amber-100 text-amber-700',
+  'Canvass': 'bg-cyan-100 text-cyan-700',
 }
 
 function ConfirmDeleteModal({ item, onConfirm, onCancel, loading }) {

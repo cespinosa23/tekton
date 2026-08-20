@@ -15,6 +15,7 @@ export const emptyBomRow = () => ({
   adjusted_subtotal: 0,
   source: '',
   price_entry_date: null,
+  is_canvass_price: false,
 })
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -83,6 +84,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       unit_price: inv ? Number(inv.latest_unit_cost) || 0 : 0,
       source: inv?.latest_cost_supplier || '',
       price_entry_date: inv?.latest_cost_date || null,
+      is_canvass_price: inv?.latest_cost_is_canvass || false,
     }
     onChange(items.map((item, i) => i !== index ? item : calcRow(updated)))
   }
@@ -174,7 +176,15 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                         placeholder="Supplier (required)"
                         className={`${inp} ${sourceMissing ? 'border-red-400 bg-red-50 focus:ring-red-300' : ''}`} />
                     ) : (
-                      <div className={roInp}>{row.source || '-'}</div>
+                      <div className={`${roInp} flex items-center gap-1.5`}>
+                        <span>{row.source || '-'}</span>
+                        {row.is_canvass_price && (
+                          <span title="This price came from a market canvass, not a verified purchase"
+                            className="px-1.5 py-0.5 bg-cyan-100 text-cyan-700 rounded text-[10px] font-medium whitespace-nowrap">
+                            Canvass
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
 

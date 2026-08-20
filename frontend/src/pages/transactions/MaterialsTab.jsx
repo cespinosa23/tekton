@@ -15,7 +15,7 @@ import {
   getInventory, getMaterialTypes, createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
 
-const MATERIAL_TX_TYPES = ['Outgoing Materials', 'Incoming Materials', 'Materials Procurement', 'Adjustment']
+const MATERIAL_TX_TYPES = ['Outgoing Materials', 'Incoming Materials', 'Materials Procurement', 'Adjustment', 'Canvass']
 
 const emptyForm = {
   transaction_type: '',
@@ -131,6 +131,10 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       data.is_office_expense = true
       data.project_id = null
       data.project_name = 'Adjustment'
+    } else if (data.transaction_type === 'Canvass') {
+      data.is_office_expense = true
+      data.project_id = null
+      data.project_name = 'Canvass'
     } else if (data.is_office_expense) {
       data.project_id = null
       data.project_name = 'Office Expense'
@@ -231,7 +235,8 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
   const getMaterialsByType = (type) => !type ? materials : materials.filter(m => m.material_type === type)
 
   const showFIFO = ['Outgoing Materials', 'Incoming Materials'].includes(formData.transaction_type)
-  const needsSupplier = formData.transaction_type === 'Materials Procurement'
+  const needsSupplier = ['Materials Procurement', 'Canvass'].includes(formData.transaction_type)
+  const isCanvass = formData.transaction_type === 'Canvass'
 
   const filtered = transactions.filter(tx => {
     const matchSearch =
@@ -305,8 +310,12 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                   <td className="px-4 py-3 text-gray-600">{tx.is_office_expense ? <span className="italic text-gray-400">Office</span> : tx.project_name || '-'}</td>
                   <td className="px-4 py-3 text-gray-600">{tx.supplier || '-'}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{tx.description || '-'}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${tx.transaction_type === 'Incoming Materials' ? 'text-blue-600' : 'text-red-600'}`}>
-                    {tx.transaction_type === 'Incoming Materials' ? '+' : '-'}{fmt(tx.amount)}
+                  <td className={`px-4 py-3 text-right font-semibold ${
+                    tx.transaction_type === 'Incoming Materials' ? 'text-blue-600'
+                      : tx.transaction_type === 'Canvass' ? 'text-cyan-600'
+                      : 'text-red-600'
+                  }`}>
+                    {tx.transaction_type === 'Incoming Materials' ? '+' : tx.transaction_type === 'Canvass' ? '' : '-'}{fmt(tx.amount)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -335,7 +344,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
               {/* Direction Selector */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-2">Transaction Type *</label>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-5 gap-3">
                   {MATERIAL_DIRECTIONS.map(dir => {
                     const Icon = dir.icon
                     const isSelected = formData.transaction_type === dir.value
@@ -388,8 +397,8 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                   </div>
 
-                  {/* Project */}
-                  {formData.transaction_type !== 'Adjustment' && (
+                  {/* Project — Canvass isn't tied to a project or real spend, same as Adjustment */}
+                  {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && (
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <input type="checkbox" id="mat_office" checked={formData.is_office_expense}
@@ -496,47 +505,64 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                             return null
                           })()}
 
-                          {/* Row 3: Qty, Unit, Cost */}
-                          <div className="grid grid-cols-12 gap-3">
-                            <div className="col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">Qty</label>
-                              <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
-                                placeholder="0"
-                                onChange={e => {
-                                  const raw = e.target.value.replace(/,/g, '');
-                                  if (!/^\d*\.?\d*$/.test(raw)) return;
-                                  if (/^0\d/.test(raw)) return;
-                                  updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">Unit</label>
-                              <div className="h-8 flex items-center px-2 bg-white border border-gray-200 rounded text-sm text-gray-600">{line.unit || '-'}</div>
-                            </div>
-                            <div className="col-span-3">
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Unit Cost
-                                {line.use_fifo && <span className="ml-1 text-blue-500 font-normal">(FIFO)</span>}
-                              </label>
-                              <input type="text" value={line.use_fifo ? Number(line.unit_cost).toLocaleString('en-US') : (line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US'))}
-                                disabled={line.use_fifo}
-                                placeholder="0.00"
-                                onChange={e => {
-                                  const raw = e.target.value.replace(/,/g, '');
-                                  if (!/^\d*\.?\d*$/.test(raw)) return;
-                                  if (/^0\d/.test(raw)) return;
-                                  updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed" />
-                            </div>
-                            <div className="col-span-5">
-                              <label className="block text-xs text-gray-500 mb-1">Total Cost</label>
-                              <div className="h-8 flex items-center justify-end px-2 bg-amber-50 border border-amber-200 rounded text-sm font-semibold text-amber-900">
-                                {fmt(line.total_cost)}
+                          {/* Row 3: Canvass only needs a Price — no quantity/unit/total since nothing is being bought */}
+                          {isCanvass ? (
+                            <div className="grid grid-cols-12 gap-3">
+                              <div className="col-span-5">
+                                <label className="block text-xs text-gray-500 mb-1">Price</label>
+                                <input type="text" value={line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US')}
+                                  placeholder="0.00"
+                                  onChange={e => {
+                                    const raw = e.target.value.replace(/,/g, '');
+                                    if (!/^\d*\.?\d*$/.test(raw)) return;
+                                    if (/^0\d/.test(raw)) return;
+                                    updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
                               </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="grid grid-cols-12 gap-3">
+                              <div className="col-span-2">
+                                <label className="block text-xs text-gray-500 mb-1">Qty</label>
+                                <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
+                                  placeholder="0"
+                                  onChange={e => {
+                                    const raw = e.target.value.replace(/,/g, '');
+                                    if (!/^\d*\.?\d*$/.test(raw)) return;
+                                    if (/^0\d/.test(raw)) return;
+                                    updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-xs text-gray-500 mb-1">Unit</label>
+                                <div className="h-8 flex items-center px-2 bg-white border border-gray-200 rounded text-sm text-gray-600">{line.unit || '-'}</div>
+                              </div>
+                              <div className="col-span-3">
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  Unit Cost
+                                  {line.use_fifo && <span className="ml-1 text-blue-500 font-normal">(FIFO)</span>}
+                                </label>
+                                <input type="text" value={line.use_fifo ? Number(line.unit_cost).toLocaleString('en-US') : (line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US'))}
+                                  disabled={line.use_fifo}
+                                  placeholder="0.00"
+                                  onChange={e => {
+                                    const raw = e.target.value.replace(/,/g, '');
+                                    if (!/^\d*\.?\d*$/.test(raw)) return;
+                                    if (/^0\d/.test(raw)) return;
+                                    updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                              </div>
+                              <div className="col-span-5">
+                                <label className="block text-xs text-gray-500 mb-1">Total Cost</label>
+                                <div className="h-8 flex items-center justify-end px-2 bg-amber-50 border border-amber-200 rounded text-sm font-semibold text-amber-900">
+                                  {fmt(line.total_cost)}
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {/* FIFO Checkbox */}
                           {showFIFO && (

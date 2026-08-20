@@ -15,5 +15,9 @@ class Inventory(Base):
     # show where that price came from and when, not just the number itself.
     latest_cost_supplier = Column(String(255), nullable=True)
     latest_cost_date = Column(Date, nullable=True)
+    # True when latest_unit_cost came from a Canvass entry (a market price check,
+    # not an actual purchase) rather than real Materials Procurement — callers
+    # showing this price should flag it as unverified/not-yet-paid.
+    latest_cost_is_canvass = Column(Boolean, default=False)
     last_updated = Column(DateTime, server_default=func.now(), onupdate=func.now())
     archived = Column(Boolean, default=False)
