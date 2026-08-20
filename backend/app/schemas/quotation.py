@@ -17,6 +17,7 @@ class QuotationCreate(BaseModel):
     company_pcab_license: Optional[str] = None
     company_letterhead_color: Optional[str] = None
     company_footer: Optional[str] = None
+    company_payment_method: Optional[str] = None
     addressee_name: Optional[str] = None
     addressee_address: Optional[str] = None
     attention_to: Optional[str] = None
@@ -33,9 +34,8 @@ class QuotationCreate(BaseModel):
     battery_brand: Optional[str] = None
     panel_brand: Optional[str] = None
     scope_of_work_items: Optional[List[Any]] = None
-    terms_of_payment: Optional[str] = None
-    mode_of_payment: Optional[str] = None
-    notes_and_exclusions: Optional[str] = None
+    payment_term_items: Optional[List[Any]] = None
+    other_items: Optional[List[Any]] = None
     total_contract_cost: Optional[Decimal] = Decimal("0")
 
 class QuotationUpdate(QuotationCreate):

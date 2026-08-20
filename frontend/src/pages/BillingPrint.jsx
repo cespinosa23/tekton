@@ -5,8 +5,9 @@ import { getProjects } from '../api/projects'
 import { getBillings } from '../api/billing'
 import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
-import { formatPhoneLines } from '../utils/phoneFormat'
-import { ArrowLeft, Printer, Mail, Phone, Smartphone } from 'lucide-react'
+import DocumentLetterhead from '../components/DocumentLetterhead'
+import DocumentFooter from '../components/DocumentFooter'
+import { ArrowLeft, Printer } from 'lucide-react'
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -117,30 +118,7 @@ export default function BillingPrint() {
           <p className="text-center text-gray-400 py-16">No company profile selected.</p>
         ) : (
           <>
-            {/* Letterhead */}
-            <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4 mb-6">
-              <div className="flex items-start gap-3">
-                {company.logo_url && (
-                  <img src={company.logo_url} alt="" className="h-16 w-16 object-contain" />
-                )}
-                <div>
-                  <h1 className="text-2xl font-bold leading-tight" style={{ color: company.letterhead_color || '#1e40af' }}>{company.company_name?.toUpperCase()}</h1>
-                  {company.short_name && <p className="text-lg font-medium leading-tight" style={{ color: company.letterhead_color || '#1e40af' }}>{company.short_name}</p>}
-                  {company.pcab_license && <p className="text-[10px] leading-tight mt-0" style={{ color: company.letterhead_color || '#1e40af' }}>PCAB License: {company.pcab_license}</p>}
-                </div>
-              </div>
-              <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
-                {company.email && (
-                  <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{company.email}</p>
-                )}
-                {formatPhoneLines(company.telephone_number).map((line, i) => (
-                  <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
-                ))}
-                {formatPhoneLines(company.contact_number).map((line, i) => (
-                  <p key={`cell-${i}`} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
-                ))}
-              </div>
-            </div>
+            <DocumentLetterhead company={company} />
 
             {/* Date */}
             <p className="mb-6">{format(new Date(), 'dd MMMM yyyy')}</p>
@@ -229,11 +207,7 @@ export default function BillingPrint() {
               {company.signatory_position && <p>{company.signatory_position}</p>}
             </div>
 
-            {company.footer_text && (
-              <p className="text-center text-xs text-gray-400 mt-10 leading-snug whitespace-pre-line">
-                {company.footer_text.replace(/\n\s*\n+/g, '\n')}
-              </p>
-            )}
+            <DocumentFooter footerText={company.footer_text} />
           </>
         )}
       </div>

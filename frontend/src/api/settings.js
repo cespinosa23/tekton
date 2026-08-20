@@ -94,6 +94,25 @@ export const removeItemFromSowType = async ({ typeId, itemId }) => {
   await client.delete(`/sow-types/${typeId}/items/${itemId}`)
 }
 
+export const getQuotationTemplateItems = async (category) => {
+  const { data } = await client.get('/quotation-template-items/', { params: category ? { category } : {} })
+  return data
+}
+
+export const createQuotationTemplateItem = async (payload) => {
+  const { data } = await client.post('/quotation-template-items/', payload)
+  return data
+}
+
+export const updateQuotationTemplateItem = async ({ id, data: payload }) => {
+  const { data } = await client.put(`/quotation-template-items/${id}`, payload)
+  return data
+}
+
+export const archiveQuotationTemplateItem = async (id) => {
+  await client.delete(`/quotation-template-items/${id}`)
+}
+
 export const getSuppliers = async () => {
   const { data } = await client.get('/suppliers/')
   return data

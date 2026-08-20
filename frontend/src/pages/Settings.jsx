@@ -9,6 +9,7 @@ import {
   archiveMaterialType, addBrandToType, removeBrandFromType,
   getSowTypes, createSowType, updateSowType,
   archiveSowType, addItemToSowType, removeItemFromSowType,
+  getQuotationTemplateItems, createQuotationTemplateItem, updateQuotationTemplateItem, archiveQuotationTemplateItem,
   getSuppliers, createSupplier, updateSupplier, archiveSupplier,
   resetAllData, getSystemUsers, forceLogoutUser
 } from '../api/settings'
@@ -36,6 +37,7 @@ export default function Settings() {
   const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('Referred By')
   const [mainTab, setMainTab] = useState('dropdown')
+  const [quotationSubTab, setQuotationSubTab] = useState('sow_types')
   const [newValue, setNewValue] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editValue, setEditValue] = useState('')
@@ -60,6 +62,12 @@ export default function Settings() {
   const [expandedSowType, setExpandedSowType] = useState(null)
   const [newSowItemName, setNewSowItemName] = useState('')
 
+  // Quotation Template Items state (Other Notes & Exclusions / Payment Terms —
+  // same flat add/edit UI reused for both categories, one at a time)
+  const [newTemplateItemText, setNewTemplateItemText] = useState('')
+  const [editingTemplateItemId, setEditingTemplateItemId] = useState(null)
+  const [editTemplateItemText, setEditTemplateItemText] = useState('')
+
   // Danger Zone state
   const [resetOpen, setResetOpen] = useState(false)
   const [resetText, setResetText] = useState('')
@@ -72,7 +80,7 @@ export default function Settings() {
     company_name: '', short_name: '', address: '', contact_number: '', telephone_number: '',
     email: '', website: '', footer_text: '', default_signatory: '', signatory_position: '',
     pcab_license: '', logo_url: '', signature_url: '',
-    letterhead_color: '',
+    letterhead_color: '', payment_method: '',
   }
   const [companyFormOpen, setCompanyFormOpen] = useState(false)
   const [editingCompany, setEditingCompany] = useState(null)
@@ -81,6 +89,7 @@ export default function Settings() {
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
   const { data: sowTypes = [] } = useQuery({ queryKey: ['sowTypes'], queryFn: getSowTypes })
+  const { data: quotationTemplateItems = [] } = useQuery({ queryKey: ['quotationTemplateItems'], queryFn: () => getQuotationTemplateItems() })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
 
   const createMutation = useMutation({
@@ -159,6 +168,24 @@ export default function Settings() {
     mutationFn: removeItemFromSowType,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }) },
     onError: () => toast.error('Failed to remove item'),
+  })
+
+  const createTemplateItemMutation = useMutation({
+    mutationFn: createQuotationTemplateItem,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotationTemplateItems'] }); setNewTemplateItemText(''); toast.success('Item added') },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to add item'),
+  })
+
+  const updateTemplateItemMutation = useMutation({
+    mutationFn: updateQuotationTemplateItem,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotationTemplateItems'] }); setEditingTemplateItemId(null); setEditTemplateItemText('') },
+    onError: () => toast.error('Failed to update'),
+  })
+
+  const archiveTemplateItemMutation = useMutation({
+    mutationFn: archiveQuotationTemplateItem,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotationTemplateItems'] }); toast.success('Item archived') },
+    onError: () => toast.error('Failed to archive'),
   })
 
   const closeCompanyForm = () => { setCompanyFormOpen(false); setEditingCompany(null); setCompanyForm(emptyCompanyForm) }
@@ -251,7 +278,7 @@ export default function Settings() {
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['sow_types', 'Scope of Work Types'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
+          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['quotation_settings', 'Quotation Settings'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
             <button key={val} onClick={() => { setMainTab(val); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -446,103 +473,180 @@ export default function Settings() {
         )}
 
         {/* Scope of Work Types Tab */}
-        {mainTab === 'sow_types' && (
+        {/* Quotation Settings Tab — groups everything that configures the
+            Quotation builder (Scope of Work Types, Other Notes & Exclusions,
+            Payment Terms) in one place instead of scattering them across the
+            top-level tab bar. */}
+        {mainTab === 'quotation_settings' && (
           <div className="max-w-2xl">
-            <div className="bg-white border border-gray-200 rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Scope of Work Types</h3>
-                  <p className="text-xs text-gray-400">Each SOW type can have multiple sub-items</p>
-                </div>
-              </div>
-              <div className="p-6">
-                {/* Add new type */}
-                <div className="flex gap-2 mb-6">
-                  <input value={newSowTypeName} onChange={e => setNewSowTypeName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
-                    placeholder="Add new Scope of Work type..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                  <button onClick={() => newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
-                    disabled={!newSowTypeName.trim()}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700 disabled:opacity-50">
-                    <Plus size={15} /> Add
-                  </button>
-                </div>
+            <div className="flex gap-1 mb-4 border-b border-gray-200">
+              {[['sow_types', 'Scope of Work Types'], ['other_notes', 'Other Notes & Exclusions'], ['payment_terms', 'Payment Terms']].map(([val, label]) => (
+                <button key={val} onClick={() => setQuotationSubTab(val)}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${quotationSubTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
-                {/* SOW types list */}
-                <div className="space-y-2">
-                  {sowTypes.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 text-sm">No Scope of Work types yet.</div>
-                  ) : sowTypes.map(st => (
-                    <div key={st.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Type header */}
-                      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 group">
-                        {editingSowTypeId === st.id ? (
-                          <>
-                            <input value={editSowTypeName} onChange={e => setEditSowTypeName(e.target.value)} autoFocus
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                            <button onClick={() => updateSowTypeMutation.mutate({ id: st.id, data: { name: editSowTypeName } })}
-                              className="p-1 rounded hover:bg-emerald-100 text-emerald-600"><Check size={15} /></button>
-                            <button onClick={() => setEditingSowTypeId(null)}
-                              className="p-1 rounded hover:bg-gray-200 text-gray-500"><X size={15} /></button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
-                              className="flex-1 text-left">
-                              <span className="text-sm font-semibold text-gray-800">{st.name}</span>
-                              <span className="text-xs text-gray-400 ml-2">({st.items.length} items)</span>
-                            </button>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => { setEditingSowTypeId(st.id); setEditSowTypeName(st.name) }}
-                                className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"><Pencil size={13} /></button>
-                              <button onClick={() => archiveSowTypeMutation.mutate(st.id)}
-                                className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
-                            </div>
-                            <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
-                              className="text-xs text-gray-400 px-2">
-                              {expandedSowType === st.id ? '▲' : '▼'}
-                            </button>
-                          </>
-                        )}
-                      </div>
+            {quotationSubTab === 'sow_types' && (
+              <div className="bg-white border border-gray-200 rounded-lg">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Scope of Work Types</h3>
+                    <p className="text-xs text-gray-400">Each SOW type can have multiple sub-items</p>
+                  </div>
+                </div>
+                <div className="p-6">
+                  {/* Add new type */}
+                  <div className="flex gap-2 mb-6">
+                    <input value={newSowTypeName} onChange={e => setNewSowTypeName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
+                      placeholder="Add new Scope of Work type..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <button onClick={() => newSowTypeName.trim() && createSowTypeMutation.mutate({ name: newSowTypeName.trim() })}
+                      disabled={!newSowTypeName.trim()}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700 disabled:opacity-50">
+                      <Plus size={15} /> Add
+                    </button>
+                  </div>
 
-                      {/* Sub-items section */}
-                      {expandedSowType === st.id && (
-                        <div className="px-4 py-3 border-t border-gray-100">
-                          {/* Add sub-item */}
-                          <div className="flex gap-2 mb-3 items-start">
-                            <textarea value={newSowItemName} onChange={e => setNewSowItemName(e.target.value)}
-                              rows={2} placeholder="Add sub-item… (can be a full sentence or paragraph)"
-                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                            <button
-                              onClick={() => newSowItemName.trim() && addSowItemMutation.mutate({ typeId: st.id, item_name: newSowItemName.trim() })}
-                              disabled={!newSowItemName.trim()}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-md text-xs hover:bg-gray-700 disabled:opacity-50 flex-shrink-0">
-                              <Plus size={13} /> Add
-                            </button>
-                          </div>
-                          {/* Sub-item list */}
-                          {st.items.length === 0 ? (
-                            <p className="text-xs text-gray-400 py-2">No sub-items yet — add one above.</p>
+                  {/* SOW types list */}
+                  <div className="space-y-2">
+                    {sowTypes.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400 text-sm">No Scope of Work types yet.</div>
+                    ) : sowTypes.map(st => (
+                      <div key={st.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Type header */}
+                        <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 group">
+                          {editingSowTypeId === st.id ? (
+                            <>
+                              <input value={editSowTypeName} onChange={e => setEditSowTypeName(e.target.value)} autoFocus
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                              <button onClick={() => updateSowTypeMutation.mutate({ id: st.id, data: { name: editSowTypeName } })}
+                                className="p-1 rounded hover:bg-emerald-100 text-emerald-600"><Check size={15} /></button>
+                              <button onClick={() => setEditingSowTypeId(null)}
+                                className="p-1 rounded hover:bg-gray-200 text-gray-500"><X size={15} /></button>
+                            </>
                           ) : (
-                            <div className="space-y-1.5">
-                              {st.items.map(item => (
-                                <div key={item.id} className="flex items-start gap-2 px-3 py-2 bg-gray-100 rounded-md text-xs text-gray-700">
-                                  <span className="flex-1 whitespace-pre-wrap">{item.item_name}</span>
-                                  <button onClick={() => removeSowItemMutation.mutate({ typeId: st.id, itemId: item.id })}
-                                    className="text-gray-400 hover:text-red-500 flex-shrink-0"><X size={13} /></button>
-                                </div>
-                              ))}
-                            </div>
+                            <>
+                              <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
+                                className="flex-1 text-left">
+                                <span className="text-sm font-semibold text-gray-800">{st.name}</span>
+                                <span className="text-xs text-gray-400 ml-2">({st.items.length} items)</span>
+                              </button>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => { setEditingSowTypeId(st.id); setEditSowTypeName(st.name) }}
+                                  className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"><Pencil size={13} /></button>
+                                <button onClick={() => archiveSowTypeMutation.mutate(st.id)}
+                                  className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                              </div>
+                              <button onClick={() => setExpandedSowType(expandedSowType === st.id ? null : st.id)}
+                                className="text-xs text-gray-400 px-2">
+                                {expandedSowType === st.id ? '▲' : '▼'}
+                              </button>
+                            </>
                           )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+
+                        {/* Sub-items section */}
+                        {expandedSowType === st.id && (
+                          <div className="px-4 py-3 border-t border-gray-100">
+                            {/* Add sub-item */}
+                            <div className="flex gap-2 mb-3 items-start">
+                              <textarea value={newSowItemName} onChange={e => setNewSowItemName(e.target.value)}
+                                rows={2} placeholder="Add sub-item… (can be a full sentence or paragraph)"
+                                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                              <button
+                                onClick={() => newSowItemName.trim() && addSowItemMutation.mutate({ typeId: st.id, item_name: newSowItemName.trim() })}
+                                disabled={!newSowItemName.trim()}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-md text-xs hover:bg-gray-700 disabled:opacity-50 flex-shrink-0">
+                                <Plus size={13} /> Add
+                              </button>
+                            </div>
+                            {/* Sub-item list */}
+                            {st.items.length === 0 ? (
+                              <p className="text-xs text-gray-400 py-2">No sub-items yet — add one above.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {st.items.map(item => (
+                                  <div key={item.id} className="flex items-start gap-2 px-3 py-2 bg-gray-100 rounded-md text-xs text-gray-700">
+                                    <span className="flex-1 whitespace-pre-wrap">{item.item_name}</span>
+                                    <button onClick={() => removeSowItemMutation.mutate({ typeId: st.id, itemId: item.id })}
+                                      className="text-gray-400 hover:text-red-500 flex-shrink-0"><X size={13} /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {(quotationSubTab === 'other_notes' || quotationSubTab === 'payment_terms') && (() => {
+              const category = quotationSubTab === 'other_notes' ? 'other_note' : 'payment_term'
+              const title = quotationSubTab === 'other_notes' ? 'Other Notes & Exclusions' : 'Payment Terms'
+              const description = quotationSubTab === 'other_notes'
+                ? "Templated notes checkable in the Quotation builder's Others step"
+                : "Templated payment schedules checkable in the Quotation builder's Payment Terms step"
+              const items = quotationTemplateItems.filter(i => i.category === category)
+              return (
+                <div className="bg-white border border-gray-200 rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                    <p className="text-xs text-gray-400">{description}</p>
+                  </div>
+                  <div className="p-6">
+                    {/* Add new item */}
+                    <div className="flex gap-2 mb-6 items-start">
+                      <textarea value={newTemplateItemText} onChange={e => setNewTemplateItemText(e.target.value)}
+                        rows={2} placeholder="Add an item… (can be a full sentence or paragraph)"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                      <button
+                        onClick={() => newTemplateItemText.trim() && createTemplateItemMutation.mutate({ category, text: newTemplateItemText.trim() })}
+                        disabled={!newTemplateItemText.trim()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700 disabled:opacity-50 flex-shrink-0">
+                        <Plus size={15} /> Add
+                      </button>
+                    </div>
+
+                    {/* Items list */}
+                    <div className="space-y-2">
+                      {items.length === 0 ? (
+                        <div className="text-center py-8 text-gray-400 text-sm">No items yet.</div>
+                      ) : items.map(item => (
+                        <div key={item.id} className="flex items-start gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg group">
+                          {editingTemplateItemId === item.id ? (
+                            <>
+                              <textarea value={editTemplateItemText} onChange={e => setEditTemplateItemText(e.target.value)} autoFocus
+                                rows={2}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                              <button onClick={() => updateTemplateItemMutation.mutate({ id: item.id, data: { text: editTemplateItemText } })}
+                                className="p-1 rounded hover:bg-emerald-100 text-emerald-600"><Check size={15} /></button>
+                              <button onClick={() => setEditingTemplateItemId(null)}
+                                className="p-1 rounded hover:bg-gray-200 text-gray-500"><X size={15} /></button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex-1 text-sm text-gray-700 whitespace-pre-wrap">{item.text}</span>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                <button onClick={() => { setEditingTemplateItemId(item.id); setEditTemplateItemText(item.text) }}
+                                  className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"><Pencil size={13} /></button>
+                                <button onClick={() => archiveTemplateItemMutation.mutate(item.id)}
+                                  className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -701,6 +805,7 @@ export default function Settings() {
                             logo_url: company.logo_url || '',
                             signature_url: company.signature_url || '',
                             letterhead_color: company.letterhead_color || '',
+                            payment_method: company.payment_method || '',
                           })
                           setCompanyFormOpen(true)
                         }}
@@ -884,6 +989,14 @@ export default function Settings() {
                 <textarea value={companyForm.footer_text} rows={2}
                   onChange={e => setCompanyForm(p => ({ ...p, footer_text: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Payment Method</label>
+                <p className="text-xs text-gray-400 mb-1">Printed exactly as typed on this company's quotations</p>
+                <textarea value={companyForm.payment_method} rows={5}
+                  onChange={e => setCompanyForm(p => ({ ...p, payment_method: e.target.value }))}
+                  placeholder={'Cash, cheque, or bank deposit. Kindly remit payments to the following account:\nBank            :  Metropolitan Bank & Trust Company (METROBANK)\nAccount Name  :  Alfredo Y. Gomez Electrical Contractor\nAccount No.     :  306-7-306517020'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y font-mono focus:outline-none focus:ring-2 focus:ring-gray-400" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {[

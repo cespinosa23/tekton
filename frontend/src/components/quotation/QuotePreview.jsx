@@ -1,9 +1,8 @@
 import { format } from 'date-fns'
-import { Mail, Phone, Smartphone } from 'lucide-react'
 import { calcScopeCostTotal } from './CostTypeEditor'
 import { calcBomTotal } from './BOMEditor'
-import { sanitizeRichText } from '../RichTextEditor'
-import { formatPhoneLines } from '../../utils/phoneFormat'
+import DocumentLetterhead from '../DocumentLetterhead'
+import DocumentFooter from '../DocumentFooter'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -27,7 +26,9 @@ export default function QuotePreview({ quote }) {
   }))
   const scopeGrandTotal = scopeRows.reduce((s, t) => s + t.cost, 0)
   const bomTypes = scopeItems.filter(t => t.bom_items?.length > 0)
-  const hasPaymentSection = !!(quote.terms_of_payment || quote.mode_of_payment)
+  const otherItems = quote.other_items || []
+  const paymentTermItems = quote.payment_term_items || []
+  const hasPaymentSection = !!(paymentTermItems.length > 0 || quote.company_payment_method)
 
   // Section numbering is dynamic — a quote with no BOM items shouldn't leave
   // a gap ("I." then "III."), so each section only claims the next numeral
@@ -36,7 +37,7 @@ export default function QuotePreview({ quote }) {
   let sectionCount = 0
   const scopeNum = scopeRows.length > 0 ? ROMAN[sectionCount++] : null
   const bomNum = bomTypes.length > 0 ? ROMAN[sectionCount++] : null
-  const notesNum = quote.notes_and_exclusions ? ROMAN[sectionCount++] : null
+  const notesNum = otherItems.length > 0 ? ROMAN[sectionCount++] : null
   const paymentNum = hasPaymentSection ? ROMAN[sectionCount++] : null
 
   let dateDisplay = ''
@@ -46,38 +47,23 @@ export default function QuotePreview({ quote }) {
 
   const greetingName = quote.attention_to || quote.addressee_name
 
+  // Quotation stores company fields flattened/prefixed (snapshotted at "Apply
+  // Company" time) — reshape into the same company shape DocumentLetterhead
+  // expects, so it's byte-for-byte the same component BillingPrint uses.
+  const letterheadCompany = {
+    logo_url: quote.company_logo_url,
+    company_name: quote.company_name,
+    short_name: quote.company_short_name,
+    pcab_license: quote.company_pcab_license,
+    letterhead_color: quote.company_letterhead_color,
+    email: quote.company_email,
+    telephone_number: quote.company_telephone_number,
+    contact_number: quote.company_contact_number,
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-8 max-w-4xl mx-auto text-gray-800 font-sans print:shadow-none print:rounded-none">
-      {/* Header — same letterhead as BillingPrint */}
-      <div className="flex items-start justify-between mb-6 pb-4 border-b-2 border-gray-800">
-        <div className="flex items-start gap-3">
-          {quote.company_logo_url && (
-            <img src={quote.company_logo_url} alt="" className="h-16 w-16 object-contain" onError={e => { e.target.style.display = 'none' }} />
-          )}
-          <div>
-            <h1 className="text-2xl font-bold leading-tight" style={{ color: quote.company_letterhead_color || '#1e40af' }}>
-              {(quote.company_name || 'Company Name').toUpperCase()}
-            </h1>
-            {quote.company_short_name && (
-              <p className="text-lg font-medium leading-tight" style={{ color: quote.company_letterhead_color || '#1e40af' }}>{quote.company_short_name}</p>
-            )}
-            {quote.company_pcab_license && (
-              <p className="text-[10px] leading-tight mt-0" style={{ color: quote.company_letterhead_color || '#1e40af' }}>PCAB License: {quote.company_pcab_license}</p>
-            )}
-          </div>
-        </div>
-        <div className="text-left text-xs text-gray-600 space-y-1 flex-shrink-0">
-          {quote.company_email && (
-            <p className="flex items-center justify-start gap-1.5"><Mail size={12} />{quote.company_email}</p>
-          )}
-          {formatPhoneLines(quote.company_telephone_number).map((line, i) => (
-            <p key={`tel-${i}`} className="flex items-center justify-start gap-1.5"><Phone size={12} />{line}</p>
-          ))}
-          {formatPhoneLines(quote.company_contact_number).map((line, i) => (
-            <p key={`cell-${i}`} className="flex items-center justify-start gap-1.5"><Smartphone size={12} />{line}</p>
-          ))}
-        </div>
-      </div>
+      <DocumentLetterhead company={letterheadCompany} />
 
       {/* Addressee — matches the standard service-quotation letter format */}
       <div className="mb-6 text-sm text-gray-800 space-y-4">
@@ -202,29 +188,33 @@ export default function QuotePreview({ quote }) {
         </Section>
       )}
 
-      {/* Other Notes and Exclusions (rich text) */}
-      {quote.notes_and_exclusions && (
+      {/* Other Notes and Exclusions — checked items from OtherNoteTemplate */}
+      {otherItems.length > 0 && (
         <div className="mb-6">
           <h3 className="text-sm font-bold text-gray-900 mb-2">{notesNum}. OTHER NOTES AND EXCLUSIONS</h3>
-          <div className="text-sm text-gray-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
-            dangerouslySetInnerHTML={{ __html: sanitizeRichText(quote.notes_and_exclusions) }} />
+          <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
+            {otherItems.map((item, i) => <li key={item.item_id ?? i}>{item.text}</li>)}
+          </ul>
         </div>
       )}
 
-      {/* Terms of Payment */}
+      {/* Terms of Payment — checked Payment Terms items + the selected
+          company's Payment Method */}
       {hasPaymentSection && (
         <div className="mb-6">
           <h3 className="text-sm font-bold text-gray-900 mb-2">{paymentNum}. TERMS OF PAYMENT</h3>
-          {quote.terms_of_payment && (
+          {paymentTermItems.length > 0 && (
             <div className="mb-3">
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Terms</p>
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.terms_of_payment}</pre>
+              <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
+                {paymentTermItems.map((item, i) => <li key={item.item_id ?? i}>{item.text}</li>)}
+              </ul>
             </div>
           )}
-          {quote.mode_of_payment && (
+          {quote.company_payment_method && (
             <div>
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Method</p>
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.mode_of_payment}</pre>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.company_payment_method}</pre>
             </div>
           )}
         </div>
@@ -257,12 +247,7 @@ export default function QuotePreview({ quote }) {
         </div>
       </div>
 
-      {/* Footer */}
-      {quote.company_footer && (
-        <div className="mt-8 pt-4 border-t border-gray-100 text-center text-xs text-gray-400 whitespace-pre-line">
-          {quote.company_footer}
-        </div>
-      )}
+      <DocumentFooter footerText={quote.company_footer} />
     </div>
   )
 }

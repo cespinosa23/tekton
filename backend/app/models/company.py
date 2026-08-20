@@ -19,4 +19,5 @@ class Company(Base):
     pcab_license = Column(String(100), nullable=True)
     signature_url = Column(Text, nullable=True)
     letterhead_color = Column(String(20), nullable=True)
+    payment_method = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)

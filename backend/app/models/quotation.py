@@ -18,6 +18,7 @@ class Quotation(Base):
     company_pcab_license = Column(String(100), nullable=True)
     company_letterhead_color = Column(String(20), nullable=True)
     company_footer = Column(String(500), nullable=True)
+    company_payment_method = Column(Text, nullable=True)  # snapshotted from Company.payment_method
     addressee_name = Column(String(255), nullable=True)
     addressee_address = Column(String(255), nullable=True)
     attention_to = Column(String(255), nullable=True)
@@ -37,9 +38,8 @@ class Quotation(Base):
     # costing and bom_items are both per scope type, not shared across the whole quotation.
     scope_of_work_items = Column(JSON, nullable=True)
 
-    terms_of_payment = Column(String(2000), nullable=True)
-    mode_of_payment = Column(String(2000), nullable=True)
-    # Rich-text HTML from RichTextEditor (bold/italic/lists only, sanitized on the frontend)
-    notes_and_exclusions = Column(Text, nullable=True)
+    # Checked items from QuotationTemplateItem, denormalized: [{ item_id, text }]
+    payment_term_items = Column(JSON, nullable=True)
+    other_items = Column(JSON, nullable=True)
     total_contract_cost = Column(Numeric(12, 2), default=0)
     archived = Column(Boolean, default=False)

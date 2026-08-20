@@ -16,6 +16,7 @@ class CompanyCreate(BaseModel):
     pcab_license: Optional[str] = None
     signature_url: Optional[str] = None
     letterhead_color: Optional[str] = None
+    payment_method: Optional[str] = None
     is_active: bool = True
 
 class CompanyUpdate(CompanyCreate):

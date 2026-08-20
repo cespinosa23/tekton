@@ -4,17 +4,20 @@ import { format } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import { getQuotations, createQuotation, updateQuotation, archiveQuotation } from '../api/quotations'
-import { getCompanies, getSowTypes } from '../api/settings'
+import { getCompanies, getSowTypes, getQuotationTemplateItems } from '../api/settings'
 import { getMaterials, getMaterialTypes } from '../api/materials'
 import { getInventoryRecords } from '../api/inventory'
 import { usePermissions } from '../hooks/usePermissions'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
+import TemplateChecklistEditor from '../components/quotation/TemplateChecklistEditor'
 import CostTypeEditor, { FORM_SCOPES, calcAllScopeCostsTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
-import RichTextEditor from '../components/RichTextEditor'
 import QuotePreview from '../components/quotation/QuotePreview'
-import { downloadQuoteAsDocx } from '../components/quotation/generateQuoteDoc'
+import { buildQuotationIR } from '../lib/documents/buildQuotationIR'
+import { downloadAsDocx } from '../lib/documents/toDocx'
+import { downloadAsPdf, printPdf } from '../lib/documents/toPdf'
+import { buildDocFileName } from '../lib/documents/fileName'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search,
@@ -22,11 +25,11 @@ import {
 
 const STEPS_SOLAR = [
   'Template & Company', 'Addressee', 'Solar Details', 'Scope of Works',
-  'Bill of Materials', 'Costing', 'Others', 'Payment Terms', 'Preview',
+  'Bill of Materials', 'Costing', 'Other Notes and Exclusions', 'Payment Terms', 'Preview',
 ]
 const STEPS_TRADITIONAL = [
   'Template & Company', 'Addressee', 'Scope of Works',
-  'Bill of Materials', 'Costing', 'Others', 'Payment Terms', 'Preview',
+  'Bill of Materials', 'Costing', 'Other Notes and Exclusions', 'Payment Terms', 'Preview',
 ]
 
 const EMPTY_QUOTE = {
@@ -42,6 +45,7 @@ const EMPTY_QUOTE = {
   company_pcab_license: '',
   company_letterhead_color: '',
   company_footer: '',
+  company_payment_method: '',
   company_logo_url: '',
   addressee_name: '',
   addressee_address: '',
@@ -59,9 +63,8 @@ const EMPTY_QUOTE = {
   battery_brand: '',
   panel_brand: '',
   scope_of_work_items: [],
-  terms_of_payment: '',
-  mode_of_payment: '',
-  notes_and_exclusions: '',
+  payment_term_items: [],
+  other_items: [],
   total_contract_cost: 0,
 }
 
@@ -72,16 +75,19 @@ const STATUS_COLORS = {
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400'
 
-function StepIndicator({ steps, current }) {
+function StepIndicator({ steps, current, onStepClick, canJump }) {
   return (
     <div className="flex items-center gap-1 flex-wrap mb-8">
       {steps.map((s, i) => (
         <span key={s} className="flex items-center gap-1">
-          <span className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-            i === current ? 'bg-amber-500 text-white'
-              : i < current ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-gray-100 text-gray-500'
-          }`}>
+          <span
+            role={canJump ? 'button' : undefined}
+            onClick={canJump ? () => onStepClick(i) : undefined}
+            className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${canJump ? 'cursor-pointer hover:opacity-80' : ''} ${
+              i === current ? 'bg-amber-500 text-white'
+                : i < current ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-gray-100 text-gray-500'
+            }`}>
             {i < current && <CheckCircle size={11} />}
             {i + 1}. {s}
           </span>
@@ -122,6 +128,9 @@ export default function Quotations() {
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
   const { data: inventoryRecords = [] } = useQuery({ queryKey: ['inventoryRecords'], queryFn: getInventoryRecords })
   const { data: sowTypes = [] } = useQuery({ queryKey: ['sowTypes'], queryFn: getSowTypes })
+  const { data: quotationTemplateItems = [] } = useQuery({ queryKey: ['quotationTemplateItems'], queryFn: () => getQuotationTemplateItems() })
+  const otherNoteTemplates = quotationTemplateItems.filter(i => i.category === 'other_note')
+  const paymentTermTemplates = quotationTemplateItems.filter(i => i.category === 'payment_term')
   const activeCompanies = companies.filter(c => c.is_active !== false)
   const activeMaterials = materials.filter(m => !m.archived)
 
@@ -212,6 +221,7 @@ export default function Quotations() {
       company_letterhead_color: c.letterhead_color || prev.company_letterhead_color,
       company_logo_url: c.logo_url || prev.company_logo_url,
       company_footer: c.footer_text || prev.company_footer,
+      company_payment_method: c.payment_method || prev.company_payment_method,
       signatory_name: c.default_signatory || prev.signatory_name,
       signatory_title: c.signatory_position || prev.signatory_title,
       signatory_signature_url: c.signature_url || prev.signatory_signature_url,
@@ -280,7 +290,7 @@ export default function Quotations() {
     setView('list')
   }
 
-  const handleDownload = async () => {
+  const handleDownload = async (fmt) => {
     setDownloading(true)
     try {
       const data = { ...quoteData, total_contract_cost: calcTotal() }
@@ -290,7 +300,10 @@ export default function Quotations() {
         const created = await createMutation.mutateAsync({ ...data, status: 'Finalized' })
         setEditingQuote(created)
       }
-      await downloadQuoteAsDocx(data)
+      const ir = buildQuotationIR(data)
+      const fileName = buildDocFileName('Quotation', data.addressee_name)
+      if (fmt === 'pdf') await downloadAsPdf(ir, `${fileName}.pdf`)
+      else await downloadAsDocx(ir, `${fileName}.docx`)
       toast.success('Downloaded — quotation finalized')
     } catch {
       toast.error('Download failed')
@@ -332,14 +345,6 @@ export default function Quotations() {
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field label="Template Type" required>
-            <select value={quoteData.template_type}
-              onChange={e => { set('template_type', e.target.value); setStep(0) }}
-              className={inp} disabled={isLocked}>
-              <option value="Traditional">Traditional</option>
-              <option value="Solar">Solar</option>
-            </select>
-          </Field>
           <Field label="Quote Number">
             <input value={quoteData.quote_number} onChange={e => set('quote_number', e.target.value)}
               placeholder="e.g. Q-2026-001" className={inp} disabled={isLocked} />
@@ -370,11 +375,6 @@ export default function Quotations() {
             <input value={quoteData.company_contact_number} onChange={e => set('company_contact_number', e.target.value)}
               placeholder="One per line" className={inp} disabled={isLocked} />
           </Field>
-          <Field label="Letterhead Color">
-            <input type="color" value={quoteData.company_letterhead_color || '#1e40af'}
-              onChange={e => set('company_letterhead_color', e.target.value)}
-              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer disabled:cursor-not-allowed" disabled={isLocked} />
-          </Field>
           <Field label="Footer Text">
             <input value={quoteData.company_footer} onChange={e => set('company_footer', e.target.value)}
               placeholder="e.g. Registered contractor…" className={inp} disabled={isLocked} />
@@ -385,6 +385,14 @@ export default function Quotations() {
           <Field label="Signatory Title">
             <input value={quoteData.signatory_title} onChange={e => set('signatory_title', e.target.value)} className={inp} disabled={isLocked} />
           </Field>
+          <div className="md:col-span-2">
+            <Field label="Payment Method">
+              <textarea value={quoteData.company_payment_method} onChange={e => set('company_payment_method', e.target.value)}
+                rows={5} placeholder={'Cash, cheque, or bank deposit. Kindly remit payments to the following account:\nBank            :  Metropolitan Bank & Trust Company (METROBANK)\nAccount Name  :  Alfredo Y. Gomez Electrical Contractor\nAccount No.     :  306-7-306517020'}
+                className={`${inp} resize-y font-mono`} disabled={isLocked} />
+              <p className="text-xs text-gray-400 mt-1">Auto-filled from the selected company above; printed exactly as typed.</p>
+            </Field>
+          </div>
         </div>
       </div>
     )
@@ -487,28 +495,16 @@ export default function Quotations() {
       />
     )
 
-    if (s === 'Others') return (
-      <Field label="Other Notes and Exclusions">
-        <RichTextEditor value={quoteData.notes_and_exclusions} onChange={html => set('notes_and_exclusions', html)}
-          placeholder="Additional notes, and anything NOT included in this quotation…" disabled={isLocked} />
-      </Field>
+    if (s === 'Other Notes and Exclusions') return (
+      <TemplateChecklistEditor items={quoteData.other_items} onChange={items => set('other_items', items)}
+        templates={otherNoteTemplates} disabled={isLocked}
+        emptyLabel="No notes/exclusions set up yet — add some in Settings first." />
     )
 
     if (s === 'Payment Terms') return (
-      <div className="space-y-5">
-        <Field label="Payment Terms">
-          <textarea value={quoteData.terms_of_payment} onChange={e => set('terms_of_payment', e.target.value)}
-            rows={6} placeholder={'1st Payment  :  50% - Down payment upon acceptance of quotation\n2nd Payment  :  30% - After completion of installation\n3rd Payment  :  20% - Upon release of Certificate of Final Electrical Inspection'}
-            className={`${inp} resize-y font-mono`} disabled={isLocked} />
-          <p className="text-xs text-gray-400 mt-1">Printed exactly as typed, line by line.</p>
-        </Field>
-        <Field label="Payment Method">
-          <textarea value={quoteData.mode_of_payment} onChange={e => set('mode_of_payment', e.target.value)}
-            rows={5} placeholder={'Cash, cheque, or bank deposit. Kindly remit payments to the following account:\nBank            :  Metropolitan Bank & Trust Company (METROBANK)\nAccount Name  :  Alfredo Y. Gomez Electrical Contractor\nAccount No.     :  306-7-306517020'}
-            className={`${inp} resize-y font-mono`} disabled={isLocked} />
-          <p className="text-xs text-gray-400 mt-1">Printed exactly as typed, line by line.</p>
-        </Field>
-      </div>
+      <TemplateChecklistEditor items={quoteData.payment_term_items} onChange={items => set('payment_term_items', items)}
+        templates={paymentTermTemplates} disabled={isLocked}
+        emptyLabel="No payment terms set up yet — add some in Settings first." />
     )
 
     if (s === 'Preview') return (
@@ -688,15 +684,31 @@ export default function Quotations() {
             <ArrowLeft size={15} /> Back
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={() => printPdf(buildQuotationIR(quoteData)).catch(() => toast.error('Print failed — check your popup blocker'))}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
             <Printer size={15} /> Print
           </button>
           <button
-            onClick={async () => { setDownloading(true); await downloadQuoteAsDocx(quoteData); setDownloading(false) }}
+            onClick={async () => {
+              setDownloading(true)
+              const ir = buildQuotationIR(quoteData)
+              await downloadAsDocx(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.docx`)
+              setDownloading(false)
+            }}
             disabled={downloading}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
             <Download size={15} /> {downloading ? 'Generating…' : 'Download Word'}
+          </button>
+          <button
+            onClick={async () => {
+              setDownloading(true)
+              const ir = buildQuotationIR(quoteData)
+              await downloadAsPdf(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.pdf`)
+              setDownloading(false)
+            }}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
+            <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
           </button>
         </div>
         <QuotePreview quote={quoteData} />
@@ -739,7 +751,7 @@ export default function Quotations() {
           </div>
         )}
 
-        <StepIndicator steps={steps} current={step} />
+        <StepIndicator steps={steps} current={step} onStepClick={setStep} canJump={!!editingQuote} />
 
         {/* Step card */}
         <div className="bg-white border border-gray-200 rounded-lg">
@@ -768,9 +780,13 @@ export default function Quotations() {
 
             {isPreviewStep ? (
               <>
-                <button onClick={handleDownload} disabled={downloading || isLocked}
+                <button onClick={() => handleDownload('docx')} disabled={downloading || isLocked}
                   className="flex items-center gap-2 px-4 py-2 text-sm border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:opacity-50">
                   <Download size={15} /> {downloading ? 'Generating…' : 'Download Word'}
+                </button>
+                <button onClick={() => handleDownload('pdf')} disabled={downloading || isLocked}
+                  className="flex items-center gap-2 px-4 py-2 text-sm border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:opacity-50">
+                  <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
                 </button>
                 {!isLocked && (
                   <button onClick={handleFinalize} disabled={updateMutation.isPending || createMutation.isPending}

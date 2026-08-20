@@ -11,7 +11,7 @@ export const emptyBomRow = () => ({
   quantity: 1,
   unit_price: 0,
   subtotal: 0,
-  adjustment_pct: 100,
+  adjustment_pct: 20,
   adjusted_subtotal: 0,
   source: '',
   price_entry_date: null,
@@ -21,8 +21,8 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
 function calcRow(row) {
   const subtotal = (Number(row.quantity) || 0) * (Number(row.unit_price) || 0)
-  const adjPct = Number.isFinite(Number(row.adjustment_pct)) ? Number(row.adjustment_pct) : 100
-  const adjustedSubtotal = subtotal * (adjPct / 100)
+  const adjPct = Number.isFinite(Number(row.adjustment_pct)) ? Number(row.adjustment_pct) : 20
+  const adjustedSubtotal = subtotal * (1 + adjPct / 100)
   return { ...row, subtotal: round2(subtotal), adjusted_subtotal: round2(adjustedSubtotal) }
 }
 
@@ -160,7 +160,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                     <input type="number" min={0} max={100} value={row.adjustment_pct}
                       onChange={e => {
                         const raw = parseFloat(e.target.value)
-                        const clamped = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 100
+                        const clamped = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 20
                         update(i, 'adjustment_pct', clamped)
                       }}
                       className={inp} />

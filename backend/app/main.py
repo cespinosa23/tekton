@@ -31,8 +31,10 @@ from app.schemas.setting import SettingCreate, SettingUpdate, SettingRead
 from app.models import material_type  # noqa
 from app.models import billing  # noqa
 from app.models import sow_type  # noqa
+from app.models import quotation_template_item  # noqa
 from app.api import material_types
 from app.api import sow_types
+from app.api import quotation_template_items
 from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 
@@ -53,6 +55,7 @@ app.include_router(employees.router)
 app.include_router(users.router)
 app.include_router(material_types.router)
 app.include_router(sow_types.router)
+app.include_router(quotation_template_items.router)
 app.include_router(admin.router)
 
 # CRUD routes
