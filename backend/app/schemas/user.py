@@ -44,6 +44,12 @@ class UserRead(BaseModel):
     roles: list[RoleReadFromUserRole] = []
 
     model_config = {"from_attributes": True}
+
+class UserBrief(BaseModel):
+    id: int
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     
 class UserRolesUpdate(BaseModel):
     roles: list[RoleName] = []

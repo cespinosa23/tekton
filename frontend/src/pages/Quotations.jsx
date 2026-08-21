@@ -3,11 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
-import { getQuotations, createQuotation, updateQuotation, archiveQuotation } from '../api/quotations'
-import { getCompanies, getSowTypes, getQuotationTemplateItems } from '../api/settings'
+import {
+  getQuotations, createQuotation, updateQuotation, archiveQuotation,
+  requestQuotationApproval, approveQuotation, rejectQuotation,
+} from '../api/quotations'
+import { getCompanies, getSowTypes, getQuotationTemplateItems, getSuppliers, getSettings, getUsersByRole } from '../api/settings'
 import { getMaterials, getMaterialTypes } from '../api/materials'
 import { getInventoryRecords } from '../api/inventory'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAuth } from '../context/AuthContext'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
@@ -20,7 +24,7 @@ import { downloadAsPdf, printPdf } from '../lib/documents/toPdf'
 import { buildDocFileName } from '../lib/documents/fileName'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
-  Copy, Lock, Printer, Search,
+  Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -49,7 +53,10 @@ const EMPTY_QUOTE = {
   company_logo_url: '',
   addressee_name: '',
   addressee_address: '',
-  attention_to: '',
+  attention_account_type: '',
+  attention_salutation: '',
+  attention_first_name: '',
+  attention_last_name: '',
   subject: '',
   quotation_date: format(new Date(), 'yyyy-MM-dd'),
   signatory_name: '',
@@ -112,6 +119,10 @@ function Field({ label, required, children }) {
 export default function Quotations() {
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
+  const { isAdmin, hasRole, user } = useAuth()
+  // Admin and Project Manager finalize directly; everyone else with quotations
+  // access (currently just Project Coordinator) has to route through a PM.
+  const canFinalizeDirectly = isAdmin() || hasRole('Project Manager')
   const [view, setView] = useState('list')
   const [editingQuote, setEditingQuote] = useState(null)
   const [quoteData, setQuoteData] = useState(EMPTY_QUOTE)
@@ -121,12 +132,22 @@ export default function Quotations() {
   const [reopenConfirm, setReopenConfirm] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [listTab, setListTab] = useState('all')
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false)
+  const [approvalTargetQuote, setApprovalTargetQuote] = useState(null)
+  const [selectedApproverId, setSelectedApproverId] = useState('')
+  const [rejectTarget, setRejectTarget] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   const { data: quotations = [], isLoading } = useQuery({ queryKey: ['quotations'], queryFn: getQuotations })
+  const { data: projectManagers = [] } = useQuery({ queryKey: ['usersByRole', 'Project Manager'], queryFn: () => getUsersByRole('Project Manager') })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
   const { data: materials = [] } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
   const { data: inventoryRecords = [] } = useQuery({ queryKey: ['inventoryRecords'], queryFn: getInventoryRecords })
+  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: getSuppliers })
+  const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
+  const salutations = settings.filter(s => s.category === 'Salutation' && s.is_active && !s.archived)
   const { data: sowTypes = [] } = useQuery({ queryKey: ['sowTypes'], queryFn: getSowTypes })
   const { data: quotationTemplateItems = [] } = useQuery({ queryKey: ['quotationTemplateItems'], queryFn: () => getQuotationTemplateItems() })
   const otherNoteTemplates = quotationTemplateItems.filter(i => i.category === 'other_note')
@@ -150,6 +171,35 @@ export default function Quotations() {
       toast.success('Quotation archived')
     },
     onError: () => toast.error('Failed to archive'),
+  })
+  const requestApprovalMutation = useMutation({
+    mutationFn: requestQuotationApproval,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      setApprovalModalOpen(false)
+      setApprovalTargetQuote(null)
+      setSelectedApproverId('')
+      toast.success('Approval requested')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to request approval'),
+  })
+  const approveMutation = useMutation({
+    mutationFn: approveQuotation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      toast.success('Quotation approved and finalized')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to approve'),
+  })
+  const rejectMutation = useMutation({
+    mutationFn: rejectQuotation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      setRejectTarget(null)
+      setRejectReason('')
+      toast.success('Quotation rejected')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to reject'),
   })
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
@@ -251,10 +301,15 @@ export default function Quotations() {
   const validateStep = (stepName) => {
     if (stepName === 'Addressee') {
       if (!quoteData.addressee_name?.trim()) return 'Client / Addressee Name is required'
+      if (!quoteData.attention_account_type) return 'Type of Account is required'
+      if (!quoteData.attention_salutation) return 'Salutation is required'
+      if (!quoteData.attention_first_name?.trim()) return 'First Name is required'
+      if (!quoteData.attention_last_name?.trim()) return 'Last Name is required'
       if (!quoteData.subject?.trim()) return 'Subject is required'
     }
     if (stepName === 'Costing' && !scopeCostValid) return 'Every checked Cost Type needs a Contract Cost'
     if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source'
+    if (stepName === 'Payment Terms' && !(quoteData.payment_term_items?.length > 0)) return 'Select a Payment Term'
     return null
   }
 
@@ -262,9 +317,14 @@ export default function Quotations() {
   const validateForFinalize = () => {
     const errors = []
     if (!quoteData.addressee_name?.trim()) errors.push('Client / Addressee Name is required')
+    if (!quoteData.attention_account_type) errors.push('Type of Account is required')
+    if (!quoteData.attention_salutation) errors.push('Salutation is required')
+    if (!quoteData.attention_first_name?.trim()) errors.push('First Name is required')
+    if (!quoteData.attention_last_name?.trim()) errors.push('Last Name is required')
     if (!quoteData.subject?.trim()) errors.push('Subject is required')
     if (!scopeCostValid) errors.push('Every checked Cost Type needs a Contract Cost')
     if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source')
+    if (!(quoteData.payment_term_items?.length > 0)) errors.push('Select a Payment Term')
     return errors
   }
 
@@ -290,21 +350,49 @@ export default function Quotations() {
     setView('list')
   }
 
+  // Roles that can't finalize directly must route through a PM instead —
+  // saves the current draft, then opens the approver picker.
+  const handleRequestApproval = async () => {
+    const errors = validateForFinalize()
+    if (errors.length > 0) {
+      errors.forEach(e => toast.error(e))
+      return
+    }
+    const data = { ...quoteData, total_contract_cost: calcTotal() }
+    let quote
+    if (editingQuote) {
+      quote = await updateMutation.mutateAsync({ id: editingQuote.id, data })
+    } else {
+      quote = await createMutation.mutateAsync(data)
+      setEditingQuote(quote)
+    }
+    setApprovalTargetQuote(quote)
+    setApprovalModalOpen(true)
+  }
+
+  const submitApprovalRequest = () => {
+    if (!selectedApproverId || !approvalTargetQuote) return
+    requestApprovalMutation.mutate({ id: approvalTargetQuote.id, approver_user_id: Number(selectedApproverId) })
+  }
+
   const handleDownload = async (fmt) => {
     setDownloading(true)
     try {
       const data = { ...quoteData, total_contract_cost: calcTotal() }
+      // Only roles that can finalize directly get download-also-finalizes —
+      // otherwise downloading would silently bypass the approval requirement.
+      if (canFinalizeDirectly) data.status = 'Finalized'
       if (editingQuote) {
-        await updateMutation.mutateAsync({ id: editingQuote.id, data: { ...data, status: 'Finalized' } })
+        await updateMutation.mutateAsync({ id: editingQuote.id, data })
       } else {
-        const created = await createMutation.mutateAsync({ ...data, status: 'Finalized' })
+        const created = await createMutation.mutateAsync(data)
         setEditingQuote(created)
       }
       const ir = buildQuotationIR(data)
       const fileName = buildDocFileName('Quotation', data.addressee_name)
       if (fmt === 'pdf') await downloadAsPdf(ir, `${fileName}.pdf`)
       else await downloadAsDocx(ir, `${fileName}.docx`)
-      toast.success('Downloaded — quotation finalized')
+      toast.success(canFinalizeDirectly ? 'Downloaded — quotation finalized' : 'Downloaded draft')
     } catch {
       toast.error('Download failed')
     }
@@ -313,7 +401,13 @@ export default function Quotations() {
 
   const activeQuotes = quotations.filter(q => !q.archived)
 
-  const filteredQuotes = activeQuotes.filter(q => {
+  // Only Admin/PM can ever be an assigned approver, so only they get the tab.
+  const canReviewApprovals = isAdmin() || hasRole('Project Manager')
+  const pendingApprovalQuotes = activeQuotes.filter(q =>
+    q.approval_status === 'pending' && (isAdmin() || q.approval_requested_to_id === user?.id)
+  )
+
+  const filteredQuotes = (listTab === 'pendingApproval' ? pendingApprovalQuotes : activeQuotes).filter(q => {
     const s = search.toLowerCase()
     const matchSearch = !s ||
       q.addressee_name?.toLowerCase().includes(s) ||
@@ -406,10 +500,52 @@ export default function Quotations() {
         <Field label="Address">
           <input value={quoteData.addressee_address} onChange={e => set('addressee_address', e.target.value)} className={inp} disabled={isLocked} />
         </Field>
-        <Field label="Through (Attention To)">
-          <input value={quoteData.attention_to} onChange={e => set('attention_to', e.target.value)}
-            placeholder="e.g. Engr. Jomar Tindugan" className={inp} disabled={isLocked} />
-        </Field>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Through (Attention To)<span className="text-red-500 ml-1">*</span>
+          </label>
+          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Type of Account</label>
+              <div className="flex items-center gap-5">
+                {['Company Owned', 'Personal'].map(opt => (
+                  <label key={opt} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                    <input type="radio" name="quote_account_type" value={opt} required
+                      checked={quoteData.attention_account_type === opt}
+                      onChange={e => set('attention_account_type', e.target.value)}
+                      disabled={isLocked}
+                      className="text-gray-900 focus:ring-gray-400" />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Salutation</label>
+                <select required value={quoteData.attention_salutation}
+                  onChange={e => set('attention_salutation', e.target.value)}
+                  disabled={isLocked}
+                  className={inp}>
+                  <option value="">Select...</option>
+                  {salutations.map(s => <option key={s.id} value={s.value}>{s.value}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                <input type="text" required value={quoteData.attention_first_name}
+                  onChange={e => set('attention_first_name', e.target.value)}
+                  disabled={isLocked} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+                <input type="text" required value={quoteData.attention_last_name}
+                  onChange={e => set('attention_last_name', e.target.value)}
+                  disabled={isLocked} className={inp} />
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="md:col-span-2">
           <Field label="Subject" required>
             <input value={quoteData.subject} onChange={e => set('subject', e.target.value)}
@@ -492,6 +628,7 @@ export default function Quotations() {
         materials={activeMaterials}
         materialTypes={materialTypes}
         inventoryRecords={inventoryRecords}
+        suppliers={suppliers}
       />
     )
 
@@ -502,9 +639,12 @@ export default function Quotations() {
     )
 
     if (s === 'Payment Terms') return (
-      <TemplateChecklistEditor items={quoteData.payment_term_items} onChange={items => set('payment_term_items', items)}
-        templates={paymentTermTemplates} disabled={isLocked}
-        emptyLabel="No payment terms set up yet — add some in Settings first." />
+      <div>
+        <p className="text-xs text-gray-400 mb-3">Select one payment term. <span className="text-red-500">*</span> Required</p>
+        <TemplateChecklistEditor items={quoteData.payment_term_items} onChange={items => set('payment_term_items', items)}
+          templates={paymentTermTemplates} disabled={isLocked} singleSelect
+          emptyLabel="No payment terms set up yet — add some in Settings first." />
+      </div>
     )
 
     if (s === 'Preview') return (
@@ -528,6 +668,19 @@ export default function Quotations() {
             </button>
           )}
         </div>
+
+        {/* Tabs — Pending My Approval only shown to Admin/PM, the only roles
+            that can ever be an assigned approver */}
+        {canReviewApprovals && (
+          <div className="flex gap-1 mb-4 border-b border-gray-200">
+            {[['all', 'All Quotations'], ['pendingApproval', `Pending My Approval${pendingApprovalQuotes.length > 0 ? ` (${pendingApprovalQuotes.length})` : ''}`]].map(([val, label]) => (
+              <button key={val} onClick={() => setListTab(val)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${listTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Search + filter bar */}
         <div className="flex gap-3 mb-4">
@@ -575,6 +728,12 @@ export default function Quotations() {
                     <span className="font-semibold text-gray-900">{q.addressee_name || 'Unnamed'}</span>
                     <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{q.template_type}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-600'}`}>{q.status}</span>
+                    {q.approval_status === 'pending' && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">Pending Approval</span>
+                    )}
+                    {q.approval_status === 'rejected' && (
+                      <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium" title={q.approval_note || undefined}>Rejected</span>
+                    )}
                     {q.quote_number && <span className="text-xs text-gray-400">#{q.quote_number}</span>}
                   </div>
                   <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-3">
@@ -586,6 +745,18 @@ export default function Quotations() {
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
+                  {q.approval_status === 'pending' && (isAdmin() || q.approval_requested_to_id === user?.id) && (
+                    <>
+                      <button onClick={() => approveMutation.mutate(q.id)} disabled={approveMutation.isPending}
+                        className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 disabled:opacity-50" title="Approve & Finalize">
+                        <ThumbsUp size={15} />
+                      </button>
+                      <button onClick={() => { setRejectTarget(q); setRejectReason('') }}
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Reject">
+                        <ThumbsDown size={15} />
+                      </button>
+                    </>
+                  )}
                   {canWrite('quotations') && (
                     q.status === 'Finalized' ? (
                       <button
@@ -618,6 +789,30 @@ export default function Quotations() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Reject approval dialog */}
+        {rejectTarget && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Reject Quotation</h3>
+              <p className="text-sm text-gray-500 mb-3">
+                Reject <strong>{rejectTarget.addressee_name || 'this quotation'}</strong> and send it back to Draft?
+              </p>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Reason <span className="text-red-500">*</span></label>
+              <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3} autoFocus
+                placeholder="Let the requester know what needs to change…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setRejectTarget(null); setRejectReason('') }} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                <button onClick={() => rejectMutation.mutate({ id: rejectTarget.id, reason: rejectReason.trim() })}
+                  disabled={!rejectReason.trim() || rejectMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50">
+                  <ThumbsDown size={14} /> Reject
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -751,6 +946,17 @@ export default function Quotations() {
           </div>
         )}
 
+        {/* Rejection banner — shows why the assigned PM sent this back */}
+        {quoteData.approval_status === 'rejected' && (
+          <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <AlertCircle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-red-800">
+              <span className="font-medium">This quotation was rejected.</span>
+              {quoteData.approval_note && <p className="text-red-700 mt-0.5">{quoteData.approval_note}</p>}
+            </div>
+          </div>
+        )}
+
         <StepIndicator steps={steps} current={step} onStepClick={setStep} canJump={!!editingQuote} />
 
         {/* Step card */}
@@ -789,10 +995,17 @@ export default function Quotations() {
                   <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
                 </button>
                 {!isLocked && (
-                  <button onClick={handleFinalize} disabled={updateMutation.isPending || createMutation.isPending}
-                    className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
-                    <CheckCircle size={15} /> Finalize Quote
-                  </button>
+                  canFinalizeDirectly ? (
+                    <button onClick={handleFinalize} disabled={updateMutation.isPending || createMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
+                      <CheckCircle size={15} /> Finalize Quote
+                    </button>
+                  ) : (
+                    <button onClick={handleRequestApproval} disabled={updateMutation.isPending || createMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
+                      <Send size={15} /> Request Approval
+                    </button>
+                  )
                 )}
               </>
             ) : (
@@ -804,6 +1017,38 @@ export default function Quotations() {
           </div>
         </div>
       </div>
+
+      {/* Request Approval — pick which PM should review this quote */}
+      {approvalModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Request Approval</h3>
+            <p className="text-sm text-gray-500 mb-4">Select a Project Manager to review and approve this quotation.</p>
+            {projectManagers.length === 0 ? (
+              <p className="text-sm text-amber-600 mb-4">No active Project Manager accounts found — ask an Admin to set one up first.</p>
+            ) : (
+              <select value={selectedApproverId} onChange={e => setSelectedApproverId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                <option value="">Select a Project Manager...</option>
+                {projectManagers.map(pm => (
+                  <option key={pm.id} value={pm.id}>
+                    {[pm.first_name, pm.last_name].filter(Boolean).join(' ') || pm.email}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setApprovalModalOpen(false); setSelectedApproverId('') }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button onClick={submitApprovalRequest}
+                disabled={!selectedApproverId || requestApprovalMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
+                <Send size={14} /> Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

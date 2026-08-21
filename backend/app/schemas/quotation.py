@@ -20,7 +20,10 @@ class QuotationCreate(BaseModel):
     company_payment_method: Optional[str] = None
     addressee_name: Optional[str] = None
     addressee_address: Optional[str] = None
-    attention_to: Optional[str] = None
+    attention_account_type: Optional[str] = None
+    attention_salutation: Optional[str] = None
+    attention_first_name: Optional[str] = None
+    attention_last_name: Optional[str] = None
     subject: Optional[str] = None
     quotation_date: Optional[date] = None
     signatory_name: Optional[str] = None
@@ -44,4 +47,16 @@ class QuotationUpdate(QuotationCreate):
 class QuotationRead(QuotationCreate):
     id: int
     archived: bool = False
+    # Server-set only — never accepted from QuotationCreate/Update payloads.
+    created_by_user_id: Optional[int] = None
+    approval_status: Optional[str] = None
+    approval_requested_to_id: Optional[int] = None
+    approval_requested_by_id: Optional[int] = None
+    approval_note: Optional[str] = None
     model_config = {"from_attributes": True}
+
+class RequestApprovalPayload(BaseModel):
+    approver_user_id: int
+
+class RejectQuotationPayload(BaseModel):
+    reason: str

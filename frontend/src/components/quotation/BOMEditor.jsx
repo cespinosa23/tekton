@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { Plus, Trash2 } from 'lucide-react'
 import MaterialCombobox from '../MaterialCombobox'
+import SupplierCombobox from '../SupplierCombobox'
 
 export const emptyBomRow = () => ({
   is_custom: false,
@@ -48,7 +49,7 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFract
 const inp = 'px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 w-full'
 const roInp = 'px-2 py-1.5 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500 w-full'
 
-export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [] }) {
+export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [] }) {
   const update = (index, field, value) => {
     onChange(items.map((item, i) => i !== index ? item : calcRow({ ...item, [field]: value })))
   }
@@ -147,11 +148,24 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   </td>
 
                   <td className="px-2 py-1.5 w-20">
-                    <input type="number" value={row.quantity} onChange={e => update(i, 'quantity', parseFloat(e.target.value) || 0)} className={inp} />
+                    <input type="text" value={row.quantity === 0 ? '' : row.quantity} placeholder="0"
+                      onChange={e => {
+                        const raw = e.target.value.trim()
+                        if (!/^\d*\.?\d*$/.test(raw)) return
+                        if (/^0\d/.test(raw)) return
+                        update(i, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0)
+                      }}
+                      className={inp} />
                   </td>
 
                   <td className="px-2 py-1.5 w-24">
-                    <input type="number" value={row.unit_price} onChange={e => update(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                    <input type="text" value={row.unit_price === 0 ? '' : row.unit_price} placeholder="0.00"
+                      onChange={e => {
+                        const raw = e.target.value.trim()
+                        if (!/^\d*\.?\d*$/.test(raw)) return
+                        if (/^0\d/.test(raw)) return
+                        update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
+                      }}
                       disabled={!row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
                       className={row.is_custom ? inp : roInp} />
                   </td>
@@ -159,10 +173,13 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   <td className="px-3 py-2.5 text-gray-700 font-medium whitespace-nowrap">{fmt(row.subtotal)}</td>
 
                   <td className="px-2 py-1.5 w-20">
-                    <input type="number" min={0} max={100} value={row.adjustment_pct}
+                    <input type="text" value={row.adjustment_pct === 0 ? '' : row.adjustment_pct} placeholder="0"
                       onChange={e => {
-                        const raw = parseFloat(e.target.value)
-                        const clamped = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 20
+                        const raw = e.target.value.trim()
+                        if (!/^\d*\.?\d*$/.test(raw)) return
+                        if (/^0\d/.test(raw)) return
+                        const parsed = parseFloat(raw)
+                        const clamped = raw === '' ? 0 : Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0
                         update(i, 'adjustment_pct', clamped)
                       }}
                       className={inp} />
@@ -172,9 +189,9 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
 
                   <td className="px-2 py-1.5 min-w-[160px]">
                     {row.is_custom ? (
-                      <input value={row.source} onChange={e => update(i, 'source', e.target.value)}
-                        placeholder="Supplier (required)"
-                        className={`${inp} ${sourceMissing ? 'border-red-400 bg-red-50 focus:ring-red-300' : ''}`} />
+                      <div className={sourceMissing ? 'rounded ring-1 ring-red-400' : ''}>
+                        <SupplierCombobox value={row.source} onValueChange={val => update(i, 'source', val)} suppliers={suppliers} />
+                      </div>
                     ) : (
                       <div className={`${roInp} flex items-center gap-1.5`}>
                         <span>{row.source || '-'}</span>

@@ -16,7 +16,6 @@ from app.models.material import Material
 from app.models.inventory import Inventory
 from app.models.supplier import Supplier
 from app.models.transaction import Transaction
-from app.models.quotation import Quotation
 from app.models.setting import Setting
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectRead
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate, AttendanceRead
@@ -26,7 +25,6 @@ from app.schemas.material import MaterialCreate, MaterialUpdate, MaterialRead
 from app.schemas.inventory import InventoryCreate, InventoryUpdate, InventoryRead
 from app.schemas.supplier import SupplierCreate, SupplierUpdate, SupplierRead
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionRead
-from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationRead
 from app.schemas.setting import SettingCreate, SettingUpdate, SettingRead
 from app.models import material_type  # noqa
 from app.models import billing  # noqa
@@ -37,6 +35,7 @@ from app.api import sow_types
 from app.api import quotation_template_items
 from app.api import transactions as transactions_router
 from app.api import billing as billing_router
+from app.api import quotations as quotations_router
 
 app = FastAPI(title="Tekton")
 
@@ -68,5 +67,5 @@ app.include_router(make_crud_router("/inventory", "inventory", Inventory, Invent
 app.include_router(make_crud_router("/suppliers", "suppliers", Supplier, SupplierCreate, SupplierUpdate, SupplierRead, write_roles=["Admin"]))
 app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
-app.include_router(make_crud_router("/quotations", "quotations", Quotation, QuotationCreate, QuotationUpdate, QuotationRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
+app.include_router(quotations_router.router)
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))

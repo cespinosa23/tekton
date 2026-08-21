@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, JSON, Text
+from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, JSON, Text, ForeignKey
 from app.db.database import Base
 
 class Quotation(Base):
@@ -7,6 +7,14 @@ class Quotation(Base):
     id = Column(Integer, primary_key=True, index=True)
     quote_number = Column(String(100), nullable=True)
     status = Column(String(50), default="Draft")
+    # NULL means it predates this field — grandfathered as visible to everyone
+    # rather than locked to Admin-only, so existing quotes don't disappear.
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # 'pending' | 'approved' | 'rejected' — null when no request has ever been made
+    approval_status = Column(String(20), nullable=True)
+    approval_requested_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approval_requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approval_note = Column(String(1000), nullable=True)  # rejection reason
     template_type = Column(String(50), default="Traditional")
     company_name = Column(String(255), nullable=True)
     company_short_name = Column(String(100), nullable=True)
@@ -21,7 +29,12 @@ class Quotation(Base):
     company_payment_method = Column(Text, nullable=True)  # snapshotted from Company.payment_method
     addressee_name = Column(String(255), nullable=True)
     addressee_address = Column(String(255), nullable=True)
-    attention_to = Column(String(255), nullable=True)
+    # THROUGH / attention-to, same shape as Billing's Company Owned/Personal
+    # attention block, so both documents present it consistently.
+    attention_account_type = Column(String(20), nullable=True)  # 'Company Owned' | 'Personal'
+    attention_salutation = Column(String(20), nullable=True)
+    attention_first_name = Column(String(100), nullable=True)
+    attention_last_name = Column(String(100), nullable=True)
     subject = Column(String(500), nullable=True)
     quotation_date = Column(Date, nullable=True)
     signatory_name = Column(String(100), nullable=True)

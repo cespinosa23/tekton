@@ -19,10 +19,17 @@ export function buildQuotationIR(quote) {
 
   blocks.push({ type: 'addressBlock', name: quote.addressee_name || '', address: quote.addressee_address || '' })
 
-  if (quote.attention_to) blocks.push({ type: 'labelValue', label: 'THROUGH', value: quote.attention_to.toUpperCase() })
+  // Same convention as Billing: THROUGH only shows for Company Owned (a
+  // Personal account is addressed directly, no attention line), and the
+  // greeting uses just salutation + last name, never the full THROUGH name.
+  const isCompanyOwned = quote.attention_account_type === 'Company Owned'
+  const throughFullName = [quote.attention_salutation, quote.attention_first_name, quote.attention_last_name].filter(Boolean).join(' ')
+  if (isCompanyOwned && throughFullName) blocks.push({ type: 'labelValue', label: 'THROUGH', value: throughFullName.toUpperCase() })
   if (quote.subject) blocks.push({ type: 'labelValue', label: 'SUBJECT', value: quote.subject.toUpperCase() })
 
-  const greetingName = quote.attention_to || quote.addressee_name
+  const greetingName = (quote.attention_account_type === 'Company Owned' || quote.attention_account_type === 'Personal')
+    ? [quote.attention_salutation, quote.attention_last_name].filter(Boolean).join(' ')
+    : quote.addressee_name
   if (greetingName) blocks.push({ type: 'paragraph', text: `Dear ${greetingName},` })
   blocks.push({ type: 'paragraph', text: 'In line with your service request, we would like to submit our offer below with the following details:' })
 

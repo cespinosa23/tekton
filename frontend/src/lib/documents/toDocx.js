@@ -200,12 +200,13 @@ function renderSectionContent(content) {
 function renderBlock(block) {
   switch (block.type) {
     case 'date':
-      return [ph(block.text), blank()]
+      return [ph(block.text), blank(), blank()]
     case 'addressBlock': {
       const out = []
       if (block.name) out.push(ph(block.name.toUpperCase(), { bold: true }))
+      if (block.name && block.address) out.push(blank())
       if (block.address) out.push(ph(block.address))
-      out.push(blank())
+      out.push(blank(), blank())
       return out
     }
     case 'labelValue':
@@ -279,7 +280,7 @@ export async function downloadAsDocx(ir, fileName) {
   const children = []
   ir.blocks.forEach((block, i) => {
     children.push(...renderBlock(block))
-    if (block.type === 'labelValue' && ir.blocks[i + 1]?.type !== 'labelValue') children.push(blank())
+    if (block.type === 'labelValue' && ir.blocks[i + 1]?.type !== 'labelValue') children.push(blank(), blank())
   })
 
   // Real Word header/footer (not body content) — repeats on every page, and
@@ -297,7 +298,9 @@ export async function downloadAsDocx(ir, fileName) {
 
   const doc = new Document({
     sections: [{
-      properties: {},
+      // Legal size (8.5 x 14in = 12240 x 20160 twips) — the app-wide document
+      // standard, matching the PDF renderer's pageSize: 'LEGAL'.
+      properties: { page: { size: { width: 12240, height: 20160 } } },
       headers: { default: new Header({ children: renderLetterhead(ir.letterhead) }) },
       ...(footers ? { footers } : {}),
       children,

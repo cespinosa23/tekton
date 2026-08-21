@@ -45,7 +45,14 @@ export default function QuotePreview({ quote }) {
     try { dateDisplay = format(new Date(quote.quotation_date + 'T00:00:00'), 'd MMMM yyyy') } catch { dateDisplay = quote.quotation_date }
   }
 
-  const greetingName = quote.attention_to || quote.addressee_name
+  // Same convention as Billing: THROUGH only shows for Company Owned (a
+  // Personal account is addressed directly, no attention line), and the
+  // greeting uses just salutation + last name, never the full THROUGH name.
+  const isCompanyOwned = quote.attention_account_type === 'Company Owned'
+  const throughFullName = [quote.attention_salutation, quote.attention_first_name, quote.attention_last_name].filter(Boolean).join(' ')
+  const greetingName = (quote.attention_account_type === 'Company Owned' || quote.attention_account_type === 'Personal')
+    ? [quote.attention_salutation, quote.attention_last_name].filter(Boolean).join(' ')
+    : quote.addressee_name
 
   // Quotation stores company fields flattened/prefixed (snapshotted at "Apply
   // Company" time) — reshape into the same company shape DocumentLetterhead
@@ -66,15 +73,15 @@ export default function QuotePreview({ quote }) {
       <DocumentLetterhead company={letterheadCompany} />
 
       {/* Addressee — matches the standard service-quotation letter format */}
-      <div className="mb-6 text-sm text-gray-800 space-y-4">
+      <div className="mb-6 text-sm text-gray-800 space-y-8">
         {dateDisplay && <p>{dateDisplay}</p>}
-        <div>
+        <div className="space-y-2">
           <p className="font-bold uppercase">{quote.addressee_name || '—'}</p>
           {quote.addressee_address && <p>{quote.addressee_address}</p>}
         </div>
         <div>
-          {quote.attention_to && (
-            <p><span className="inline-block w-24 font-semibold">THROUGH</span> : <span className="uppercase">{quote.attention_to}</span></p>
+          {isCompanyOwned && throughFullName && (
+            <p><span className="inline-block w-24 font-semibold">THROUGH</span> : <span className="uppercase">{throughFullName}</span></p>
           )}
           {quote.subject && (
             <p><span className="inline-block w-24 font-semibold">SUBJECT</span> : <span className="uppercase">{quote.subject}</span></p>

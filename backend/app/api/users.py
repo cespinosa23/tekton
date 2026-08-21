@@ -9,7 +9,7 @@ from app.core.email import send_invite_email, send_reset_email
 from app.models.user import User
 from app.models.role import Role, UserRole
 from app.models.employee import Employee
-from app.schemas.user import UserInvite, CompleteRegistration, UserRead, UserRolesUpdate
+from app.schemas.user import UserInvite, CompleteRegistration, UserRead, UserRolesUpdate, UserBrief
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -163,6 +163,32 @@ def get_registration_info(token: str, db: Session = Depends(get_db)):
         "middle_name": user.employee.middle_name if user.employee else "",
     }
     
+@router.get("/by-role/{role_name}", response_model=list[UserBrief])
+def list_users_by_role(
+    role_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Active users holding a given role, with display names — used for
+    pickers like "select a Project Manager to approve this quotation"."""
+    users = (
+        db.query(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .filter(Role.name == role_name, User.is_active == True)
+        .all()
+    )
+    return [
+        UserBrief(
+            id=u.id,
+            email=u.email,
+            first_name=u.employee.first_name if u.employee else None,
+            last_name=u.employee.last_name if u.employee else None,
+        )
+        for u in users
+    ]
+
+
 @router.get("/employee-roles")
 def get_employee_roles(
     db: Session = Depends(get_db),

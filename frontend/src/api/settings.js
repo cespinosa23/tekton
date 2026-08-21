@@ -142,6 +142,11 @@ export const getSystemUsers = async () => {
   return data
 }
 
+export const getUsersByRole = async (roleName) => {
+  const { data } = await client.get(`/users/by-role/${encodeURIComponent(roleName)}`)
+  return data
+}
+
 export const forceLogoutUser = async (userId) => {
   const { data } = await client.post(`/admin/users/${userId}/force-logout`)
   return data

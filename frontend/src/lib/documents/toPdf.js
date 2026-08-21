@@ -3,7 +3,7 @@ import { formatPhoneLines } from '../../utils/phoneFormat'
 import { normalizeImageForPdf } from './normalizeImage'
 
 const NAVY = '#1B3A5C'
-const CONTENT_WIDTH = 515 // A4 (595pt) minus default 40pt left/right margins
+const CONTENT_WIDTH = 532 // Legal (612pt) minus default 40pt left/right margins
 
 const TABLE_LAYOUT = {
   hLineColor: () => '#333333',
@@ -146,7 +146,11 @@ function renderTable(table) {
     row.push({ text: amount, bold: true, color: 'white', fillColor: NAVY })
     body.push(row)
   }
-  return { table: { headerRows: 1, widths, body }, layout: TABLE_LAYOUT }
+  // dontBreakRows — without it, pdfmake can split a single row's cell content
+  // across a page boundary (e.g. a BOM row showing its quantity on one page
+  // and its description on the next). Force the whole row to move to the
+  // next page together instead.
+  return { table: { headerRows: 1, widths, body, dontBreakRows: true, keepWithHeaderRows: 1 }, layout: TABLE_LAYOUT }
 }
 
 function renderSectionContent(content) {
@@ -179,12 +183,12 @@ function renderSectionContent(content) {
 function renderBlock(block) {
   switch (block.type) {
     case 'date':
-      return [{ text: block.text, margin: [0, 0, 0, 10] }]
+      return [{ text: block.text, margin: [0, 0, 0, 20] }]
     case 'addressBlock': {
       const out = []
-      if (block.name) out.push({ text: block.name.toUpperCase(), bold: true })
+      if (block.name) out.push({ text: block.name.toUpperCase(), bold: true, margin: [0, 0, 0, block.address ? 8 : 0] })
       if (block.address) out.push({ text: block.address })
-      out.push({ text: ' ', margin: [0, 0, 0, 4] })
+      out.push({ text: ' ', margin: [0, 0, 0, 8] })
       return out
     }
     case 'labelValue':
@@ -207,6 +211,7 @@ function renderBlock(block) {
       return [{
         table: {
           widths: ['*', 'auto'],
+          dontBreakRows: true,
           body: [[
             { text: block.label, bold: true, fontSize: 13.5, color: 'white', fillColor: '#f59e0b', margin: [10, 10, 8, 10] },
             { text: peso(block.amount), bold: true, fontSize: 18, color: 'white', fillColor: '#f59e0b', alignment: 'right', margin: [8, 10, 10, 10] },
@@ -265,7 +270,7 @@ async function buildDocDefinition(ir) {
     // before the next block (e.g. the "Dear ..." greeting) — only the last
     // labelValue in a run needs that bigger trailing gap.
     if (block.type === 'labelValue' && normalizedIr.blocks[i + 1]?.type !== 'labelValue' && rendered[0]?.margin) {
-      rendered[0].margin[3] = 10
+      rendered[0].margin[3] = 20
     }
     content.push(...rendered)
   })
@@ -273,7 +278,7 @@ async function buildDocDefinition(ir) {
   const footerText = ir.footerText ? ir.footerText.replace(/\n\s*\n+/g, '\n') : ''
 
   return {
-    pageSize: 'A4',
+    pageSize: 'LEGAL',
     pageMargins: [40, 40, 40, footerText ? 50 : 40],
     content,
     ...(footerText ? {
