@@ -172,7 +172,6 @@ export default function Quotations() {
   const [step, setStep] = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
-  const [reopenConfirm, setReopenConfirm] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [listTab, setListTab] = useState('all')
@@ -320,14 +319,6 @@ export default function Quotations() {
         prefillApproverLastName: approver?.last_name || '',
       },
     })
-  }
-
-  const handleReopenFromBuilder = async () => {
-    const data = { ...quoteData, status: 'Draft' }
-    await updateMutation.mutateAsync({ id: editingQuote.id, data })
-    setEditingQuote(prev => ({ ...prev, status: 'Draft' }))
-    setQuoteData(prev => ({ ...prev, status: 'Draft' }))
-    toast.success('Re-opened as Draft')
   }
 
   const applyCompany = (companyId) => {
@@ -841,12 +832,9 @@ export default function Quotations() {
                   )}
                   {canWrite('quotations') && isOwner(q) && (
                     q.status === 'Finalized' && !isAdmin() ? (
-                      <button
-                        onClick={() => setReopenConfirm(q)}
-                        className="p-1.5 rounded hover:bg-amber-50 text-gray-400 hover:text-amber-600"
-                        title="Finalized — click to re-open as Draft">
+                      <span className="p-1.5 text-gray-300" title="Finalized — no longer editable. Clone it to make changes.">
                         <Lock size={15} />
-                      </button>
+                      </span>
                     ) : (
                       <button onClick={() => openBuilder(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Edit">
                         <Pencil size={15} />
@@ -921,39 +909,6 @@ export default function Quotations() {
           </div>
         )}
 
-        {/* Re-open (finalized) confirm dialog */}
-        {reopenConfirm && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <Lock size={20} className="text-amber-500 flex-shrink-0" />
-                <h3 className="text-lg font-semibold text-gray-900">Re-open Quotation?</h3>
-              </div>
-              <p className="text-sm text-gray-500 mb-6">
-                <strong>{reopenConfirm.quote_number || 'This quotation'}</strong> is <strong>Finalized</strong>.
-                Re-opening it will change the status back to <strong>Draft</strong> and allow editing.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setReopenConfirm(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateMutation.mutateAsync({ id: reopenConfirm.id, data: { ...reopenConfirm, status: 'Draft' } })
-                      openBuilder({ ...reopenConfirm, status: 'Draft' })
-                      setReopenConfirm(null)
-                      toast.success('Re-opened as Draft')
-                    } catch {
-                      toast.error('Failed to re-open')
-                    }
-                  }}
-                  disabled={updateMutation.isPending}
-                  className="px-4 py-2 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:opacity-50">
-                  Re-open as Draft
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
   )
@@ -1028,19 +983,13 @@ export default function Quotations() {
           )}
         </div>
 
-        {/* Finalized lock banner */}
+        {/* Finalized lock banner — should be unreachable in practice, since nothing
+            still opens the builder with a Finalized quote for a non-admin, but
+            kept as a defensive last line in case that ever changes. */}
         {isLocked && (
-          <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2 text-amber-800">
-              <Lock size={15} />
-              <span className="text-sm font-medium">This quotation is Finalized — fields are read-only.</span>
-            </div>
-            <button
-              onClick={handleReopenFromBuilder}
-              disabled={updateMutation.isPending}
-              className="text-sm px-3 py-1.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:opacity-50">
-              Re-open as Draft
-            </button>
+          <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800">
+            <Lock size={15} />
+            <span className="text-sm font-medium">This quotation is Finalized — fields are read-only. Clone it to make changes.</span>
           </div>
         )}
 
