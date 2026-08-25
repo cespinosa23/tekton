@@ -197,7 +197,7 @@ function renderSectionContent(content) {
   return children
 }
 
-function renderBlock(block) {
+function renderBlock(block, letterheadColor) {
   switch (block.type) {
     case 'date':
       return [ph(block.text), blank(), blank()]
@@ -221,7 +221,8 @@ function renderBlock(block) {
     }
     case 'section':
       return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), ...renderSectionContent(block.content), blank()]
-    case 'totalBanner':
+    case 'totalBanner': {
+      const bannerFill = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()
       return [
         new Table({
           borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
@@ -230,13 +231,13 @@ function renderBlock(block) {
             children: [
               new TableCell({
                 borders: NO_BORDERS,
-                shading: { fill: 'F59E0B' },
+                shading: { fill: bannerFill },
                 width: { size: 50, type: WidthType.PERCENTAGE },
                 children: [new Paragraph({ children: [new TextRun({ text: block.label, bold: true, size: 27, color: 'FFFFFF' })] })],
               }),
               new TableCell({
                 borders: NO_BORDERS,
-                shading: { fill: 'F59E0B' },
+                shading: { fill: bannerFill },
                 width: { size: 50, type: WidthType.PERCENTAGE },
                 children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: peso(block.amount), bold: true, size: 36, color: 'FFFFFF' })] })],
               }),
@@ -245,6 +246,7 @@ function renderBlock(block) {
         }),
         blank(),
       ]
+    }
     case 'signatureBlock': {
       const sigImage = dataUriToImage(block.signatory.imageUrl)
       const signatoryParagraphs = [ph('Authorized Signatory:', { bold: true })]
@@ -279,7 +281,7 @@ function renderBlock(block) {
 export async function downloadAsDocx(ir, fileName) {
   const children = []
   ir.blocks.forEach((block, i) => {
-    children.push(...renderBlock(block))
+    children.push(...renderBlock(block, ir.letterhead.letterheadColor))
     if (block.type === 'labelValue' && ir.blocks[i + 1]?.type !== 'labelValue') children.push(blank(), blank())
   })
 

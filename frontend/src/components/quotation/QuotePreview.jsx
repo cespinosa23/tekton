@@ -228,7 +228,8 @@ export default function QuotePreview({ quote }) {
       )}
 
       {/* Total */}
-      <div className="mt-6 bg-amber-500 text-white rounded-xl p-5 flex justify-between items-center">
+      <div className="mt-6 text-white rounded-xl p-5 flex justify-between items-center"
+        style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
         <span className="text-lg font-bold">TOTAL CONTRACT COST</span>
         <span className="text-2xl font-bold">{fmt(quote.total_contract_cost)}</span>
       </div>

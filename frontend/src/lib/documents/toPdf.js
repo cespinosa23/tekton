@@ -180,7 +180,7 @@ function renderSectionContent(content) {
   return []
 }
 
-function renderBlock(block) {
+function renderBlock(block, letterheadColor) {
   switch (block.type) {
     case 'date':
       return [{ text: block.text, margin: [0, 0, 0, 20] }]
@@ -207,19 +207,21 @@ function renderBlock(block) {
         ...renderSectionContent(block.content),
         { text: ' ', margin: [0, 0, 0, 10] },
       ]
-    case 'totalBanner':
+    case 'totalBanner': {
+      const bannerColor = letterheadColor || '#1e40af'
       return [{
         table: {
           widths: ['*', 'auto'],
           dontBreakRows: true,
           body: [[
-            { text: block.label, bold: true, fontSize: 13.5, color: 'white', fillColor: '#f59e0b', margin: [10, 10, 8, 10] },
-            { text: peso(block.amount), bold: true, fontSize: 18, color: 'white', fillColor: '#f59e0b', alignment: 'right', margin: [8, 10, 10, 10] },
+            { text: block.label, bold: true, fontSize: 13.5, color: 'white', fillColor: bannerColor, margin: [10, 10, 8, 10] },
+            { text: peso(block.amount), bold: true, fontSize: 18, color: 'white', fillColor: bannerColor, alignment: 'right', margin: [8, 10, 10, 10] },
           ]],
         },
         layout: 'noBorders',
         margin: [0, 10, 0, 10],
       }]
+    }
     case 'signatureBlock': {
       const sigStack = [{ text: 'Authorized Signatory:', bold: true, margin: [0, 0, 0, 6] }]
       if (block.signatory.imageUrl) sigStack.push({ image: block.signatory.imageUrl, width: 90, height: 40, margin: [0, 0, 0, 2] })
@@ -264,7 +266,7 @@ async function buildDocDefinition(ir) {
   const normalizedIr = await normalizeIrImages(ir)
   const content = [...renderLetterhead(normalizedIr.letterhead)]
   normalizedIr.blocks.forEach((block, i) => {
-    const rendered = renderBlock(block)
+    const rendered = renderBlock(block, normalizedIr.letterhead.letterheadColor)
     // THROUGH/SUBJECT lines sit tight against each other (2pt), but the HTML
     // letterhead's `space-y-4` gives every such group a real gap (~10pt)
     // before the next block (e.g. the "Dear ..." greeting) — only the last
