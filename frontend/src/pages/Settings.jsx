@@ -268,6 +268,14 @@ export default function Settings() {
     onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to force logout'),
   })
 
+  if (!isAdmin()) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
+
   return (
     <Layout>
       <div className="p-8">

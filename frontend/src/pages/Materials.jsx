@@ -12,7 +12,7 @@ import { useElementHeight } from '../hooks/useElementHeight'
 const emptyForm = { rating_size: '', material_type: '', unit: '', description: '', min_stock: '', max_stock: '' }
 
 export default function Materials() {
-  const { canWrite } = usePermissions()
+  const { canWrite, canSeeNav } = usePermissions()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState(null)
@@ -99,6 +99,14 @@ export default function Materials() {
   })
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'rating_size')
   const [toolbarRef, toolbarHeight] = useElementHeight()
+
+  if (!canSeeNav('/materials')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>

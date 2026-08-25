@@ -81,7 +81,7 @@ const calculateSalaries = (data, employee) => {
 }
 
 export default function Attendance() {
-  const { canWrite } = usePermissions()
+  const { canWrite, canSeeNav } = usePermissions()
   const { hasRole } = useAuth()
   const hideSalary = hasRole('Project Coordinator') || hasRole('Project Manager')
   const queryClient = useQueryClient()
@@ -336,6 +336,14 @@ export default function Attendance() {
   const summaryTotalSalary = filtered.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
   const summaryHeadcount = new Set(filtered.map(a => a.employee_id)).size
   const summaryDaysPresent = parseFloat((summaryRegularHours / 8).toFixed(1))
+
+  if (!canSeeNav('/attendance')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>

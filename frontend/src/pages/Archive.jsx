@@ -288,6 +288,14 @@ export default function Archive() {
 
   const current = tabConfig[activeTab]
 
+  if (!isAdmin()) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
+
   return (
     <Layout>
       <div className="p-8">

@@ -7,8 +7,10 @@ import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { usePermissions } from '../hooks/usePermissions'
 
 export default function Inventory() {
+  const { canSeeNav } = usePermissions()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -155,6 +157,14 @@ export default function Inventory() {
   const totalItems = filtered.reduce((sum, i) => sum + i.balance, 0)
   const totalValue = filtered.reduce((sum, i) => sum + i.total_value, 0)
   const lowStockItems = filtered.filter(i => i.balance < i.min_stock).length
+
+  if (!canSeeNav('/inventory')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>

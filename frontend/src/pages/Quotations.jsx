@@ -160,7 +160,7 @@ function ApprovalHistoryPanel({ history = [] }) {
 export default function Quotations() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { canWrite } = usePermissions()
+  const { canWrite, canSeeNav } = usePermissions()
   const { isAdmin, hasRole, user } = useAuth()
   // Admin and Project Manager finalize directly; everyone else with quotations
   // access (currently Project Coordinator and Engineer) has to route through a PM.
@@ -708,6 +708,14 @@ export default function Quotations() {
 
     if (s === 'Preview') return (
       <QuotePreview quote={{ ...quoteData, total_contract_cost: calcTotal() }} />
+    )
+  }
+
+  if (!canSeeNav('/quotations')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
     )
   }
 

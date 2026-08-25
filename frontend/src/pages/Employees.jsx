@@ -31,7 +31,7 @@ const emptyForm = {
 }
 
 export default function Employees() {
-  const { canWrite } = usePermissions()
+  const { canWrite, canSeeNav } = usePermissions()
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
@@ -226,6 +226,14 @@ export default function Employees() {
   })
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'first_name')
   const [toolbarRef, toolbarHeight] = useElementHeight()
+
+  if (!canSeeNav('/employees')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>

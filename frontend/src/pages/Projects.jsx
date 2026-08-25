@@ -520,7 +520,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
 
 // --- Main Projects Page ---
 export default function Projects() {
-  const { canWrite } = usePermissions()
+  const { canWrite, canSeeNav } = usePermissions()
   const { isAdmin, hasRole, user } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -647,6 +647,14 @@ export default function Projects() {
       default:          return b.id - a.id
     }
   })
+
+  if (!canSeeNav('/projects')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>

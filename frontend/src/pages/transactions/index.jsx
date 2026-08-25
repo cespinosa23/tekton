@@ -6,6 +6,7 @@ import ExpendituresTab from './ExpendituresTab'
 import { Banknote, Package, Receipt } from 'lucide-react'
 import { useElementHeight } from '../../hooks/useElementHeight'
 import { scrollContentToTop } from '../../utils/scroll'
+import { usePermissions } from '../../hooks/usePermissions'
 
 const TABS = [
   { key: 'payments', label: 'Payments', icon: Banknote, description: 'Customer payments received' },
@@ -16,6 +17,15 @@ const TABS = [
 export default function Transactions() {
   const [activeTab, setActiveTab] = useState('payments')
   const [toolbarRef, toolbarHeight] = useElementHeight()
+  const { canSeeNav } = usePermissions()
+
+  if (!canSeeNav('/transactions')) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>
