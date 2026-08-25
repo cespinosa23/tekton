@@ -1,10 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, ForeignKey
 from app.db.database import Base
 
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Set once, at creation, by the Quotation -> Project handoff — lets
+    # Quotations know a project already exists for a given quote.
+    source_quotation_id = Column(Integer, ForeignKey("quotations.id"), nullable=True)
     owner_company_name = Column(String(255), nullable=False)
     address = Column(String(255), nullable=True)
     project_name = Column(String(255), nullable=False)

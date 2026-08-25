@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import date
 
 class ProjectCreate(BaseModel):
+    source_quotation_id: Optional[int] = None
     owner_company_name: str
     address: Optional[str] = None
     project_name: str

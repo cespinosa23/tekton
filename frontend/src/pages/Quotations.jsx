@@ -11,6 +11,7 @@ import {
 import { getCompanies, getSowTypes, getQuotationTemplateItems, getSuppliers, getSettings, getUsersByRole } from '../api/settings'
 import { getMaterials, getMaterialTypes } from '../api/materials'
 import { getInventoryRecords } from '../api/inventory'
+import { getProjects } from '../api/projects'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
@@ -27,7 +28,7 @@ import { buildProjectPrefillFromQuotation } from '../lib/projectFromQuotation'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
-  Clock, ChevronDown, ChevronUp,
+  Clock, ChevronDown, ChevronUp, Link2,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -183,6 +184,13 @@ export default function Quotations() {
 
   const { data: quotations = [], isLoading } = useQuery({ queryKey: ['quotations'], queryFn: getQuotations })
   const { data: projectManagers = [] } = useQuery({ queryKey: ['usersByRole', 'Project Manager'], queryFn: () => getUsersByRole('Project Manager') })
+  const { data: allProjects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
+  // Quote id -> the Project already created from it, if any — used to disable
+  // "Create Project" and show which project a quote was handed off to.
+  const projectByQuoteId = allProjects.reduce((map, p) => {
+    if (p.source_quotation_id) map[p.source_quotation_id] = p
+    return map
+  }, {})
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
   const { data: materials = [] } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
@@ -849,10 +857,18 @@ export default function Quotations() {
                     <Eye size={15} />
                   </button>
                   {q.status === 'Finalized' && canWrite('projects') && (
-                    <button onClick={() => handleCreateProject(q)}
-                      className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
-                      <Briefcase size={15} />
-                    </button>
+                    projectByQuoteId[q.id] ? (
+                      <button onClick={() => navigate(`/projects/${projectByQuoteId[q.id].id}`)}
+                        className="p-1.5 rounded hover:bg-gray-100 text-emerald-500"
+                        title={`Already handed off to project "${projectByQuoteId[q.id].project_name}" — click to view`}>
+                        <Link2 size={15} />
+                      </button>
+                    ) : (
+                      <button onClick={() => handleCreateProject(q)}
+                        className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
+                        <Briefcase size={15} />
+                      </button>
+                    )
                   )}
                   {canWrite('quotations') && isOwner(q) && (
                     <button onClick={() => setArchiveConfirm(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500" title="Archive">

@@ -51,6 +51,7 @@ const getScopeStatus = (project, key) => {
 const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
 
 const emptyForm = {
+  source_quotation_id: null,
   owner_company_name: '', address: '', project_name: '',
   quotation_date: '', status: 'Active',
   scope_wiring_permit: false, scope_electrical_plan: false,
@@ -257,6 +258,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
   useEffect(() => {
     if (project) {
       setFormData({
+        source_quotation_id: project.source_quotation_id || null,
         owner_company_name: project.owner_company_name || '',
         address: project.address || '',
         project_name: project.project_name || '',
@@ -510,7 +512,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
           <button onClick={() => onSave(formData)}
             disabled={!formData.owner_company_name || !formData.address || !formData.project_name || !formData.referred_by || !scopeCostValid}
             className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
-            {project ? 'Update' : 'Create'} Project
+            {project?.id ? 'Update' : 'Create'} Project
           </button>
         </div>
       </div>

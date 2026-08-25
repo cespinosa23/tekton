@@ -67,6 +67,7 @@ export function buildProjectPrefillFromQuotation(quote) {
   })
 
   return {
+    source_quotation_id: quote.id,
     owner_company_name: quote.addressee_name || '',
     address: quote.addressee_address || '',
     project_name: quote.subject || '',
