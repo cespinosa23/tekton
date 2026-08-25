@@ -4,6 +4,14 @@ import { calcBomTotal } from '../../components/quotation/BOMEditor'
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
 
+// e.g. "2P, 275V — AC Surge Protection Device" — rating/size on its own reads
+// as a bare spec, so the material's fuller description (snapshotted onto the
+// BOM row at selection time) is appended when present.
+function bomDescription(item) {
+  const name = item.material_name || item.material || ''
+  return item.material_description ? `${name} — ${item.material_description}` : name
+}
+
 // Turns a Quotation record into the shared document IR (see ir.js for the
 // shape) — the single source of truth both toDocx() and toPdf() render from,
 // so the two output formats can never drift apart the way hand-written
@@ -106,7 +114,7 @@ export function buildQuotationIR(quote) {
           heading: (t.sow_type_name || '').toUpperCase(),
           table: {
             columns: [{ header: 'QUANTITY', width: 22 }, { header: 'UNIT', width: 22 }, { header: 'DESCRIPTION', width: 56 }],
-            rows: t.bom_items.map(item => [String(item.quantity ?? ''), item.unit || '', item.material_name || item.material || '']),
+            rows: t.bom_items.map(item => [String(item.quantity ?? ''), item.unit || '', bomDescription(item)]),
           },
         })),
       },

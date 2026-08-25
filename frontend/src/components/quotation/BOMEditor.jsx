@@ -8,6 +8,7 @@ export const emptyBomRow = () => ({
   material_type: '',
   material_id: null,
   material_name: '',
+  material_description: '',
   unit: '',
   quantity: 1,
   unit_price: 0,
@@ -58,7 +59,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
     onChange(items.map((item, i) => i !== index ? item : calcRow({
       ...item,
       is_custom: checked,
-      material_type: '', material_id: null, material_name: '',
+      material_type: '', material_id: null, material_name: '', material_description: '',
       unit: '', unit_price: 0, source: '', price_entry_date: null,
     })))
   }
@@ -67,7 +68,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
     onChange(items.map((item, i) => i !== index ? item : calcRow({
       ...item,
       material_type: typeName,
-      material_id: null, material_name: '', unit: '', unit_price: 0, source: '', price_entry_date: null,
+      material_id: null, material_name: '', material_description: '', unit: '', unit_price: 0, source: '', price_entry_date: null,
     })))
   }
 
@@ -80,6 +81,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       ...items[index],
       material_id: materialId,
       material_name: mat?.rating_size || '',
+      material_description: mat?.description || '',
       material_type: items[index].material_type || mat?.material_type || '',
       unit: mat?.unit || '',
       unit_price: inv ? Number(inv.latest_unit_cost) || 0 : 0,
