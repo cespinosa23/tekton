@@ -254,8 +254,10 @@ export default function Quotations() {
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
   const isPreviewStep = steps[step] === 'Preview'
   // Admin can edit anything, any status, no restriction — everyone else must
-  // explicitly re-open a Finalized quote (reverting it to Draft) before editing.
-  const isLocked = editingQuote?.status === 'Finalized' && !isAdmin()
+  // Finalized is a one-way door for everyone, Admin included — no exceptions.
+  // The only way to change a Finalized quote's content is to Clone it into a
+  // new Draft and route that through approval.
+  const isLocked = editingQuote?.status === 'Finalized'
   // Downloads are only for the finished document — everyone, regardless of
   // role, has to wait until the quote is actually Finalized.
   const canDownloadQuote = quoteData.status === 'Finalized'
@@ -831,7 +833,7 @@ export default function Quotations() {
                     </>
                   )}
                   {canWrite('quotations') && isOwner(q) && (
-                    q.status === 'Finalized' && !isAdmin() ? (
+                    q.status === 'Finalized' ? (
                       <span className="p-1.5 text-gray-300" title="Finalized — no longer editable. Clone it to make changes.">
                         <Lock size={15} />
                       </span>
@@ -984,8 +986,8 @@ export default function Quotations() {
         </div>
 
         {/* Finalized lock banner — should be unreachable in practice, since nothing
-            still opens the builder with a Finalized quote for a non-admin, but
-            kept as a defensive last line in case that ever changes. */}
+            still opens the builder with a Finalized quote for anyone, Admin
+            included, but kept as a defensive last line in case that ever changes. */}
         {isLocked && (
           <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800">
             <Lock size={15} />

@@ -93,6 +93,11 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
         raise HTTPException(status_code=404, detail="Quotation not found")
     if not _can_edit(item, current_user):
         raise HTTPException(status_code=403, detail="You can only edit quotations you created")
+    # Finalized is a one-way door — no exceptions, Admin included. The only
+    # way to change a Finalized quote's content is to clone it into a new
+    # Draft and route that through approval again.
+    if item.status == "Finalized":
+        raise HTTPException(status_code=400, detail="Finalized quotations can no longer be edited — clone it to make changes")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     db.commit()
