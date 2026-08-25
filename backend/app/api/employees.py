@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 from decimal import Decimal
@@ -7,6 +8,7 @@ from app.core.deps import get_current_user, require_role
 from app.models.employee import Employee
 from app.models.user import User
 from app.models.attendance import Attendance
+from app.models.quotation import Quotation
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -141,6 +143,18 @@ def permanent_delete_employee(
     # 2. Delete linked user account + their user_roles (cascade on User.roles)
     linked_user = db.query(User).filter(User.employee_id == employee_id).first()
     if linked_user:
+        # Quotation FKs to users.id have no ondelete — deleting a user still
+        # referenced there would otherwise fail with a raw IntegrityError.
+        blocking = db.query(Quotation).filter(or_(
+            Quotation.created_by_user_id == linked_user.id,
+            Quotation.approval_requested_to_id == linked_user.id,
+            Quotation.approval_requested_by_id == linked_user.id,
+        )).count()
+        if blocking:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot permanently delete: {blocking} quotation(s) still reference this user",
+            )
         db.delete(linked_user)
 
     db.flush()

@@ -53,6 +53,7 @@ class QuotationRead(QuotationCreate):
     approval_requested_to_id: Optional[int] = None
     approval_requested_by_id: Optional[int] = None
     approval_note: Optional[str] = None
+    approval_history: Optional[List[Any]] = None
     model_config = {"from_attributes": True}
 
 class RequestApprovalPayload(BaseModel):

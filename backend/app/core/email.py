@@ -175,3 +175,65 @@ def send_reset_email(email: str, token: str):
 </html>"""
 
     _send(to=email, subject="Reset your Tekton Ledger password", html=html, plain=plain)
+
+
+def send_approval_requested_email(to_email: str, quote_label: str, requester_label: str):
+    link = f"{settings.FRONTEND_URL}/quotations"
+
+    plain = (
+        f"{requester_label} submitted \"{quote_label}\" for your approval.\n\n"
+        f"Review it here:\n{link}\n\n"
+        f"— Tekton Ledger"
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e4e4e7;">
+        <!-- Header -->
+        <tr>
+          <td style="background:#111827;padding:28px 40px;">
+            <span style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">Tekton Ledger</span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px;">
+            <h2 style="margin:0 0 16px;font-size:22px;color:#111827;">Quotation awaiting your approval</h2>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              <strong>{requester_label}</strong> submitted <strong>{quote_label}</strong> for your approval.
+            </p>
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#111827;border-radius:6px;">
+                  <a href="{link}"
+                     style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;">
+                    Review Quotation
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
+              Or copy this link into your browser:<br>
+              <span style="color:#374151;word-break:break-all;">{link}</span>
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e4e4e7;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              This message was sent by Tekton Ledger &mdash; itadmin@tekton.energy
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    _send(to=to_email, subject=f"Quotation awaiting your approval: {quote_label}", html=html, plain=plain)

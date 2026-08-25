@@ -27,6 +27,7 @@ import { buildProjectPrefillFromQuotation } from '../lib/projectFromQuotation'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
+  Clock, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -114,6 +115,44 @@ function Field({ label, required, children }) {
         {label}{required && <span className="text-red-500 ml-1">*</span>}
       </label>
       {children}
+    </div>
+  )
+}
+
+// Every request/approve/reject round for a quotation, not just the latest —
+// shown both in the builder and in the standalone Preview (the only view a
+// non-owner approver reaches for a quote pending their decision).
+function ApprovalHistoryPanel({ history = [] }) {
+  const [show, setShow] = useState(false)
+  if (!history?.length) return null
+  return (
+    <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden print:hidden">
+      <button onClick={() => setShow(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700">
+        <span className="flex items-center gap-2"><Clock size={14} /> Approval History ({history.length})</span>
+        {show ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+      </button>
+      {show && (
+        <div className="divide-y divide-gray-100">
+          {history.map((h, i) => (
+            <div key={i} className="px-4 py-2.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-800">
+                  {h.action === 'requested' && <>Requested by <strong>{h.by_name}</strong> → <strong>{h.to_name}</strong></>}
+                  {h.action === 'approved' && <>Approved by <strong>{h.by_name}</strong></>}
+                  {h.action === 'rejected' && <>Rejected by <strong>{h.by_name}</strong></>}
+                </span>
+                <span className="text-xs text-gray-400 flex-shrink-0 ml-3">
+                  {h.at && format(new Date(h.at), 'MMM d, yyyy h:mm a')}
+                </span>
+              </div>
+              {h.action === 'rejected' && h.reason && (
+                <p className="text-gray-500 mt-0.5">{h.reason}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -941,6 +980,7 @@ export default function Quotations() {
           </button>
           )}
         </div>
+        <ApprovalHistoryPanel history={quoteData.approval_history} />
         <QuotePreview quote={quoteData} />
       </div>
     </Layout>
@@ -991,6 +1031,8 @@ export default function Quotations() {
             </div>
           </div>
         )}
+
+        <ApprovalHistoryPanel history={quoteData.approval_history} />
 
         <StepIndicator steps={steps} current={step} onStepClick={setStep} canJump={!!editingQuote} />
 

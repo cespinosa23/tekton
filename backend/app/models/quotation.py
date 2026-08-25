@@ -14,6 +14,9 @@ class Quotation(Base):
     approval_requested_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     approval_requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     approval_note = Column(String(1000), nullable=True)  # rejection reason
+    # Full log of every request/approve/reject round, supplementary to the
+    # single-value fields above: [{ action, by_user_id, to_user_id?, reason?, at }]
+    approval_history = Column(JSON, nullable=True)
     template_type = Column(String(50), default="Traditional")
     company_name = Column(String(255), nullable=True)
     company_short_name = Column(String(100), nullable=True)

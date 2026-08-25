@@ -1,14 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
+from app.core.email import send_approval_requested_email
 from app.models.quotation import Quotation
 from app.models.user import User
 from app.schemas.quotation import (
     QuotationCreate, QuotationUpdate, QuotationRead,
     RequestApprovalPayload, RejectQuotationPayload,
 )
+
+
+def _display_name(user: User) -> str:
+    emp = user.employee
+    if emp and (emp.first_name or emp.last_name):
+        return f"{emp.first_name or ''} {emp.last_name or ''}".strip()
+    return user.email
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 _write_auth = require_role(["Admin", "Project Coordinator", "Project Manager", "Engineer"])
@@ -126,7 +135,7 @@ def permanent_delete_quotation(item_id: int, db: Session = Depends(get_db), _=De
 # everyone else (currently Project Coordinator and Engineer) submits for approval. ──
 
 @router.post("/{item_id}/request-approval", response_model=QuotationRead)
-def request_approval(item_id: int, payload: RequestApprovalPayload, db: Session = Depends(get_db), current_user: User = Depends(_write_auth)):
+def request_approval(item_id: int, payload: RequestApprovalPayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(_write_auth)):
     item = db.query(Quotation).filter(Quotation.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Quotation not found")
@@ -145,8 +154,20 @@ def request_approval(item_id: int, payload: RequestApprovalPayload, db: Session 
     item.approval_requested_to_id = approver.id
     item.approval_requested_by_id = current_user.id
     item.approval_note = None
+    item.approval_history = (item.approval_history or []) + [{
+        "action": "requested",
+        "by_user_id": current_user.id,
+        "by_name": _display_name(current_user),
+        "to_user_id": approver.id,
+        "to_name": _display_name(approver),
+        "at": datetime.utcnow().isoformat(),
+    }]
     db.commit()
     db.refresh(item)
+
+    quote_label = item.quote_number or item.subject or f"Quotation #{item.id}"
+    background_tasks.add_task(send_approval_requested_email, approver.email, quote_label, _display_name(current_user))
+
     return item
 
 
@@ -162,6 +183,12 @@ def approve_quotation(item_id: int, db: Session = Depends(get_db), current_user:
 
     item.status = "Finalized"
     item.approval_status = "approved"
+    item.approval_history = (item.approval_history or []) + [{
+        "action": "approved",
+        "by_user_id": current_user.id,
+        "by_name": _display_name(current_user),
+        "at": datetime.utcnow().isoformat(),
+    }]
     db.commit()
     db.refresh(item)
     return item
@@ -182,6 +209,13 @@ def reject_quotation(item_id: int, payload: RejectQuotationPayload, db: Session 
     item.status = "Draft"
     item.approval_status = "rejected"
     item.approval_note = payload.reason.strip()
+    item.approval_history = (item.approval_history or []) + [{
+        "action": "rejected",
+        "by_user_id": current_user.id,
+        "by_name": _display_name(current_user),
+        "reason": payload.reason.strip(),
+        "at": datetime.utcnow().isoformat(),
+    }]
     db.commit()
     db.refresh(item)
     return item
