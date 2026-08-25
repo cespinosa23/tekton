@@ -7,11 +7,11 @@ import DocumentFooter from '../DocumentFooter'
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 // e.g. "2P, 275V — AC Surge Protection Device" — rating/size on its own reads
-// as a bare spec, so the material's fuller description (snapshotted onto the
-// BOM row at selection time) is appended when present.
+// as a bare spec, so the material's type (same field shown under the name in
+// the material picker) is appended when present.
 const bomDescription = (row) => {
   const name = row.material_name || row.material || ''
-  return row.material_description ? `${name} — ${row.material_description}` : name
+  return row.material_type ? `${name} — ${row.material_type}` : name
 }
 
 function Section({ title, children }) {

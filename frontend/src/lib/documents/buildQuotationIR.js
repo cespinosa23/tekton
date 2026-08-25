@@ -5,11 +5,11 @@ import { calcBomTotal } from '../../components/quotation/BOMEditor'
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
 
 // e.g. "2P, 275V — AC Surge Protection Device" — rating/size on its own reads
-// as a bare spec, so the material's fuller description (snapshotted onto the
-// BOM row at selection time) is appended when present.
+// as a bare spec, so the material's type (same field shown under the name in
+// the material picker) is appended when present.
 function bomDescription(item) {
   const name = item.material_name || item.material || ''
-  return item.material_description ? `${name} — ${item.material_description}` : name
+  return item.material_type ? `${name} — ${item.material_type}` : name
 }
 
 // Turns a Quotation record into the shared document IR (see ir.js for the
