@@ -16,7 +16,7 @@ import { useElementHeight } from '../hooks/useElementHeight'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
-  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle
+  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle, Link2
 } from 'lucide-react'
 
 const SCOPES = [
@@ -257,6 +257,12 @@ export default function ProjectView() {
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] || STATUS_COLORS.Inactive}`}>
                 {project.status}
               </span>
+              {project.source_quotation_id && (
+                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium flex items-center gap-1"
+                  title="Created from a Quotation handoff">
+                  <Link2 size={11} /> From Quotation
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-gray-500">
               <div className="flex items-center gap-1"><User size={13} />{project.owner_company_name}</div>

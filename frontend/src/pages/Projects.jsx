@@ -11,7 +11,7 @@ import {
 import { getEmployees } from '../api/employees'
 import {
   Plus, Search, Eye, Pencil, Trash2, Archive,
-  MapPin, User, Calendar, X, Filter
+  MapPin, User, Calendar, X, Filter, Link2
 } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
@@ -90,9 +90,17 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
             <h3 className="font-semibold text-gray-900 text-base">{project.project_name}</h3>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ml-2 flex-shrink-0 ${STATUS_COLORS[project.status] || STATUS_COLORS.Inactive}`}>
-              {project.status}
-            </span>
+            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+              {project.source_quotation_id && (
+                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium flex items-center gap-1"
+                  title="Created from a Quotation handoff">
+                  <Link2 size={11} /> From Quotation
+                </span>
+              )}
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] || STATUS_COLORS.Inactive}`}>
+                {project.status}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1">
             <User size={13} /><span className="truncate">{project.owner_company_name}</span>

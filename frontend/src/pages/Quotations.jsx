@@ -809,6 +809,13 @@ export default function Quotations() {
                     {q.approval_status === 'rejected' && (
                       <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium" title={q.approval_note || undefined}>Rejected</span>
                     )}
+                    {projectByQuoteId[q.id] && (
+                      <button onClick={() => navigate(`/projects/${projectByQuoteId[q.id].id}`)}
+                        className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-medium hover:bg-emerald-200 flex items-center gap-1"
+                        title={`View project "${projectByQuoteId[q.id].project_name}"`}>
+                        <Link2 size={11} /> Project Created
+                      </button>
+                    )}
                     {q.quote_number && <span className="text-xs text-gray-400">#{q.quote_number}</span>}
                   </div>
                   <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-3">
@@ -856,19 +863,11 @@ export default function Quotations() {
                     className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Preview">
                     <Eye size={15} />
                   </button>
-                  {q.status === 'Finalized' && canWrite('projects') && (
-                    projectByQuoteId[q.id] ? (
-                      <button onClick={() => navigate(`/projects/${projectByQuoteId[q.id].id}`)}
-                        className="p-1.5 rounded hover:bg-gray-100 text-emerald-500"
-                        title={`Already handed off to project "${projectByQuoteId[q.id].project_name}" — click to view`}>
-                        <Link2 size={15} />
-                      </button>
-                    ) : (
-                      <button onClick={() => handleCreateProject(q)}
-                        className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
-                        <Briefcase size={15} />
-                      </button>
-                    )
+                  {q.status === 'Finalized' && canWrite('projects') && !projectByQuoteId[q.id] && (
+                    <button onClick={() => handleCreateProject(q)}
+                      className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
+                      <Briefcase size={15} />
+                    </button>
                   )}
                   {canWrite('quotations') && isOwner(q) && (
                     <button onClick={() => setArchiveConfirm(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500" title="Archive">
