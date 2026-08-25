@@ -7,8 +7,7 @@ class Quotation(Base):
     id = Column(Integer, primary_key=True, index=True)
     quote_number = Column(String(100), nullable=True)
     status = Column(String(50), default="Draft")
-    # NULL means it predates this field — grandfathered as visible to everyone
-    # rather than locked to Admin-only, so existing quotes don't disappear.
+    # NULL means no recorded owner (e.g. predates this field) — visible to Admin only.
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # 'pending' | 'approved' | 'rejected' — null when no request has ever been made
     approval_status = Column(String(20), nullable=True)

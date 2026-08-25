@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
@@ -353,7 +353,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">{project ? 'Edit Project' : 'New Project'}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{project?.id ? 'Edit Project' : 'New Project'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
         <div className="px-6 py-4 space-y-5">
@@ -523,6 +523,8 @@ export default function Projects() {
   const { canWrite } = usePermissions()
   const { isAdmin, hasRole, user } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [formOpen, setFormOpen] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
   const [deleteProject, setDeleteProject] = useState(null)
@@ -535,7 +537,38 @@ export default function Projects() {
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
-  const projectManagers = employees.filter(e => e.role === 'Project Manager' && !e.archived)
+  const projectManagers = useMemo(
+    () => employees.filter(e => e.role === 'Project Manager' && !e.archived),
+    [employees]
+  )
+
+  // Arriving from Quotations' "Create Project" action — pre-fill the New
+  // Project form (still needs a manual Save, nothing is created here).
+  // The Project Manager match is resolved here (not on the Quotations side)
+  // because only this page has Employee records with middle names, which
+  // the Project Manager <select> below needs to match exactly.
+  // consumedPrefillRef guards against re-opening the modal if this effect
+  // re-fires (e.g. from an unrelated re-render) before the state-clearing
+  // navigate() below has actually landed — without it, closing the modal
+  // right after arriving here could make it pop back open.
+  const consumedPrefillRef = useRef(null)
+  useEffect(() => {
+    const state = location.state
+    if (!state?.prefillProject || isLoadingEmployees) return
+    if (consumedPrefillRef.current === state.prefillProject) return
+    consumedPrefillRef.current = state.prefillProject
+    const matchedPM = projectManagers.find(e =>
+      e.first_name?.trim().toLowerCase() === state.prefillApproverFirstName?.trim().toLowerCase() &&
+      e.last_name?.trim().toLowerCase() === state.prefillApproverLastName?.trim().toLowerCase()
+    )
+    const project_manager = matchedPM
+      ? [matchedPM.first_name, matchedPM.middle_name, matchedPM.last_name].filter(Boolean).join(' ')
+      : ''
+    setEditingProject({ ...state.prefillProject, project_manager })
+    setFormOpen(true)
+    // Clear the router state so refreshing or navigating back doesn't re-trigger this.
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, isLoadingEmployees, projectManagers])
 
   // For PM role: only show their own projects
   const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
@@ -573,7 +606,7 @@ export default function Projects() {
     )
     const quotationDate = data.quotation_date === '' ? null : data.quotation_date
     const payload = { ...data, ...sanitized, contract_cost: contractCost, encumbrance: encumbranceVal, quotation_date: quotationDate }
-    if (editingProject) {
+    if (editingProject?.id) {
       updateMutation.mutate({ id: editingProject.id, data: payload })
     } else {
       createMutation.mutate(payload)

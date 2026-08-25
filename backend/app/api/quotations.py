@@ -11,7 +11,7 @@ from app.schemas.quotation import (
 )
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
-_write_auth = require_role(["Admin", "Project Coordinator", "Project Manager"])
+_write_auth = require_role(["Admin", "Project Coordinator", "Project Manager", "Engineer"])
 
 
 def _is_admin(user: User) -> bool:
@@ -23,21 +23,19 @@ def _has_role(user: User, role_name: str) -> bool:
 
 
 def _scope_visible(query, current_user: User):
-    """Admin sees everything. Everyone else sees only quotes they created,
-    quotes currently awaiting their approval, or quotes with no recorded
-    creator (predates this feature — grandfathered as visible to all rather
-    than silently disappearing for whoever was using them)."""
+    """Admin sees everything. Everyone else sees only quotes they created or
+    quotes currently awaiting their approval. A quote with no recorded owner
+    is visible to Admin only — never grandfathered open to everyone."""
     if _is_admin(current_user):
         return query
     return query.filter(or_(
         Quotation.created_by_user_id == current_user.id,
         Quotation.approval_requested_to_id == current_user.id,
-        Quotation.created_by_user_id.is_(None),
     ))
 
 
 def _can_edit(item: Quotation, current_user: User) -> bool:
-    return _is_admin(current_user) or item.created_by_user_id in (None, current_user.id)
+    return _is_admin(current_user) or item.created_by_user_id == current_user.id
 
 
 def _can_act_on_approval(item: Quotation, current_user: User) -> bool:
@@ -64,7 +62,7 @@ def get_quotation(item_id: int, db: Session = Depends(get_db), current_user: Use
     item = db.query(Quotation).filter(Quotation.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Quotation not found")
-    visible = _is_admin(current_user) or item.created_by_user_id in (None, current_user.id) or item.approval_requested_to_id == current_user.id
+    visible = _is_admin(current_user) or item.created_by_user_id == current_user.id or item.approval_requested_to_id == current_user.id
     if not visible:
         raise HTTPException(status_code=404, detail="Quotation not found")
     return item
@@ -125,7 +123,7 @@ def permanent_delete_quotation(item_id: int, db: Session = Depends(get_db), _=De
 
 
 # ── Approval workflow — Admin and Project Manager finalize directly;
-# everyone else (currently just Project Coordinator) submits for approval. ──
+# everyone else (currently Project Coordinator and Engineer) submits for approval. ──
 
 @router.post("/{item_id}/request-approval", response_model=QuotationRead)
 def request_approval(item_id: int, payload: RequestApprovalPayload, db: Session = Depends(get_db), current_user: User = Depends(_write_auth)):

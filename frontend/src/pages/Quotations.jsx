@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
@@ -22,9 +23,10 @@ import { buildQuotationIR } from '../lib/documents/buildQuotationIR'
 import { downloadAsDocx } from '../lib/documents/toDocx'
 import { downloadAsPdf, printPdf } from '../lib/documents/toPdf'
 import { buildDocFileName } from '../lib/documents/fileName'
+import { buildProjectPrefillFromQuotation } from '../lib/projectFromQuotation'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
-  Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle,
+  Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -118,10 +120,11 @@ function Field({ label, required, children }) {
 
 export default function Quotations() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { canWrite } = usePermissions()
   const { isAdmin, hasRole, user } = useAuth()
   // Admin and Project Manager finalize directly; everyone else with quotations
-  // access (currently just Project Coordinator) has to route through a PM.
+  // access (currently Project Coordinator and Engineer) has to route through a PM.
   const canFinalizeDirectly = isAdmin() || hasRole('Project Manager')
   const [view, setView] = useState('list')
   const [editingQuote, setEditingQuote] = useState(null)
@@ -204,7 +207,16 @@ export default function Quotations() {
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
   const isPreviewStep = steps[step] === 'Preview'
-  const isLocked = editingQuote?.status === 'Finalized'
+  // Admin can edit anything, any status, no restriction — everyone else must
+  // explicitly re-open a Finalized quote (reverting it to Draft) before editing.
+  const isLocked = editingQuote?.status === 'Finalized' && !isAdmin()
+  // Downloads are only for the finished document — everyone, regardless of
+  // role, has to wait until the quote is actually Finalized.
+  const canDownloadQuote = quoteData.status === 'Finalized'
+  // Matches the backend's _can_edit: owner or Admin only — a quote visible
+  // only because it's pending someone's approval doesn't make them the
+  // owner, and a quote with no recorded owner is Admin's alone to manage.
+  const isOwner = (q) => isAdmin() || q.created_by_user_id === user?.id
 
   const set = (field, value) => setQuoteData(prev => ({ ...prev, [field]: value }))
 
@@ -246,6 +258,21 @@ export default function Quotations() {
     setEditingQuote(null)
     setStep(0)
     setView('builder')
+  }
+
+  // Pre-fills the Projects page's "New Project" form from this (already
+  // Finalized) quotation — the user still reviews and saves it themselves,
+  // nothing is created automatically here.
+  const handleCreateProject = (quote) => {
+    const prefillProject = buildProjectPrefillFromQuotation(quote)
+    const approver = projectManagers.find(pm => pm.id === quote.approval_requested_to_id)
+    navigate('/projects', {
+      state: {
+        prefillProject,
+        prefillApproverFirstName: approver?.first_name || '',
+        prefillApproverLastName: approver?.last_name || '',
+      },
+    })
   }
 
   const handleReopenFromBuilder = async () => {
@@ -375,24 +402,17 @@ export default function Quotations() {
     requestApprovalMutation.mutate({ id: approvalTargetQuote.id, approver_user_id: Number(selectedApproverId) })
   }
 
+  // Downloads are only ever reachable once the quote is already Finalized
+  // (canDownloadQuote gates the buttons), so this just generates the file —
+  // no save/finalize side effect needed here anymore.
   const handleDownload = async (fmt) => {
     setDownloading(true)
     try {
-      const data = { ...quoteData, total_contract_cost: calcTotal() }
-      // Only roles that can finalize directly get download-also-finalizes —
-      // otherwise downloading would silently bypass the approval requirement.
-      if (canFinalizeDirectly) data.status = 'Finalized'
-      if (editingQuote) {
-        await updateMutation.mutateAsync({ id: editingQuote.id, data })
-      } else {
-        const created = await createMutation.mutateAsync(data)
-        setEditingQuote(created)
-      }
-      const ir = buildQuotationIR(data)
-      const fileName = buildDocFileName('Quotation', data.addressee_name)
+      const ir = buildQuotationIR(quoteData)
+      const fileName = buildDocFileName('Quotation', quoteData.addressee_name)
       if (fmt === 'pdf') await downloadAsPdf(ir, `${fileName}.pdf`)
       else await downloadAsDocx(ir, `${fileName}.docx`)
-      toast.success(canFinalizeDirectly ? 'Downloaded — quotation finalized' : 'Downloaded draft')
+      toast.success('Downloaded')
     } catch {
       toast.error('Download failed')
     }
@@ -673,7 +693,7 @@ export default function Quotations() {
             that can ever be an assigned approver */}
         {canReviewApprovals && (
           <div className="flex gap-1 mb-4 border-b border-gray-200">
-            {[['all', 'All Quotations'], ['pendingApproval', `Pending My Approval${pendingApprovalQuotes.length > 0 ? ` (${pendingApprovalQuotes.length})` : ''}`]].map(([val, label]) => (
+            {[['all', 'All Quotations'], ['pendingApproval', `Pending Approval${pendingApprovalQuotes.length > 0 ? ` (${pendingApprovalQuotes.length})` : ''}`]].map(([val, label]) => (
               <button key={val} onClick={() => setListTab(val)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${listTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                 {label}
@@ -757,8 +777,8 @@ export default function Quotations() {
                       </button>
                     </>
                   )}
-                  {canWrite('quotations') && (
-                    q.status === 'Finalized' ? (
+                  {canWrite('quotations') && isOwner(q) && (
+                    q.status === 'Finalized' && !isAdmin() ? (
                       <button
                         onClick={() => setReopenConfirm(q)}
                         className="p-1.5 rounded hover:bg-amber-50 text-gray-400 hover:text-amber-600"
@@ -781,7 +801,13 @@ export default function Quotations() {
                     className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Preview">
                     <Eye size={15} />
                   </button>
-                  {canWrite('quotations') && (
+                  {q.status === 'Finalized' && canWrite('projects') && (
+                    <button onClick={() => handleCreateProject(q)}
+                      className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
+                      <Briefcase size={15} />
+                    </button>
+                  )}
+                  {canWrite('quotations') && isOwner(q) && (
                     <button onClick={() => setArchiveConfirm(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500" title="Archive">
                       <Archive size={15} />
                     </button>
@@ -878,11 +904,17 @@ export default function Quotations() {
           <button onClick={() => setView('list')} className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
             <ArrowLeft size={15} /> Back
           </button>
+          {!canDownloadQuote && (
+            <span className="text-xs text-gray-400">Print and downloads available once finalized</span>
+          )}
+          {canDownloadQuote && (
           <button
             onClick={() => printPdf(buildQuotationIR(quoteData)).catch(() => toast.error('Print failed — check your popup blocker'))}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
             <Printer size={15} /> Print
           </button>
+          )}
+          {canDownloadQuote && (
           <button
             onClick={async () => {
               setDownloading(true)
@@ -894,6 +926,8 @@ export default function Quotations() {
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
             <Download size={15} /> {downloading ? 'Generating…' : 'Download Word'}
           </button>
+          )}
+          {canDownloadQuote && (
           <button
             onClick={async () => {
               setDownloading(true)
@@ -905,6 +939,7 @@ export default function Quotations() {
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
             <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
           </button>
+          )}
         </div>
         <QuotePreview quote={quoteData} />
       </div>
@@ -986,14 +1021,21 @@ export default function Quotations() {
 
             {isPreviewStep ? (
               <>
-                <button onClick={() => handleDownload('docx')} disabled={downloading || isLocked}
+                {!canDownloadQuote && (
+                  <span className="text-xs text-gray-400 self-center">Downloads available once finalized</span>
+                )}
+                {canDownloadQuote && (
+                <button onClick={() => handleDownload('docx')} disabled={downloading}
                   className="flex items-center gap-2 px-4 py-2 text-sm border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:opacity-50">
                   <Download size={15} /> {downloading ? 'Generating…' : 'Download Word'}
                 </button>
-                <button onClick={() => handleDownload('pdf')} disabled={downloading || isLocked}
+                )}
+                {canDownloadQuote && (
+                <button onClick={() => handleDownload('pdf')} disabled={downloading}
                   className="flex items-center gap-2 px-4 py-2 text-sm border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:opacity-50">
                   <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
                 </button>
+                )}
                 {!isLocked && (
                   canFinalizeDirectly ? (
                     <button onClick={handleFinalize} disabled={updateMutation.isPending || createMutation.isPending}

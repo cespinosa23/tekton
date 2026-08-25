@@ -13,7 +13,7 @@ export const WRITE_ROLES = {
   suppliers:    [],                         // Admin only
   settings:     [],                         // Admin only
   archive:      [],                         // Admin only (restore + permanent delete)
-  quotations:   ['Project Coordinator', 'Project Manager'],
+  quotations:   ['Project Coordinator', 'Project Manager', 'Engineer'],
   billing:      [],                         // Admin only
 }
 
@@ -21,7 +21,7 @@ export const WRITE_ROLES = {
 // Paths not listed here are visible to all authenticated users.
 export const NAV_ROLES = {
   '/settings':      [],                     // Admin only
-  '/quotations':    ['Project Coordinator', 'Project Manager'],
+  '/quotations':    ['Project Coordinator', 'Project Manager', 'Engineer'],
   '/archive':       [],                     // Admin only
   '/materials':     [],                     // Admin only
   '/inventory':     ['Project Coordinator', 'Project Manager'],
