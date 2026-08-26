@@ -390,6 +390,18 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
 
               {formData.transaction_type && (
                 <>
+                  {/* Office Expense checkbox — standalone, above the grid, so the Date/Project
+                      row below stays two evenly-matched label+field cells instead of Date
+                      sitting beside a taller checkbox-plus-field stack. */}
+                  {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && (
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="mat_office" checked={formData.is_office_expense}
+                        onChange={e => setFormData(p => ({ ...p, is_office_expense: e.target.checked, project_id: '', project_name: '' }))}
+                        className="w-4 h-4 rounded" />
+                      <label htmlFor="mat_office" className="text-sm text-gray-700 cursor-pointer">Office / Operational Expense</label>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-4">
                     {/* Date */}
                     <div>
@@ -399,22 +411,12 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                     </div>
 
                     {/* Project — Canvass isn't tied to a project or real spend, same as Adjustment */}
-                    {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && (
+                    {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && !formData.is_office_expense && (
                       <div className="col-span-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <input type="checkbox" id="mat_office" checked={formData.is_office_expense}
-                            onChange={e => setFormData(p => ({ ...p, is_office_expense: e.target.checked, project_id: '', project_name: '' }))}
-                            className="w-4 h-4 rounded" />
-                          <label htmlFor="mat_office" className="text-sm text-gray-700 cursor-pointer">Office / Operational Expense</label>
-                        </div>
-                        {!formData.is_office_expense && (
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
-                            <ProjectCombobox value={formData.project_id}
-                              onValueChange={id => { const p = projects.find(x => x.id === id); setFormData(prev => ({ ...prev, project_id: id, project_name: p?.project_name || '' })) }}
-                              projects={projects} />
-                          </div>
-                        )}
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
+                        <ProjectCombobox value={formData.project_id}
+                          onValueChange={id => { const p = projects.find(x => x.id === id); setFormData(prev => ({ ...prev, project_id: id, project_name: p?.project_name || '' })) }}
+                          projects={projects} />
                       </div>
                     )}
 
