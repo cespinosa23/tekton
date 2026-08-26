@@ -334,7 +334,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       {/* Form Dialog */}
       {formOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto m-4">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="text-lg font-semibold text-gray-900">{editingTx ? 'Edit Materials Transaction' : 'New Materials Transaction'}</h2>
               <button onClick={closeForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -390,42 +390,44 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
 
               {formData.transaction_type && (
                 <>
-                  {/* Date */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
-                    <input type="date" value={formData.transaction_date} onChange={set('transaction_date')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                  </div>
-
-                  {/* Project — Canvass isn't tied to a project or real spend, same as Adjustment */}
-                  {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && (
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Date */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <input type="checkbox" id="mat_office" checked={formData.is_office_expense}
-                          onChange={e => setFormData(p => ({ ...p, is_office_expense: e.target.checked, project_id: '', project_name: '' }))}
-                          className="w-4 h-4 rounded" />
-                        <label htmlFor="mat_office" className="text-sm text-gray-700 cursor-pointer">Office / Operational Expense</label>
-                      </div>
-                      {!formData.is_office_expense && (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
-                          <ProjectCombobox value={formData.project_id}
-                            onValueChange={id => { const p = projects.find(x => x.id === id); setFormData(prev => ({ ...prev, project_id: id, project_name: p?.project_name || '' })) }}
-                            projects={projects} />
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
+                      <input type="date" value={formData.transaction_date} onChange={set('transaction_date')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+
+                    {/* Project — Canvass isn't tied to a project or real spend, same as Adjustment */}
+                    {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && (
+                      <div className="col-span-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input type="checkbox" id="mat_office" checked={formData.is_office_expense}
+                            onChange={e => setFormData(p => ({ ...p, is_office_expense: e.target.checked, project_id: '', project_name: '' }))}
+                            className="w-4 h-4 rounded" />
+                          <label htmlFor="mat_office" className="text-sm text-gray-700 cursor-pointer">Office / Operational Expense</label>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {!formData.is_office_expense && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
+                            <ProjectCombobox value={formData.project_id}
+                              onValueChange={id => { const p = projects.find(x => x.id === id); setFormData(prev => ({ ...prev, project_id: id, project_name: p?.project_name || '' })) }}
+                              projects={projects} />
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {/* Supplier (Procurement only) */}
-                  {needsSupplier && formData.transaction_type !== 'Adjustment' && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Supplier</label>
-                      <SupplierCombobox value={formData.supplier}
-                        onValueChange={val => setFormData(p => ({ ...p, supplier: val }))}
-                        suppliers={suppliers} />
-                    </div>
-                  )}
+                    {/* Supplier (Procurement only) */}
+                    {needsSupplier && formData.transaction_type !== 'Adjustment' && (
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Supplier</label>
+                        <SupplierCombobox value={formData.supplier}
+                          onValueChange={val => setFormData(p => ({ ...p, supplier: val }))}
+                          suppliers={suppliers} />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Materials Lines */}
                   <div>
@@ -436,148 +438,141 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                         <Plus size={13} /> Add Line
                       </button>
                     </div>
-                    <div className="space-y-3">
-                      {formData.materials.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
-                          No materials added. Click "Add Line" to add materials.
-                        </p>
-                      ) : formData.materials.map((line, idx) => (
-                        <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                          {/* Row 1: Type, Material, Delete */}
-                          <div className="grid grid-cols-12 gap-3 mb-3">
-                            <div className="col-span-4">
-                              <label className="block text-xs text-gray-500 mb-1">Material Type</label>
-                              <select value={line.material_type}
-                                onChange={e => updateMaterialLine(idx, 'material_type', e.target.value)}
-                                className="w-full h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
-                                <option value="">All Types</option>
-                                {materialTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                              </select>
-                            </div>
-                            <div className="col-span-7">
-                              <label className="block text-xs text-gray-500 mb-1">Material</label>
-                              <MaterialCombobox value={line.material_id}
-                                onValueChange={val => updateMaterialLine(idx, 'material_id', val)}
-                                materials={getMaterialsByType(line.material_type)} />
-                            </div>
-                            <div className="col-span-1 flex items-end">
-                              <button type="button" onClick={() => removeMaterialLine(idx)}
-                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Row 2: Brand */}
-                          <div className="mb-3">
-                            <label className="block text-xs text-gray-500 mb-1">Brand</label>
-                            {getBrandsForMaterial(line.material_id).length > 0 ? (
-                              <select value={line.brand}
-                                onChange={e => updateMaterialLine(idx, 'brand', e.target.value)}
-                                className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
-                                <option value="">Select brand...</option>
-                                {getBrandsForMaterial(line.material_id).map(b => (
-                                  <option key={b.id} value={b.brand_name}>{b.brand_name}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <div className="h-9 flex items-center px-3 bg-white border border-gray-200 rounded-md text-sm text-gray-400">
-                                {line.material_id ? 'No brands set for this type' : 'Select a material first'}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Stock Warning (Outgoing only) */}
-                          {line.material_id && formData.transaction_type === 'Outgoing Materials' && (() => {
-                            const stock = getCurrentStock(line.material_id, line.brand)
-                            const qty = line.quantity || 0
-                            if (qty > stock) {
+                    {formData.materials.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                        No materials added. Click "Add Line" to add materials.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm" style={{ minWidth: isCanvass ? '640px' : '980px' }}>
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-36">Material Type</th>
+                              <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide min-w-[200px]">Material</th>
+                              <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-40">Brand</th>
+                              {isCanvass ? (
+                                <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Price</th>
+                              ) : (
+                                <>
+                                  <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">Qty</th>
+                                  <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-16">Unit</th>
+                                  <th className="text-left px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Unit Cost</th>
+                                  <th className="text-right px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Total Cost</th>
+                                </>
+                              )}
+                              <th className="w-16"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {formData.materials.map((line, idx) => {
+                              const stock = getCurrentStock(line.material_id, line.brand)
+                              const overStock = !!line.material_id && formData.transaction_type === 'Outgoing Materials' && (line.quantity || 0) > stock
+                              const brands = getBrandsForMaterial(line.material_id)
                               return (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md mb-3">
-                                  <span className="text-amber-600 text-xs">⚠️</span>
-                                  <span className="text-xs text-amber-700">
-                                    Requested qty <strong>{qty}</strong> exceeds current stock of <strong>{stock} {line.unit}</strong>
-                                    {line.brand && ` for ${line.brand}`}. You can still proceed but inventory will go negative.
-                                  </span>
-                                </div>
+                                <tr key={idx} className="align-top">
+                                  <td className="px-2 py-2">
+                                    <select value={line.material_type}
+                                      onChange={e => updateMaterialLine(idx, 'material_type', e.target.value)}
+                                      className="w-full h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+                                      <option value="">All Types</option>
+                                      {materialTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <MaterialCombobox value={line.material_id}
+                                      onValueChange={val => updateMaterialLine(idx, 'material_id', val)}
+                                      materials={getMaterialsByType(line.material_type)} />
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    {brands.length > 0 ? (
+                                      <select value={line.brand}
+                                        onChange={e => updateMaterialLine(idx, 'brand', e.target.value)}
+                                        className="w-full h-9 px-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400">
+                                        <option value="">Select brand...</option>
+                                        {brands.map(b => <option key={b.id} value={b.brand_name}>{b.brand_name}</option>)}
+                                      </select>
+                                    ) : (
+                                      <div className="h-9 flex items-center px-2 text-xs text-gray-400 truncate"
+                                        title={line.material_id ? 'No brands set for this type' : 'Select a material first'}>
+                                        {line.material_id ? 'No brands set' : 'Select material first'}
+                                      </div>
+                                    )}
+                                  </td>
+                                  {isCanvass ? (
+                                    <td className="px-2 py-2">
+                                      <input type="text" value={line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US')}
+                                        placeholder="0.00"
+                                        onChange={e => {
+                                          const raw = e.target.value.replace(/,/g, '');
+                                          if (!/^\d*\.?\d*$/.test(raw)) return;
+                                          if (/^0\d/.test(raw)) return;
+                                          updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
+                                        }}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                                    </td>
+                                  ) : (
+                                    <>
+                                      <td className="px-2 py-2">
+                                        <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
+                                          placeholder="0"
+                                          onChange={e => {
+                                            const raw = e.target.value.replace(/,/g, '');
+                                            if (!/^\d*\.?\d*$/.test(raw)) return;
+                                            if (/^0\d/.test(raw)) return;
+                                            updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
+                                          }}
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                                      </td>
+                                      <td className="px-2 py-2">
+                                        <div className="h-8 flex items-center px-1 text-sm text-gray-600 truncate">{line.unit || '-'}</div>
+                                      </td>
+                                      <td className="px-2 py-2">
+                                        <input type="text" value={line.use_fifo ? Number(line.unit_cost).toLocaleString('en-US') : (line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US'))}
+                                          disabled={line.use_fifo}
+                                          placeholder="0.00"
+                                          onChange={e => {
+                                            const raw = e.target.value.replace(/,/g, '');
+                                            if (!/^\d*\.?\d*$/.test(raw)) return;
+                                            if (/^0\d/.test(raw)) return;
+                                            updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
+                                          }}
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                                        {showFIFO && (
+                                          <label className="flex items-center gap-1 mt-1 cursor-pointer" title={`Use inventory price (FIFO)${line.brand ? ` — latest ${line.brand} cost` : ''}`}>
+                                            <input type="checkbox" checked={line.use_fifo || false}
+                                              onChange={e => updateMaterialLine(idx, 'use_fifo', e.target.checked)}
+                                              className="w-3 h-3 rounded" />
+                                            <span className="text-[10px] text-gray-500">FIFO</span>
+                                          </label>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-2 text-right">
+                                        <div className="h-8 flex items-center justify-end px-2 bg-amber-50 border border-amber-200 rounded text-sm font-semibold text-amber-900">
+                                          {fmt(line.total_cost)}
+                                        </div>
+                                      </td>
+                                    </>
+                                  )}
+                                  <td className="px-2 py-2">
+                                    <div className="flex items-center justify-end gap-1 h-9">
+                                      {overStock && (
+                                        <span className="text-amber-500 cursor-help" title={`Requested qty ${line.quantity || 0} exceeds current stock of ${stock} ${line.unit}${line.brand ? ` for ${line.brand}` : ''}. You can still proceed but inventory will go negative.`}>
+                                          ⚠️
+                                        </span>
+                                      )}
+                                      <button type="button" onClick={() => removeMaterialLine(idx)}
+                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
                               )
-                            }
-                            return null
-                          })()}
-
-                          {/* Row 3: Canvass only needs a Price — no quantity/unit/total since nothing is being bought */}
-                          {isCanvass ? (
-                            <div className="grid grid-cols-12 gap-3">
-                              <div className="col-span-5">
-                                <label className="block text-xs text-gray-500 mb-1">Price</label>
-                                <input type="text" value={line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US')}
-                                  placeholder="0.00"
-                                  onChange={e => {
-                                    const raw = e.target.value.replace(/,/g, '');
-                                    if (!/^\d*\.?\d*$/.test(raw)) return;
-                                    if (/^0\d/.test(raw)) return;
-                                    updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
-                                  }}
-                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-12 gap-3">
-                              <div className="col-span-2">
-                                <label className="block text-xs text-gray-500 mb-1">Qty</label>
-                                <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
-                                  placeholder="0"
-                                  onChange={e => {
-                                    const raw = e.target.value.replace(/,/g, '');
-                                    if (!/^\d*\.?\d*$/.test(raw)) return;
-                                    if (/^0\d/.test(raw)) return;
-                                    updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
-                                  }}
-                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                              </div>
-                              <div className="col-span-2">
-                                <label className="block text-xs text-gray-500 mb-1">Unit</label>
-                                <div className="h-8 flex items-center px-2 bg-white border border-gray-200 rounded text-sm text-gray-600">{line.unit || '-'}</div>
-                              </div>
-                              <div className="col-span-3">
-                                <label className="block text-xs text-gray-500 mb-1">
-                                  Unit Cost
-                                  {line.use_fifo && <span className="ml-1 text-blue-500 font-normal">(FIFO)</span>}
-                                </label>
-                                <input type="text" value={line.use_fifo ? Number(line.unit_cost).toLocaleString('en-US') : (line.unit_cost === 0 ? '' : Number(line.unit_cost).toLocaleString('en-US'))}
-                                  disabled={line.use_fifo}
-                                  placeholder="0.00"
-                                  onChange={e => {
-                                    const raw = e.target.value.replace(/,/g, '');
-                                    if (!/^\d*\.?\d*$/.test(raw)) return;
-                                    if (/^0\d/.test(raw)) return;
-                                    updateMaterialLine(idx, 'unit_cost', raw === '' ? 0 : parseFloat(raw) || 0);
-                                  }}
-                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed" />
-                              </div>
-                              <div className="col-span-5">
-                                <label className="block text-xs text-gray-500 mb-1">Total Cost</label>
-                                <div className="h-8 flex items-center justify-end px-2 bg-amber-50 border border-amber-200 rounded text-sm font-semibold text-amber-900">
-                                  {fmt(line.total_cost)}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* FIFO Checkbox */}
-                          {showFIFO && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <input type="checkbox" id={`fifo_${idx}`} checked={line.use_fifo || false}
-                                onChange={e => updateMaterialLine(idx, 'use_fifo', e.target.checked)}
-                                className="w-3.5 h-3.5 rounded" />
-                              <label htmlFor={`fifo_${idx}`} className="text-xs text-gray-600 cursor-pointer">
-                                Use inventory price (FIFO){line.brand ? ` — latest ${line.brand} cost` : ''}
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {/* Summary Warning */}
                     {formData.transaction_type === 'Outgoing Materials' && formData.materials.some(line => {
