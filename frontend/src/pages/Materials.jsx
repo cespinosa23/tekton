@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
-import { getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial } from '../api/materials'
-import { Plus, Search, Pencil, Trash2, Archive, X } from 'lucide-react'
+import {
+  getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial,
+  downloadMaterialsTemplate, importMaterials,
+} from '../api/materials'
+import { Plus, Search, Pencil, Trash2, Archive, X, Download, Upload } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
@@ -20,6 +23,10 @@ export default function Materials() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [formData, setFormData] = useState(emptyForm)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importResult, setImportResult] = useState(null)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
 
   const { data: materials = [], isLoading } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
@@ -56,6 +63,31 @@ export default function Materials() {
   })
 
   const closeForm = () => { setFormOpen(false); setEditingMaterial(null); setFormData(emptyForm) }
+
+  const importMutation = useMutation({
+    mutationFn: importMaterials,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      setImportResult(result)
+      setImportFile(null)
+      if (result.created > 0) toast.success(`${result.created} material${result.created === 1 ? '' : 's'} imported`)
+      else toast.error('No materials were imported — see details below')
+    },
+    onError: () => toast.error('Import failed — check the file and try again'),
+  })
+
+  const closeImport = () => { setImportOpen(false); setImportFile(null); setImportResult(null) }
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true)
+    try {
+      await downloadMaterialsTemplate()
+    } catch {
+      toast.error('Failed to download template')
+    } finally {
+      setDownloadingTemplate(false)
+    }
+  }
 
   const getOptions = (category) => settings.filter(s => s.category === category && s.is_active)
 
@@ -119,12 +151,27 @@ export default function Materials() {
               <p className="text-sm text-gray-500 mt-1">Manage materials reference for the system</p>
             </div>
             {canWrite('materials') && (
-              <button
-                onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
-                className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-              >
-                <Plus size={16} /> Add Material
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadTemplate}
+                  disabled={downloadingTemplate}
+                  className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <Download size={16} /> {downloadingTemplate ? 'Downloading…' : 'Template'}
+                </button>
+                <button
+                  onClick={() => { setImportResult(null); setImportFile(null); setImportOpen(true) }}
+                  className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  <Upload size={16} /> Import
+                </button>
+                <button
+                  onClick={() => { setEditingMaterial(null); setFormData(emptyForm); setFormOpen(true) }}
+                  className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+                >
+                  <Plus size={16} /> Add Material
+                </button>
+              </div>
             )}
           </div>
 
@@ -282,6 +329,61 @@ export default function Materials() {
                 <button onClick={() => archiveMutation.mutate(deleteMaterial.id)}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600">
                   <Archive size={15} /> Archive
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Import Modal */}
+        {importOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg m-4">
+              <div className="flex items-center justify-between px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">Import Materials</h2>
+                <button onClick={closeImport} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <p className="text-sm text-gray-500">
+                  Upload a filled-in copy of the import template. Rows with an unrecognized Material Type,
+                  a duplicate Material Type + Material/Specs, or a missing required field are skipped —
+                  everything else gets imported.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Excel file (.xlsx)</label>
+                  <input type="file" accept=".xlsx"
+                    onChange={e => { setImportFile(e.target.files[0] || null); setImportResult(null) }}
+                    className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:font-medium file:bg-white file:hover:bg-gray-50" />
+                </div>
+
+                {importResult && (
+                  <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-900">
+                      {importResult.created} material{importResult.created === 1 ? '' : 's'} imported
+                      {importResult.skipped.length > 0 && `, ${importResult.skipped.length} skipped`}
+                    </p>
+                    {importResult.skipped.length > 0 && (
+                      <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded">
+                        {importResult.skipped.map((s, i) => (
+                          <div key={i} className="px-3 py-2 text-xs">
+                            <span className="text-gray-400">Row {s.row}:</span>{' '}
+                            <span className="text-gray-700 font-medium">{s.material_type || '—'} / {s.rating_size || '—'}</span>{' '}
+                            <span className="text-amber-600">— {s.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 px-6 py-4 border-t">
+                <button onClick={closeImport} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+                  {importResult ? 'Close' : 'Cancel'}
+                </button>
+                <button onClick={() => importMutation.mutate(importFile)}
+                  disabled={!importFile || importMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
+                  <Upload size={15} /> {importMutation.isPending ? 'Importing…' : 'Upload & Import'}
                 </button>
               </div>
             </div>

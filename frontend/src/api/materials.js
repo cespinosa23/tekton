@@ -28,3 +28,24 @@ export const updateMaterial = async ({ id, data: payload }) => {
 export const archiveMaterial = async (id) => {
   await client.delete(`/materials/${id}`)
 }
+
+export const downloadMaterialsTemplate = async () => {
+  const { data } = await client.get('/materials/import-template', { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'materials_import_template.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export const importMaterials = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await client.post('/materials/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}

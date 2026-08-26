@@ -36,6 +36,7 @@ from app.api import quotation_template_items
 from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 from app.api import quotations as quotations_router
+from app.api import materials_import
 
 app = FastAPI(title="Tekton")
 
@@ -62,6 +63,7 @@ app.include_router(make_crud_router("/projects", "projects", Project, ProjectCre
 app.include_router(make_crud_router("/attendance", "attendance", Attendance, AttendanceCreate, AttendanceUpdate, AttendanceRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
 app.include_router(make_crud_router("/calendar-days", "calendar_days", CalendarDay, CalendarDayCreate, CalendarDayUpdate, CalendarDayRead, allow_archive=False, write_roles=["Admin"]))
 app.include_router(make_crud_router("/companies", "companies", Company, CompanyCreate, CompanyUpdate, CompanyRead, allow_archive=False, write_roles=["Admin"]))
+app.include_router(materials_import.router)
 app.include_router(make_crud_router("/materials", "materials", Material, MaterialCreate, MaterialUpdate, MaterialRead, write_roles=["Admin"]))
 app.include_router(make_crud_router("/inventory", "inventory", Inventory, InventoryCreate, InventoryUpdate, InventoryRead, write_roles=["Admin"]))
 app.include_router(make_crud_router("/suppliers", "suppliers", Supplier, SupplierCreate, SupplierUpdate, SupplierRead, write_roles=["Admin"]))
