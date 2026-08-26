@@ -18,18 +18,11 @@ import Quotations from './pages/Quotations'
 import Reports from './pages/Reports'
 import BillingPrint from './pages/BillingPrint'
 import Billings from './pages/Billings'
-import { isProduction } from './utils/environment'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   return user ? children : <Navigate to="/login" replace />
-}
-
-// Quotations is still being rolled out — hidden on production for now, but
-// stays fully available on staging/local so testing isn't blocked.
-function HiddenOnProduction({ children }) {
-  return isProduction() ? <Navigate to="/dashboard" replace /> : children
 }
 
 function PublicOnlyRoute({ children }) {
@@ -63,7 +56,7 @@ export default function App() {
       <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-      <Route path="/quotations" element={<ProtectedRoute><HiddenOnProduction><Quotations /></HiddenOnProduction></ProtectedRoute>} />
+      <Route path="/quotations" element={<ProtectedRoute><Quotations /></ProtectedRoute>} />
       <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
