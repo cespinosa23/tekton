@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.core.deps import require_role
 from app.models.material import Material
 from app.models.material_type import MaterialType
+from app.models.setting import Setting
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 
@@ -37,6 +38,18 @@ def download_import_template(db: Session = Depends(get_db), _=Depends(_write_aut
     for name in names:
         types_sheet.append([name])
     types_sheet.column_dimensions["A"].width = 28
+
+    units_sheet = wb.create_sheet("Valid Units")
+    units_sheet.append(["Unit"])
+    units_sheet[1][0].font = Font(bold=True)
+    units = [
+        s.value for s in db.query(Setting)
+        .filter(Setting.category == "Material Unit", Setting.is_active == True, Setting.archived == False)
+        .order_by(Setting.value).all()
+    ]
+    for unit in units:
+        units_sheet.append([unit])
+    units_sheet.column_dimensions["A"].width = 20
 
     buf = BytesIO()
     wb.save(buf)
