@@ -135,7 +135,9 @@ export function buildQuotationIR(quote) {
   // company's Payment Method, printed exactly as typed
   if (hasPaymentSection) {
     const paymentBlocks = []
-    if (paymentTermItems.length > 0) paymentBlocks.push({ label: 'Payment Terms', kind: 'bulletList', items: paymentTermItems.map(i => i.text) })
+    // Single-select — only ever one item — so this prints as plain text, no
+    // bullet marker, matching Payment Method's treatment right below it.
+    if (paymentTermItems.length > 0) paymentBlocks.push({ label: 'Payment Terms', kind: 'text', text: paymentTermItems[0].text })
     if (quote.company_payment_method) paymentBlocks.push({ label: 'Payment Method', kind: 'text', text: quote.company_payment_method })
     blocks.push({
       type: 'section',

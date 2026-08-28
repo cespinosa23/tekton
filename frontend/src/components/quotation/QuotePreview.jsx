@@ -221,9 +221,7 @@ export default function QuotePreview({ quote }) {
           {paymentTermItems.length > 0 && (
             <div className="mb-3">
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Terms</p>
-              <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-                {paymentTermItems.map((item, i) => <li key={item.item_id ?? i} className="whitespace-pre-wrap">{item.text}</li>)}
-              </ul>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{paymentTermItems[0].text}</pre>
             </div>
           )}
           {quote.company_payment_method && (
