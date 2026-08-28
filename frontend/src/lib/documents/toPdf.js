@@ -153,6 +153,15 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   return { table: { headerRows: 1, widths, body, dontBreakRows: true, keepWithHeaderRows: 1 }, layout: TABLE_LAYOUT }
 }
 
+// A bullet item's text can carry embedded newlines (e.g. a Payment Terms
+// template's "1st Payment: ... \n2nd Payment: ..." lines) — pdfmake doesn't
+// treat \n inside a plain text string as a line break, so a multi-line item
+// needs a stack of lines instead of one flat string.
+function renderBulletItem(text) {
+  const lines = String(text ?? '').split('\n')
+  return lines.length > 1 ? { stack: lines.map(line => ({ text: line })) } : { text }
+}
+
 function renderSectionContent(content, color) {
   if (content.kind === 'table') return [renderTable(content, color)]
   if (content.kind === 'tableGroup') {
@@ -164,13 +173,13 @@ function renderSectionContent(content, color) {
     return out
   }
   if (content.kind === 'richTextHtml') return htmlToPdfContent(content.html)
-  if (content.kind === 'bulletList') return [{ ul: content.items.map(text => ({ text })) }]
+  if (content.kind === 'bulletList') return [{ ul: content.items.map(renderBulletItem) }]
   if (content.kind === 'labeledBlocks') {
     const out = []
     content.blocks.forEach(b => {
       out.push({ text: b.label, bold: true, margin: [0, 6, 0, 2] })
       if (b.kind === 'bulletList') {
-        out.push({ ul: b.items.map(text => ({ text })) })
+        out.push({ ul: b.items.map(renderBulletItem) })
       } else {
         b.text.split('\n').forEach(line => out.push({ text: line || ' ' }))
       }

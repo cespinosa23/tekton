@@ -169,6 +169,15 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } })
 }
 
+// A bullet item's text can carry embedded newlines (e.g. a Payment Terms
+// template's "1st Payment: ... \n2nd Payment: ..." lines) — a single
+// TextRun doesn't render \n as a line break, so each line becomes its own
+// paragraph; only the first gets the bullet marker, the rest are indented
+// to line up under it.
+function pushBulletItem(children, text) {
+  String(text ?? '').split('\n').forEach((line, i) => children.push(ph(i === 0 ? `•  ${line}` : `     ${line}`)))
+}
+
 function renderSectionContent(content, color) {
   const children = []
   if (content.kind === 'table') {
@@ -182,12 +191,12 @@ function renderSectionContent(content, color) {
   } else if (content.kind === 'richTextHtml') {
     children.push(...htmlToDocxParagraphs(content.html))
   } else if (content.kind === 'bulletList') {
-    content.items.forEach(text => children.push(ph(`•  ${text}`)))
+    content.items.forEach(text => pushBulletItem(children, text))
   } else if (content.kind === 'labeledBlocks') {
     content.blocks.forEach(b => {
       children.push(ph(b.label, { bold: true }))
       if (b.kind === 'bulletList') {
-        b.items.forEach(text => children.push(ph(`•  ${text}`)))
+        b.items.forEach(text => pushBulletItem(children, text))
       } else {
         b.text.split('\n').forEach(line => children.push(ph(line)))
       }

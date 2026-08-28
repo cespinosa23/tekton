@@ -208,7 +208,7 @@ export default function QuotePreview({ quote }) {
         <div className="mb-6">
           <h3 className="text-sm font-bold text-gray-900 mb-2">{notesNum}. OTHER NOTES AND EXCLUSIONS</h3>
           <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-            {otherItems.map((item, i) => <li key={item.item_id ?? i}>{item.text}</li>)}
+            {otherItems.map((item, i) => <li key={item.item_id ?? i} className="whitespace-pre-wrap">{item.text}</li>)}
           </ul>
         </div>
       )}
@@ -222,7 +222,7 @@ export default function QuotePreview({ quote }) {
             <div className="mb-3">
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Terms</p>
               <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-                {paymentTermItems.map((item, i) => <li key={item.item_id ?? i}>{item.text}</li>)}
+                {paymentTermItems.map((item, i) => <li key={item.item_id ?? i} className="whitespace-pre-wrap">{item.text}</li>)}
               </ul>
             </div>
           )}
