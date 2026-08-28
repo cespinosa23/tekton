@@ -37,6 +37,7 @@ from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 from app.api import quotations as quotations_router
 from app.api import materials_import
+from app.api import canvass_import
 
 app = FastAPI(title="Tekton")
 
@@ -67,6 +68,7 @@ app.include_router(materials_import.router)
 app.include_router(make_crud_router("/materials", "materials", Material, MaterialCreate, MaterialUpdate, MaterialRead, write_roles=["Admin"]))
 app.include_router(make_crud_router("/inventory", "inventory", Inventory, InventoryCreate, InventoryUpdate, InventoryRead, write_roles=["Admin"]))
 app.include_router(make_crud_router("/suppliers", "suppliers", Supplier, SupplierCreate, SupplierUpdate, SupplierRead, write_roles=["Admin"]))
+app.include_router(canvass_import.router)
 app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
 app.include_router(quotations_router.router)

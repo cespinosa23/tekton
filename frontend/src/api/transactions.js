@@ -48,3 +48,24 @@ export const getMaterialTypes = async () => {
   const { data } = await client.get('/material-types/')
   return data
 }
+
+export const downloadCanvassTemplate = async () => {
+  const { data } = await client.get('/transactions/canvass-import-template', { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'canvass_import_template.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export const importCanvass = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await client.post('/transactions/canvass-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}

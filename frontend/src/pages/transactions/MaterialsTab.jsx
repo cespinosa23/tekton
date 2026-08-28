@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Plus, Search, Eye, Pencil, Trash2, Archive, X, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, Trash2, Archive, X, TrendingUp, TrendingDown, Download, Upload } from 'lucide-react'
 import { useSortable } from '../../hooks/useSortable'
 import { SortableHeader } from '../../components/SortableHeader'
 import { useElementHeight } from '../../hooks/useElementHeight'
@@ -12,7 +12,8 @@ import MaterialCombobox from '../../components/MaterialCombobox'
 import SupplierCombobox from '../../components/SupplierCombobox'
 import {
   getTransactions, getProjects, getMaterials, getSuppliers,
-  getInventory, getMaterialTypes, createTransaction, updateTransaction, archiveTransaction
+  getInventory, getMaterialTypes, createTransaction, updateTransaction, archiveTransaction,
+  downloadCanvassTemplate, importCanvass,
 } from '../../api/transactions'
 
 const MATERIAL_TX_TYPES = ['Outgoing Materials', 'Incoming Materials', 'Materials Procurement', 'Adjustment', 'Canvass']
@@ -40,6 +41,10 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [formData, setFormData] = useState(emptyForm)
+  const [canvassImportOpen, setCanvassImportOpen] = useState(false)
+  const [canvassImportFile, setCanvassImportFile] = useState(null)
+  const [canvassImportResult, setCanvassImportResult] = useState(null)
+  const [downloadingCanvassTemplate, setDownloadingCanvassTemplate] = useState(false)
 
   const { data: allTransactions = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
@@ -106,6 +111,32 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
   })
 
   const closeForm = () => { setFormOpen(false); setEditingTx(null); setFormData(emptyForm) }
+
+  const canvassImportMutation = useMutation({
+    mutationFn: importCanvass,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      setCanvassImportResult(result)
+      setCanvassImportFile(null)
+      if (result.created > 0) toast.success(`${result.created} canvass entr${result.created === 1 ? 'y' : 'ies'} imported`)
+      else toast.error('No canvass entries were imported — see details below')
+    },
+    onError: () => toast.error('Import failed — check the file and try again'),
+  })
+
+  const closeCanvassImport = () => { setCanvassImportOpen(false); setCanvassImportFile(null); setCanvassImportResult(null) }
+
+  const handleDownloadCanvassTemplate = async () => {
+    setDownloadingCanvassTemplate(true)
+    try {
+      await downloadCanvassTemplate()
+    } catch {
+      toast.error('Failed to download template')
+    } finally {
+      setDownloadingCanvassTemplate(false)
+    }
+  }
 
   const handleEdit = (tx) => {
     setEditingTx(tx)
@@ -270,10 +301,20 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
             {MATERIAL_TX_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        <button onClick={() => { setEditingTx(null); setFormData(emptyForm); setFormOpen(true) }}
-          className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 ml-3">
-          <Plus size={15} /> New
-        </button>
+        <div className="flex items-center gap-2 ml-3">
+          <button onClick={handleDownloadCanvassTemplate} disabled={downloadingCanvassTemplate}
+            className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
+            <Download size={15} /> {downloadingCanvassTemplate ? 'Downloading…' : 'Canvass Template'}
+          </button>
+          <button onClick={() => { setCanvassImportResult(null); setCanvassImportFile(null); setCanvassImportOpen(true) }}
+            className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">
+            <Upload size={15} /> Canvass Import
+          </button>
+          <button onClick={() => { setEditingTx(null); setFormData(emptyForm); setFormOpen(true) }}
+            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700">
+            <Plus size={15} /> New
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -680,6 +721,62 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
               <button onClick={() => archiveMutation.mutate(deleteTx.id)}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600">
                 <Archive size={15} /> Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Canvass Import Modal */}
+      {canvassImportOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg m-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-semibold text-gray-900">Import Canvass Entries</h2>
+              <button onClick={closeCanvassImport} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-500">
+                Upload a filled-in copy of the canvass import template. Each row creates its own Canvass
+                transaction (a market price check — doesn&apos;t affect stock). Rows with an unrecognized
+                Material Type, a Material that doesn&apos;t exist under that type, or a missing/invalid
+                required field are skipped — everything else gets imported.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Excel file (.xlsx)</label>
+                <input type="file" accept=".xlsx"
+                  onChange={e => { setCanvassImportFile(e.target.files[0] || null); setCanvassImportResult(null) }}
+                  className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:font-medium file:bg-white file:hover:bg-gray-50" />
+              </div>
+
+              {canvassImportResult && (
+                <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-medium text-gray-900">
+                    {canvassImportResult.created} entr{canvassImportResult.created === 1 ? 'y' : 'ies'} imported
+                    {canvassImportResult.skipped.length > 0 && `, ${canvassImportResult.skipped.length} skipped`}
+                  </p>
+                  {canvassImportResult.skipped.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded">
+                      {canvassImportResult.skipped.map((s, i) => (
+                        <div key={i} className="px-3 py-2 text-xs">
+                          <span className="text-gray-400">Row {s.row}:</span>{' '}
+                          <span className="text-gray-700 font-medium">{s.material_type || '—'} / {s.material || '—'}</span>{' '}
+                          <span className="text-amber-600">— {s.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              <button onClick={closeCanvassImport} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+                {canvassImportResult ? 'Close' : 'Cancel'}
+              </button>
+              <button onClick={() => canvassImportMutation.mutate(canvassImportFile)}
+                disabled={!canvassImportFile || canvassImportMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
+                <Upload size={15} /> {canvassImportMutation.isPending ? 'Importing…' : 'Upload & Import'}
               </button>
             </div>
           </div>
