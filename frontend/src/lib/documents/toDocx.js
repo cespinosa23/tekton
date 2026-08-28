@@ -4,7 +4,7 @@ import {
 } from 'docx'
 import { formatPhoneLines } from '../../utils/phoneFormat'
 
-const NAVY = '1B3A5C'
+const DEFAULT_LETTERHEAD_COLOR = '1E40AF'
 const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
 const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER }
 
@@ -141,10 +141,10 @@ function renderCell(cell) {
   return new TableCell({ children: [ph(String(cell ?? ''))] })
 }
 
-function renderTable(table) {
+function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   const headerRow = new TableRow({
     children: table.columns.map(c => new TableCell({
-      shading: { fill: NAVY },
+      shading: { fill: color },
       children: [new Paragraph({ children: [new TextRun({ text: c.header, bold: true, color: 'FFFFFF' })] })],
     })),
   })
@@ -156,11 +156,11 @@ function renderTable(table) {
       children: [
         new TableCell({
           columnSpan: table.columns.length - 1,
-          shading: { fill: NAVY },
+          shading: { fill: color },
           children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: label, bold: true, color: 'FFFFFF' })] })],
         }),
         new TableCell({
-          shading: { fill: NAVY },
+          shading: { fill: color },
           children: [new Paragraph({ children: [new TextRun({ text: amount, bold: true, color: 'FFFFFF' })] })],
         }),
       ],
@@ -169,14 +169,14 @@ function renderTable(table) {
   return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } })
 }
 
-function renderSectionContent(content) {
+function renderSectionContent(content, color) {
   const children = []
   if (content.kind === 'table') {
-    children.push(renderTable(content))
+    children.push(renderTable(content, color))
   } else if (content.kind === 'tableGroup') {
     content.groups.forEach(g => {
       children.push(ph(g.heading, { bold: true }))
-      children.push(renderTable(g.table))
+      children.push(renderTable(g.table, color))
       children.push(blank())
     })
   } else if (content.kind === 'richTextHtml') {
@@ -219,8 +219,10 @@ function renderBlock(block, letterheadColor) {
       out.push(blank())
       return out
     }
-    case 'section':
-      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), ...renderSectionContent(block.content), blank()]
+    case 'section': {
+      const tableColor = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()
+      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), ...renderSectionContent(block.content, tableColor), blank()]
+    }
     case 'totalBanner': {
       const bannerFill = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()
       return [

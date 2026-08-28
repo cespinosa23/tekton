@@ -105,7 +105,7 @@ export default function QuotePreview({ quote }) {
           <h3 className="text-sm font-bold text-gray-900 mb-2">{scopeNum}. SCOPE OF WORKS</h3>
           <table className="w-full text-sm border border-gray-800">
             <thead>
-              <tr className="bg-[#1b3a5c] text-white">
+              <tr className="text-white" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
                 <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-14">ITEM</th>
                 <th className="border border-gray-800 px-3 py-2 font-semibold text-left">SCOPE DESCRIPTION</th>
                 <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-32">COST (PHP)</th>
@@ -139,7 +139,7 @@ export default function QuotePreview({ quote }) {
                   </td>
                 </tr>
               ))}
-              <tr className="bg-[#1b3a5c] text-white font-bold">
+              <tr className="text-white font-bold" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
                 <td colSpan={2} className="border border-gray-800 px-3 py-2 text-right">TOTAL COST</td>
                 <td className="border border-gray-800 px-3 py-2 text-center whitespace-nowrap">
                   {scopeGrandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -160,7 +160,7 @@ export default function QuotePreview({ quote }) {
                 <p className="font-bold uppercase text-sm mb-1.5">{t.sow_type_name}</p>
                 <table className="w-full text-sm border border-gray-800">
                   <thead>
-                    <tr className="bg-[#1b3a5c] text-white">
+                    <tr className="text-white" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
                       <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-28">QUANTITY</th>
                       <th className="border border-gray-800 px-3 py-2 font-semibold text-center w-28">UNIT</th>
                       <th className="border border-gray-800 px-3 py-2 font-semibold text-left">DESCRIPTION</th>

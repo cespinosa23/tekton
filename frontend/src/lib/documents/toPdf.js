@@ -2,7 +2,7 @@ import pdfMake from './pdfSetup'
 import { formatPhoneLines } from '../../utils/phoneFormat'
 import { normalizeImageForPdf } from './normalizeImage'
 
-const NAVY = '#1B3A5C'
+const DEFAULT_LETTERHEAD_COLOR = '#1e40af'
 const CONTENT_WIDTH = 532 // Legal (612pt) minus default 40pt left/right margins
 
 const TABLE_LAYOUT = {
@@ -134,16 +134,16 @@ function renderCellContent(cell) {
   return { text: String(cell ?? '') }
 }
 
-function renderTable(table) {
+function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   const widths = table.columns.map(c => `${c.width}%`)
-  const body = [table.columns.map(c => ({ text: c.header, bold: true, color: 'white', fillColor: NAVY }))]
+  const body = [table.columns.map(c => ({ text: c.header, bold: true, color: 'white', fillColor: color }))]
   table.rows.forEach(row => body.push(row.map(renderCellContent)))
   if (table.totalRow) {
     const [label, amount] = table.totalRow
     const span = table.columns.length - 1
-    const row = [{ text: label, bold: true, color: 'white', fillColor: NAVY, colSpan: span, alignment: 'right' }]
+    const row = [{ text: label, bold: true, color: 'white', fillColor: color, colSpan: span, alignment: 'right' }]
     for (let i = 1; i < span; i++) row.push({})
-    row.push({ text: amount, bold: true, color: 'white', fillColor: NAVY })
+    row.push({ text: amount, bold: true, color: 'white', fillColor: color })
     body.push(row)
   }
   // dontBreakRows — without it, pdfmake can split a single row's cell content
@@ -153,13 +153,13 @@ function renderTable(table) {
   return { table: { headerRows: 1, widths, body, dontBreakRows: true, keepWithHeaderRows: 1 }, layout: TABLE_LAYOUT }
 }
 
-function renderSectionContent(content) {
-  if (content.kind === 'table') return [renderTable(content)]
+function renderSectionContent(content, color) {
+  if (content.kind === 'table') return [renderTable(content, color)]
   if (content.kind === 'tableGroup') {
     const out = []
     content.groups.forEach(g => {
       out.push({ text: g.heading, bold: true, margin: [0, 6, 0, 4] })
-      out.push(renderTable(g.table))
+      out.push(renderTable(g.table, color))
     })
     return out
   }
@@ -204,11 +204,11 @@ function renderBlock(block, letterheadColor) {
     case 'section':
       return [
         { text: `${block.number}. ${block.title}`, bold: true, fontSize: 12, margin: [0, 10, 0, 6] },
-        ...renderSectionContent(block.content),
+        ...renderSectionContent(block.content, letterheadColor || DEFAULT_LETTERHEAD_COLOR),
         { text: ' ', margin: [0, 0, 0, 10] },
       ]
     case 'totalBanner': {
-      const bannerColor = letterheadColor || '#1e40af'
+      const bannerColor = letterheadColor || DEFAULT_LETTERHEAD_COLOR
       return [{
         table: {
           widths: ['*', 'auto'],
