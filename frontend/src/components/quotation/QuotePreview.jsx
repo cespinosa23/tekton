@@ -102,7 +102,7 @@ export default function QuotePreview({ quote }) {
       {/* Scope of Work — one row per scope type, priced from Costing (never a raw BOM readout) */}
       {scopeRows.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">{scopeNum}. SCOPE OF WORKS</h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">{scopeNum}. SCOPE OF WORKS</h3>
           <table className="w-full text-sm border border-gray-800">
             <thead>
               <tr className="text-white" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
@@ -153,7 +153,7 @@ export default function QuotePreview({ quote }) {
       {/* Bill of Materials — reference list only (quantity/unit/description), no pricing here; final pricing lives in Costing above */}
       {bomTypes.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">{bomNum}. BILL OF MATERIALS</h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">{bomNum}. BILL OF MATERIALS</h3>
           <div className="space-y-4">
             {bomTypes.map(t => (
               <div key={t.sow_type_id}>
@@ -207,7 +207,7 @@ export default function QuotePreview({ quote }) {
       {otherItems.length > 0 && (
         <div className="mb-6">
           <h3 className="text-sm font-bold text-gray-900 mb-2">{notesNum}. OTHER NOTES AND EXCLUSIONS</h3>
-          <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
+          <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1 text-justify">
             {otherItems.map((item, i) => <li key={item.item_id ?? i} className="whitespace-pre-wrap">{item.text}</li>)}
           </ul>
         </div>
@@ -221,13 +221,13 @@ export default function QuotePreview({ quote }) {
           {paymentTermItems.length > 0 && (
             <div className="mb-3">
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Terms</p>
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{paymentTermItems[0].text}</pre>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans text-justify">{paymentTermItems[0].text}</pre>
             </div>
           )}
           {quote.company_payment_method && (
             <div>
               <p className="font-semibold text-sm text-gray-900 mb-1">Payment Method</p>
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{quote.company_payment_method}</pre>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans text-justify">{quote.company_payment_method}</pre>
             </div>
           )}
         </div>

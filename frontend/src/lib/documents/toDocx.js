@@ -9,7 +9,9 @@ const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
 const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER }
 
 function ph(text = '', opts = {}) {
-  return new Paragraph({ children: [new TextRun({ text: String(text), ...opts })] })
+  // alignment is a Paragraph-level property, everything else is a TextRun one
+  const { alignment, ...runOpts } = opts
+  return new Paragraph({ ...(alignment ? { alignment } : {}), children: [new TextRun({ text: String(text), ...runOpts })] })
 }
 function phRight(text = '', opts = {}) {
   return new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: String(text), ...opts })] })
@@ -175,7 +177,8 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
 // paragraph; only the first gets the bullet marker, the rest are indented
 // to line up under it.
 function pushBulletItem(children, text) {
-  String(text ?? '').split('\n').forEach((line, i) => children.push(ph(i === 0 ? `•  ${line}` : `     ${line}`)))
+  String(text ?? '').split('\n').forEach((line, i) =>
+    children.push(ph(i === 0 ? `•  ${line}` : `     ${line}`, { alignment: AlignmentType.JUSTIFIED })))
 }
 
 function renderSectionContent(content, color) {
@@ -198,7 +201,7 @@ function renderSectionContent(content, color) {
       if (b.kind === 'bulletList') {
         b.items.forEach(text => pushBulletItem(children, text))
       } else {
-        b.text.split('\n').forEach(line => children.push(ph(line)))
+        b.text.split('\n').forEach(line => children.push(ph(line, { alignment: AlignmentType.JUSTIFIED })))
       }
       children.push(blank())
     })
@@ -230,7 +233,7 @@ function renderBlock(block, letterheadColor) {
     }
     case 'section': {
       const tableColor = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()
-      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), ...renderSectionContent(block.content, tableColor), blank()]
+      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), blank(), ...renderSectionContent(block.content, tableColor), blank()]
     }
     case 'totalBanner': {
       const bannerFill = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()

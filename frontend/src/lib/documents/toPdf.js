@@ -159,7 +159,9 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
 // needs a stack of lines instead of one flat string.
 function renderBulletItem(text) {
   const lines = String(text ?? '').split('\n')
-  return lines.length > 1 ? { stack: lines.map(line => ({ text: line })) } : { text }
+  return lines.length > 1
+    ? { stack: lines.map(line => ({ text: line, alignment: 'justify' })) }
+    : { text, alignment: 'justify' }
 }
 
 function renderSectionContent(content, color) {
@@ -181,7 +183,7 @@ function renderSectionContent(content, color) {
       if (b.kind === 'bulletList') {
         out.push({ ul: b.items.map(renderBulletItem) })
       } else {
-        b.text.split('\n').forEach(line => out.push({ text: line || ' ' }))
+        b.text.split('\n').forEach(line => out.push({ text: line || ' ', alignment: 'justify' }))
       }
     })
     return out
@@ -212,7 +214,7 @@ function renderBlock(block, letterheadColor) {
     }
     case 'section':
       return [
-        { text: `${block.number}. ${block.title}`, bold: true, fontSize: 12, margin: [0, 10, 0, 6] },
+        { text: `${block.number}. ${block.title}`, bold: true, fontSize: 12, margin: [0, 10, 0, 14] },
         ...renderSectionContent(block.content, letterheadColor || DEFAULT_LETTERHEAD_COLOR),
         { text: ' ', margin: [0, 0, 0, 10] },
       ]
