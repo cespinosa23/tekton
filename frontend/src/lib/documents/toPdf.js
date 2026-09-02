@@ -95,11 +95,16 @@ function htmlToPdfContent(html) {
 
 function renderLetterhead(letterhead) {
   const color = letterhead.letterheadColor || '#1e40af'
-  const left = []
-  if (letterhead.logoUrl) left.push({ image: letterhead.logoUrl, width: 48, height: 48, margin: [0, 0, 0, 4] })
-  if (letterhead.companyName) left.push({ text: letterhead.companyName.toUpperCase(), bold: true, fontSize: 18, color })
-  if (letterhead.shortName) left.push({ text: letterhead.shortName, fontSize: 13.5, color })
-  if (letterhead.pcabLicense) left.push({ text: `PCAB License: ${letterhead.pcabLicense}`, fontSize: 7.5, color })
+  // Logo sits beside the company-name text (not stacked above it), matching
+  // the HTML letterhead's `flex items-start gap-3` row.
+  const textStack = []
+  if (letterhead.companyName) textStack.push({ text: letterhead.companyName.toUpperCase(), bold: true, fontSize: 18, color })
+  if (letterhead.shortName) textStack.push({ text: letterhead.shortName, fontSize: 13.5, color })
+  if (letterhead.pcabLicense) textStack.push({ text: `PCAB License: ${letterhead.pcabLicense}`, fontSize: 7.5, color })
+  const textCol = { width: '*', stack: textStack.length ? textStack : [{ text: '' }] }
+  const left = letterhead.logoUrl
+    ? { columns: [{ image: letterhead.logoUrl, width: 48, height: 48, margin: [0, 0, 10, 0] }, textCol] }
+    : (textStack.length ? { stack: textStack } : { text: '' })
 
   const right = []
   if (letterhead.email) right.push(iconLine('mail', letterhead.email))
@@ -108,13 +113,13 @@ function renderLetterhead(letterhead) {
 
   return [
     {
-      // Right block is 'auto'-width (sized to its own content) after a '*'
-      // spacer, so it hugs the page's right margin exactly like the HTML
-      // letterhead's `flex justify-between` + `flex-shrink-0` — not a fixed
-      // percentage column with leftover empty space past the text.
+      // Left takes all remaining space and the right block is 'auto'-width
+      // (sized to its own content), so it hugs the page's right margin
+      // exactly like the HTML letterhead's `flex justify-between` +
+      // `flex-shrink-0` — not a fixed-percentage left column that wraps
+      // the company name early.
       columns: [
-        { width: '60%', stack: left.length ? left : [{ text: '' }] },
-        { width: '*', text: '' },
+        { width: '*', ...left },
         { width: 'auto', stack: right.length ? right : [{ text: '' }] },
       ],
     },

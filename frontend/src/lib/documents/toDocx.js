@@ -95,14 +95,30 @@ function renderLetterhead(letterhead) {
   const letterColor = hexColor(letterhead.letterheadColor)
   const logoImage = dataUriToImage(letterhead.logoUrl)
 
-  const left = []
-  if (logoImage) {
-    left.push(new Paragraph({ children: [new ImageRun({ data: logoImage.data, type: logoImage.type, transformation: { width: 56, height: 56 } })] }))
-  }
-  if (letterhead.companyName) left.push(ph(letterhead.companyName.toUpperCase(), { bold: true, size: 32, color: letterColor }))
-  if (letterhead.shortName) left.push(ph(letterhead.shortName, { bold: true, size: 24, color: letterColor }))
-  if (letterhead.pcabLicense) left.push(ph(`PCAB License: ${letterhead.pcabLicense}`, { size: 14, color: letterColor }))
-  if (left.length === 0) left.push(blank())
+  const textStack = []
+  if (letterhead.companyName) textStack.push(ph(letterhead.companyName.toUpperCase(), { bold: true, size: 32, color: letterColor }))
+  if (letterhead.shortName) textStack.push(ph(letterhead.shortName, { bold: true, size: 24, color: letterColor }))
+  if (letterhead.pcabLicense) textStack.push(ph(`PCAB License: ${letterhead.pcabLicense}`, { size: 14, color: letterColor }))
+  if (textStack.length === 0) textStack.push(blank())
+
+  // Logo sits beside the company-name text (not stacked above it), matching
+  // the HTML letterhead's `flex items-start gap-3` row — a nested 2-column
+  // table since a TableCell's children stack vertically otherwise.
+  const left = logoImage
+    ? [new Table({
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [new TableRow({
+          children: [
+            new TableCell({
+              borders: NO_BORDERS, width: { size: 16, type: WidthType.PERCENTAGE },
+              children: [new Paragraph({ children: [new ImageRun({ data: logoImage.data, type: logoImage.type, transformation: { width: 56, height: 56 } })] })],
+            }),
+            new TableCell({ borders: NO_BORDERS, width: { size: 84, type: WidthType.PERCENTAGE }, children: textStack }),
+          ],
+        })],
+      })]
+    : textStack
 
   // Word can't embed the lucide SVGs the PDF uses, so plain Unicode glyphs
   // (widely supported, no extra assets) stand in for the mail/phone/mobile
@@ -120,8 +136,8 @@ function renderLetterhead(letterhead) {
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [new TableRow({
         children: [
-          new TableCell({ borders: NO_BORDERS, width: { size: 65, type: WidthType.PERCENTAGE }, children: left }),
-          new TableCell({ borders: NO_BORDERS, width: { size: 35, type: WidthType.PERCENTAGE }, children: right }),
+          new TableCell({ borders: NO_BORDERS, width: { size: 74, type: WidthType.PERCENTAGE }, children: left }),
+          new TableCell({ borders: NO_BORDERS, width: { size: 26, type: WidthType.PERCENTAGE }, children: right }),
         ],
       })],
     }),
