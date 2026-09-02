@@ -103,7 +103,7 @@ function renderLetterhead(letterhead) {
   if (letterhead.pcabLicense) textStack.push({ text: `PCAB License: ${letterhead.pcabLicense}`, fontSize: 7.5, color })
   const textCol = { width: '*', stack: textStack.length ? textStack : [{ text: '' }] }
   const left = letterhead.logoUrl
-    ? { columns: [{ image: letterhead.logoUrl, width: 48, height: 48, margin: [0, 0, 16, 0] }, textCol] }
+    ? { columns: [{ image: letterhead.logoUrl, width: 48, fit: [48, 48], margin: [0, 0, 16, 0] }, textCol] }
     : (textStack.length ? { stack: textStack } : { text: '' })
 
   const right = []
