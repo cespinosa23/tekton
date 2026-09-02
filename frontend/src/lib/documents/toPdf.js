@@ -285,17 +285,29 @@ async function normalizeIrImages(ir) {
 async function buildDocDefinition(ir) {
   const normalizedIr = await normalizeIrImages(ir)
   const content = [...renderLetterhead(normalizedIr.letterhead)]
-  normalizedIr.blocks.forEach((block, i) => {
+  const blocks = normalizedIr.blocks
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]
     const rendered = renderBlock(block, normalizedIr.letterhead.letterheadColor)
     // THROUGH/SUBJECT lines sit tight against each other (2pt), but the HTML
     // letterhead's `space-y-4` gives every such group a real gap (~10pt)
     // before the next block (e.g. the "Dear ..." greeting) — only the last
     // labelValue in a run needs that bigger trailing gap.
-    if (block.type === 'labelValue' && normalizedIr.blocks[i + 1]?.type !== 'labelValue' && rendered[0]?.margin) {
+    if (block.type === 'labelValue' && blocks[i + 1]?.type !== 'labelValue' && rendered[0]?.margin) {
       rendered[0].margin[3] = 20
     }
+    // The total banner stranded alone at the bottom of a page with the
+    // signature block orphaned onto the next page looks broken — keep them
+    // together as one unbreakable unit so they move to the next page as a
+    // whole when they don't both fit, instead of splitting apart.
+    if (block.type === 'totalBanner' && blocks[i + 1]?.type === 'signatureBlock') {
+      const signatureRendered = renderBlock(blocks[i + 1], normalizedIr.letterhead.letterheadColor)
+      content.push({ stack: [...rendered, ...signatureRendered], unbreakable: true })
+      i++
+      continue
+    }
     content.push(...rendered)
-  })
+  }
 
   const footerText = ir.footerText ? ir.footerText.replace(/\n\s*\n+/g, '\n') : ''
 
