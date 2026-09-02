@@ -100,6 +100,14 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
         raise HTTPException(status_code=400, detail="Finalized quotations can no longer be edited — clone it to make changes")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
+    # Finalizing directly (Admin/PM bypassing the approval flow) supersedes
+    # any outstanding approval request — clear it server-side so a stale
+    # 'pending' from before this save doesn't leave the Pending Approval
+    # badge/actions stuck on for an already-Finalized quote.
+    if item.status == "Finalized":
+        item.approval_status = None
+        item.approval_requested_to_id = None
+        item.approval_requested_by_id = None
     db.commit()
     db.refresh(item)
     return item
