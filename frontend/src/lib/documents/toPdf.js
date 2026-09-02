@@ -103,7 +103,11 @@ function renderLetterhead(letterhead) {
   if (letterhead.pcabLicense) textStack.push({ text: `PCAB License: ${letterhead.pcabLicense}`, fontSize: 7.5, color })
   const textCol = { width: '*', stack: textStack.length ? textStack : [{ text: '' }] }
   const left = letterhead.logoUrl
-    ? { columns: [{ image: letterhead.logoUrl, width: 48, fit: [48, 48], margin: [0, 0, 16, 0] }, textCol] }
+    // pdfmake reserves exactly `width` for a fixed-width column — a `margin`
+    // on the same node does NOT expand that reserved space, so the gap has
+    // to come from widening the column itself, past the 48pt the image
+    // (via `fit`) actually renders at.
+    ? { columns: [{ image: letterhead.logoUrl, width: 64, fit: [48, 48] }, textCol] }
     : (textStack.length ? { stack: textStack } : { text: '' })
 
   const right = []
