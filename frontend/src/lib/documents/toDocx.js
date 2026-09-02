@@ -233,7 +233,11 @@ function renderBlock(block, letterheadColor) {
     }
     case 'section': {
       const tableColor = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()
-      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), blank(), ...renderSectionContent(block.content, tableColor), blank()]
+      // Extra breathing room below the heading only for Scope of Works/BOM
+      // (table-shaped sections) — Other Notes/Terms of Payment match Preview's mb-2.
+      const isTableSection = block.content.kind === 'table' || block.content.kind === 'tableGroup'
+      const headingGap = isTableSection ? [blank()] : []
+      return [ph(`${block.number}. ${block.title}`, { bold: true, size: 24 }), ...headingGap, ...renderSectionContent(block.content, tableColor), blank()]
     }
     case 'totalBanner': {
       const bannerFill = (letterheadColor || '#1e40af').replace('#', '').toUpperCase()

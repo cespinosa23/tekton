@@ -212,12 +212,16 @@ function renderBlock(block, letterheadColor) {
       out.push({ text: ' ', margin: [0, 0, 0, 10] })
       return out
     }
-    case 'section':
+    case 'section': {
+      // Extra breathing room below the heading only for Scope of Works/BOM
+      // (table-shaped sections) — Other Notes/Terms of Payment match Preview's mb-2.
+      const isTableSection = block.content.kind === 'table' || block.content.kind === 'tableGroup'
       return [
-        { text: `${block.number}. ${block.title}`, bold: true, fontSize: 12, margin: [0, 10, 0, 14] },
+        { text: `${block.number}. ${block.title}`, bold: true, fontSize: 12, margin: [0, 10, 0, isTableSection ? 14 : 6] },
         ...renderSectionContent(block.content, letterheadColor || DEFAULT_LETTERHEAD_COLOR),
         { text: ' ', margin: [0, 0, 0, 10] },
       ]
+    }
     case 'totalBanner': {
       const bannerColor = letterheadColor || DEFAULT_LETTERHEAD_COLOR
       return [{
