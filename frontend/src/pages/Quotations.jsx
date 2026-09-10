@@ -14,6 +14,7 @@ import { getInventoryRecords } from '../api/inventory'
 import { getProjects } from '../api/projects'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
+import { formatCompanyAddress } from '../lib/company'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
@@ -28,7 +29,7 @@ import { buildProjectPrefillFromQuotation } from '../lib/projectFromQuotation'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
-  Clock, ChevronDown, ChevronUp, Link2,
+  Clock, ChevronDown, ChevronUp, Link2, ListChecks,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -56,7 +57,12 @@ const EMPTY_QUOTE = {
   company_payment_method: '',
   company_logo_url: '',
   addressee_name: '',
-  addressee_address: '',
+  addressee_address_line1: '',
+  addressee_address_line2: '',
+  addressee_city: '',
+  addressee_state_province: '',
+  addressee_postal_code: '',
+  addressee_country: 'Philippines',
   attention_account_type: '',
   attention_salutation: '',
   attention_first_name: '',
@@ -82,6 +88,18 @@ const EMPTY_QUOTE = {
 const STATUS_COLORS = {
   Draft: 'bg-amber-100 text-amber-700',
   Finalized: 'bg-emerald-100 text-emerald-700',
+}
+
+// A quotation counts as Stalled once its most recent approval request has sat
+// with no decision (approved/disapproved/re-requested) for this many days.
+const STALLED_DAYS = 14
+
+function isQuoteStalled(q) {
+  if (q.approval_status !== 'pending') return false
+  const lastRequested = [...(q.approval_history || [])].reverse().find(h => h.action === 'requested')
+  if (!lastRequested?.at) return false
+  const daysSince = (Date.now() - new Date(lastRequested.at).getTime()) / (1000 * 60 * 60 * 24)
+  return daysSince >= STALLED_DAYS
 }
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400'
@@ -141,7 +159,7 @@ function ApprovalHistoryPanel({ history = [] }) {
                 <span className="text-gray-800">
                   {h.action === 'requested' && <>Requested by <strong>{h.by_name}</strong> → <strong>{h.to_name}</strong></>}
                   {h.action === 'approved' && <>Approved by <strong>{h.by_name}</strong></>}
-                  {h.action === 'rejected' && <>Rejected by <strong>{h.by_name}</strong></>}
+                  {h.action === 'rejected' && <>Disapproved by <strong>{h.by_name}</strong></>}
                 </span>
                 <span className="text-xs text-gray-400 flex-shrink-0 ml-3">
                   {h.at && format(new Date(h.at), 'MMM d, yyyy h:mm a')}
@@ -166,6 +184,9 @@ export default function Quotations() {
   // Admin and Project Manager finalize directly; everyone else with quotations
   // access (currently Project Coordinator and Engineer) has to route through a PM.
   const canFinalizeDirectly = isAdmin() || hasRole('Project Manager')
+  // Lets these roles step through a Finalized quotation's full builder (every
+  // field disabled via isLocked) instead of only the flattened document Preview.
+  const canViewFinalizedBuilder = isAdmin() || hasRole('Project Manager') || hasRole('Project Coordinator')
   const [view, setView] = useState('list')
   const [editingQuote, setEditingQuote] = useState(null)
   const [quoteData, setQuoteData] = useState(EMPTY_QUOTE)
@@ -175,6 +196,7 @@ export default function Quotations() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [listTab, setListTab] = useState('all')
+  const [sortBy, setSortBy] = useState('date_new')
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
   const [approvalTargetQuote, setApprovalTargetQuote] = useState(null)
   const [selectedApproverId, setSelectedApproverId] = useState('')
@@ -246,9 +268,9 @@ export default function Quotations() {
       queryClient.invalidateQueries({ queryKey: ['quotations'] })
       setRejectTarget(null)
       setRejectReason('')
-      toast.success('Quotation rejected')
+      toast.success('Quotation disapproved')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to reject'),
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to disapprove'),
   })
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
@@ -330,7 +352,7 @@ export default function Quotations() {
       ...prev,
       company_name: c.company_name || prev.company_name,
       company_short_name: c.short_name || prev.company_short_name,
-      company_address: c.address || prev.company_address,
+      company_address: formatCompanyAddress(c) || prev.company_address,
       company_email: c.email || prev.company_email,
       company_telephone_number: c.telephone_number || prev.company_telephone_number,
       company_contact_number: c.contact_number || prev.company_contact_number,
@@ -477,13 +499,23 @@ export default function Quotations() {
     return matchSearch && matchStatus
   })
 
+  const sortedQuotes = [...filteredQuotes].sort((a, b) => {
+    switch (sortBy) {
+      case 'name_az': return (a.addressee_name || '').localeCompare(b.addressee_name || '')
+      case 'name_za': return (b.addressee_name || '').localeCompare(a.addressee_name || '')
+      case 'date_old': return new Date(a.quotation_date || 0) - new Date(b.quotation_date || 0)
+      case 'date_new':
+      default: return new Date(b.quotation_date || 0) - new Date(a.quotation_date || 0)
+    }
+  })
+
   // ── Step content ──────────────────────────────────────────────
   const renderStep = () => {
     const s = steps[step]
 
     if (s === 'Template & Company') return (
       <div className="space-y-6">
-        {activeCompanies.length > 0 && (
+        {activeCompanies.length > 0 && !isLocked && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <label className="block text-sm font-semibold text-amber-800 mb-2">Quick-fill from Company</label>
             <select
@@ -557,9 +589,28 @@ export default function Quotations() {
           <input value={quoteData.addressee_name} onChange={e => set('addressee_name', e.target.value)}
             placeholder="Client or company name" className={inp} disabled={isLocked} />
         </Field>
-        <Field label="Address">
-          <input value={quoteData.addressee_address} onChange={e => set('addressee_address', e.target.value)} className={inp} disabled={isLocked} />
-        </Field>
+        <div className="md:col-span-2">
+          <Field label="Address">
+            <div className="space-y-2">
+              <input value={quoteData.addressee_address_line1} placeholder="Address Line 1 (street, barangay)"
+                onChange={e => set('addressee_address_line1', e.target.value)} className={inp} disabled={isLocked} />
+              <input value={quoteData.addressee_address_line2} placeholder="Address Line 2 (unit, floor — optional)"
+                onChange={e => set('addressee_address_line2', e.target.value)} className={inp} disabled={isLocked} />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={quoteData.addressee_city} placeholder="City"
+                  onChange={e => set('addressee_city', e.target.value)} className={inp} disabled={isLocked} />
+                <input value={quoteData.addressee_state_province} placeholder="State / Province"
+                  onChange={e => set('addressee_state_province', e.target.value)} className={inp} disabled={isLocked} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={quoteData.addressee_postal_code} placeholder="Postal Code"
+                  onChange={e => set('addressee_postal_code', e.target.value)} className={inp} disabled={isLocked} />
+                <input value={quoteData.addressee_country} placeholder="Country"
+                  onChange={e => set('addressee_country', e.target.value)} className={inp} disabled={isLocked} />
+              </div>
+            </div>
+          </Field>
+        </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Through (Attention To)<span className="text-red-500 ml-1">*</span>
@@ -689,6 +740,7 @@ export default function Quotations() {
         materialTypes={materialTypes}
         inventoryRecords={inventoryRecords}
         suppliers={suppliers}
+        disabled={isLocked}
       />
     )
 
@@ -770,6 +822,16 @@ export default function Quotations() {
             <option value="Draft">Draft</option>
             <option value="Finalized">Finalized</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            <option value="date_new">Date (Newest)</option>
+            <option value="date_old">Date (Oldest)</option>
+            <option value="name_az">Name (A → Z)</option>
+            <option value="name_za">Name (Z → A)</option>
+          </select>
         </div>
 
         {isLoading ? (
@@ -789,7 +851,7 @@ export default function Quotations() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredQuotes.map(q => (
+            {sortedQuotes.map(q => (
               <div key={q.id} className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-4 hover:shadow-sm transition-shadow">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
@@ -799,8 +861,11 @@ export default function Quotations() {
                     {q.approval_status === 'pending' && (
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">Pending Approval</span>
                     )}
+                    {q.approval_status === 'pending' && isQuoteStalled(q) && (
+                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">Stalled</span>
+                    )}
                     {q.approval_status === 'rejected' && (
-                      <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium" title={q.approval_note || undefined}>Rejected</span>
+                      <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium" title={q.approval_note || undefined}>Disapproved</span>
                     )}
                     {projectByQuoteId[q.id] && (
                       <button onClick={() => navigate(`/projects/${projectByQuoteId[q.id].id}`)}
@@ -827,7 +892,7 @@ export default function Quotations() {
                         <ThumbsUp size={15} />
                       </button>
                       <button onClick={() => { setRejectTarget(q); setRejectReason('') }}
-                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Reject">
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Disapprove">
                         <ThumbsDown size={15} />
                       </button>
                     </>
@@ -842,6 +907,12 @@ export default function Quotations() {
                         <Pencil size={15} />
                       </button>
                     )
+                  )}
+                  {q.status === 'Finalized' && canViewFinalizedBuilder && (
+                    <button onClick={() => openBuilder(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                      title="View full builder (read-only) — Finalized, editing is disabled">
+                      <ListChecks size={15} />
+                    </button>
                   )}
                   {canWrite('quotations') && (
                     <button onClick={() => handleClone(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Clone / Duplicate">
@@ -870,13 +941,13 @@ export default function Quotations() {
           </div>
         )}
 
-        {/* Reject approval dialog */}
+        {/* Disapprove approval dialog */}
         {rejectTarget && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Reject Quotation</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Disapprove Quotation</h3>
               <p className="text-sm text-gray-500 mb-3">
-                Reject <strong>{rejectTarget.addressee_name || 'this quotation'}</strong> and send it back to Draft?
+                Disapprove <strong>{rejectTarget.addressee_name || 'this quotation'}</strong> and send it back to Draft?
               </p>
               <label className="block text-xs font-medium text-gray-700 mb-1">Reason <span className="text-red-500">*</span></label>
               <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3} autoFocus
@@ -887,7 +958,7 @@ export default function Quotations() {
                 <button onClick={() => rejectMutation.mutate({ id: rejectTarget.id, reason: rejectReason.trim() })}
                   disabled={!rejectReason.trim() || rejectMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50">
-                  <ThumbsDown size={14} /> Reject
+                  <ThumbsDown size={14} /> Disapprove
                 </button>
               </div>
             </div>
@@ -976,7 +1047,7 @@ export default function Quotations() {
             <ArrowLeft size={15} /> Back
           </button>
           <h1 className="text-xl font-bold text-gray-900">
-            {editingQuote ? 'Edit Quotation' : 'New Quotation'}
+            {isLocked ? 'View Quotation' : editingQuote ? 'Edit Quotation' : 'New Quotation'}
           </h1>
           {editingQuote && (
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[editingQuote.status] || 'bg-gray-100 text-gray-600'}`}>
@@ -985,9 +1056,9 @@ export default function Quotations() {
           )}
         </div>
 
-        {/* Finalized lock banner — should be unreachable in practice, since nothing
-            still opens the builder with a Finalized quote for anyone, Admin
-            included, but kept as a defensive last line in case that ever changes. */}
+        {/* Finalized lock banner — reachable via the read-only builder view
+            (Admin/PM/PC only, see canViewFinalizedBuilder), and kept as a
+            defensive last line for any other path that ever reaches here. */}
         {isLocked && (
           <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800">
             <Lock size={15} />
@@ -995,12 +1066,12 @@ export default function Quotations() {
           </div>
         )}
 
-        {/* Rejection banner — shows why the assigned PM sent this back */}
+        {/* Disapproval banner — shows why the assigned PM sent this back */}
         {quoteData.approval_status === 'rejected' && (
           <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
             <AlertCircle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-red-800">
-              <span className="font-medium">This quotation was rejected.</span>
+              <span className="font-medium">This quotation was disapproved.</span>
               {quoteData.approval_note && <p className="text-red-700 mt-0.5">{quoteData.approval_note}</p>}
             </div>
           </div>

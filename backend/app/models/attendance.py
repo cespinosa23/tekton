@@ -10,6 +10,9 @@ class Attendance(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     project_name = Column(String(255), nullable=True)
     is_office_based = Column(Boolean, default=False)
+    # Client pays this labor cost directly — tracked for attendance/headcount
+    # purposes only, never counted toward company transactions or costing.
+    is_direct_hire = Column(Boolean, default=False)
     date = Column(Date, nullable=False)
     regular_time_in = Column(String(10), nullable=True)
     regular_time_out = Column(String(10), nullable=True)

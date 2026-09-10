@@ -3,6 +3,7 @@ import { calcScopeCostTotal } from './CostTypeEditor'
 import { calcBomTotal } from './BOMEditor'
 import DocumentLetterhead from '../DocumentLetterhead'
 import DocumentFooter from '../DocumentFooter'
+import { addresseeAddress, formatAddressLines } from '../../lib/address'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -85,7 +86,7 @@ export default function QuotePreview({ quote }) {
         {dateDisplay && <p>{dateDisplay}</p>}
         <div className="space-y-2">
           <p className="font-bold uppercase">{quote.addressee_name || '—'}</p>
-          {quote.addressee_address && <p>{quote.addressee_address}</p>}
+          {formatAddressLines(addresseeAddress(quote)).map((line, i) => <p key={i}>{line}</p>)}
         </div>
         <div>
           {isCompanyOwned && throughFullName && (

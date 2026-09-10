@@ -207,7 +207,7 @@ function renderBlock(block, letterheadColor) {
     case 'addressBlock': {
       const out = []
       if (block.name) out.push({ text: block.name.toUpperCase(), bold: true, margin: [0, 0, 0, block.address ? 8 : 0] })
-      if (block.address) out.push({ text: block.address })
+      if (block.address) block.address.split('\n').forEach(line => out.push({ text: line }))
       out.push({ text: ' ', margin: [0, 0, 0, 8] })
       return out
     }

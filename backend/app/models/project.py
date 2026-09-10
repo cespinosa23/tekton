@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, ForeignKey, Text
 from app.db.database import Base
 
 class Project(Base):
@@ -9,7 +9,13 @@ class Project(Base):
     # Quotations know a project already exists for a given quote.
     source_quotation_id = Column(Integer, ForeignKey("quotations.id"), nullable=True)
     owner_company_name = Column(String(255), nullable=False)
-    address = Column(String(255), nullable=True)
+    address = Column(String(255), nullable=True)  # deprecated: superseded by address_line1/2, city, etc. Kept as fallback until re-entered.
+    address_line1 = Column(String(255), nullable=True)
+    address_line2 = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=True)
+    state_province = Column(String(100), nullable=True)
+    postal_code = Column(String(20), nullable=True)
+    country = Column(String(100), nullable=True, default='Philippines')
     project_name = Column(String(255), nullable=False)
     project_manager = Column(String(100), nullable=True)
     quotation_date = Column(Date, nullable=True)
@@ -21,7 +27,7 @@ class Project(Base):
     meralco_branch = Column(String(100), nullable=True)
     contract_cost = Column(Numeric(12, 2), default=0)
     encumbrance = Column(Numeric(12, 2), default=0)
-    other_notes = Column(String(1000), nullable=True)
+    other_notes = Column(Text, nullable=True)
 
     # Scope fields
     scope_wiring_permit = Column(Boolean, default=False)

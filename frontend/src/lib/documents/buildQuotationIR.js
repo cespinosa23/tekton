@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { calcScopeCostTotal } from '../../components/quotation/CostTypeEditor'
 import { calcBomTotal } from '../../components/quotation/BOMEditor'
+import { addresseeAddress, formatAddressBlock } from '../address'
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
 
@@ -25,7 +26,7 @@ export function buildQuotationIR(quote) {
   }
   if (dateDisplay) blocks.push({ type: 'date', text: dateDisplay })
 
-  blocks.push({ type: 'addressBlock', name: quote.addressee_name || '', address: quote.addressee_address || '' })
+  blocks.push({ type: 'addressBlock', name: quote.addressee_name || '', address: formatAddressBlock(addresseeAddress(quote)) })
 
   // Same convention as Billing: THROUGH only shows for Company Owned (a
   // Personal account is addressed directly, no attention line), and the

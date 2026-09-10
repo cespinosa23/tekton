@@ -12,7 +12,7 @@ export const allBomValid = (scopeOfWorkItems = []) =>
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [] }) {
+export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
   const bomTypes = scopeOfWorkItems
   const [activeTypeId, setActiveTypeId] = useState(bomTypes[0]?.sow_type_id ?? null)
 
@@ -61,6 +61,7 @@ export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materia
           materialTypes={materialTypes}
           inventoryRecords={inventoryRecords}
           suppliers={suppliers}
+          disabled={disabled}
         />
       )}
     </div>

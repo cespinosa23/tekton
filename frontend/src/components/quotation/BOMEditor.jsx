@@ -2,6 +2,7 @@ import { format } from 'date-fns'
 import { Plus, Trash2 } from 'lucide-react'
 import MaterialCombobox from '../MaterialCombobox'
 import SupplierCombobox from '../SupplierCombobox'
+import { bestInventoryFor } from '../../lib/inventoryPricing'
 
 export const emptyBomRow = () => ({
   is_custom: false,
@@ -28,17 +29,6 @@ function calcRow(row) {
   return { ...row, subtotal: round2(subtotal), adjusted_subtotal: round2(adjustedSubtotal) }
 }
 
-// BOM doesn't ask the user to pick a Brand — across all Inventory buckets for
-// this material (one per brand), use whichever has the highest tracked cost,
-// same "top entry" price Outgoing/Incoming Materials transactions use.
-function bestInventoryFor(materialId, inventoryRecords) {
-  const matches = inventoryRecords.filter(r => r.material_id === materialId && !r.archived)
-  if (matches.length === 0) return null
-  return matches.reduce((best, r) =>
-    (Number(r.latest_unit_cost) || 0) > (Number(best.latest_unit_cost) || 0) ? r : best
-  )
-}
-
 // A custom row needs a Source typed in manually (no DB material to derive it from).
 export const bomValid = (items = []) => items.every(row => !row.is_custom || row.source?.trim())
 
@@ -49,7 +39,7 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFract
 const inp = 'px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 w-full'
 const roInp = 'px-2 py-1.5 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500 w-full'
 
-export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [] }) {
+export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
   const update = (index, field, value) => {
     onChange(items.map((item, i) => i !== index ? item : calcRow({ ...item, [field]: value })))
   }
@@ -98,9 +88,9 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <div className="overflow-x-auto overflow-y-auto max-h-[28rem] rounded-lg border border-gray-200">
         <table className="w-full text-sm min-w-[1400px]">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               {['Custom', 'Material Type', 'Material', 'Unit', 'Qty', 'Price', 'Subtotal', 'Adj. %', 'Subtotal (Adj)', 'Source', 'Price Entry Date', ''].map(h => (
                 <th key={h} className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -118,15 +108,16 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                 <tr key={i} className="bg-white align-top">
                   <td className="px-2 py-2 text-center">
                     <input type="checkbox" checked={!!row.is_custom} onChange={e => toggleCustom(i, e.target.checked)}
-                      className="w-4 h-4 rounded accent-gray-800" />
+                      disabled={disabled} className="w-4 h-4 rounded accent-gray-800" />
                   </td>
 
                   <td className="px-2 py-1.5 min-w-[130px]">
                     {row.is_custom ? (
                       <input value={row.material_type} onChange={e => update(i, 'material_type', e.target.value)}
-                        placeholder="Type" className={inp} />
+                        disabled={disabled} placeholder="Type" className={disabled ? roInp : inp} />
                     ) : (
-                      <select value={row.material_type} onChange={e => updateMaterialType(i, e.target.value)} className={inp}>
+                      <select value={row.material_type} onChange={e => updateMaterialType(i, e.target.value)}
+                        disabled={disabled} className={disabled ? roInp : inp}>
                         <option value="">All types</option>
                         {activeTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                       </select>
@@ -136,15 +127,15 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   <td className="px-2 py-1.5 min-w-[210px]">
                     {row.is_custom ? (
                       <input value={row.material_name} onChange={e => update(i, 'material_name', e.target.value)}
-                        placeholder="Material name" className={inp} />
+                        disabled={disabled} placeholder="Material name" className={disabled ? roInp : inp} />
                     ) : (
-                      <MaterialCombobox value={row.material_id} onValueChange={id => updateMaterial(i, id)} materials={filteredMaterials} />
+                      <MaterialCombobox value={row.material_id} onValueChange={id => updateMaterial(i, id)} materials={filteredMaterials} disabled={disabled} />
                     )}
                   </td>
 
                   <td className="px-2 py-1.5 w-20">
                     <input value={row.unit} onChange={e => update(i, 'unit', e.target.value)}
-                      disabled={!row.is_custom} placeholder="pcs" className={row.is_custom ? inp : roInp} />
+                      disabled={disabled || !row.is_custom} placeholder="pcs" className={row.is_custom && !disabled ? inp : roInp} />
                   </td>
 
                   <td className="px-2 py-1.5 w-20">
@@ -155,7 +146,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                         if (/^0\d/.test(raw)) return
                         update(i, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0)
                       }}
-                      className={inp} />
+                      disabled={disabled} className={disabled ? roInp : inp} />
                   </td>
 
                   <td className="px-2 py-1.5 w-24">
@@ -166,8 +157,8 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                         if (/^0\d/.test(raw)) return
                         update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
                       }}
-                      disabled={!row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
-                      className={row.is_custom ? inp : roInp} />
+                      disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
+                      className={row.is_custom && !disabled ? inp : roInp} />
                   </td>
 
                   <td className="px-3 py-2.5 text-gray-700 font-medium whitespace-nowrap">{fmt(row.subtotal)}</td>
@@ -182,7 +173,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                         const clamped = raw === '' ? 0 : Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0
                         update(i, 'adjustment_pct', clamped)
                       }}
-                      className={inp} />
+                      disabled={disabled} className={disabled ? roInp : inp} />
                   </td>
 
                   <td className="px-3 py-2.5 text-gray-900 font-semibold whitespace-nowrap">{fmt(row.adjusted_subtotal)}</td>
@@ -190,7 +181,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   <td className="px-2 py-1.5 min-w-[160px]">
                     {row.is_custom ? (
                       <div className={sourceMissing ? 'rounded ring-1 ring-red-400' : ''}>
-                        <SupplierCombobox value={row.source} onValueChange={val => update(i, 'source', val)} suppliers={suppliers} />
+                        <SupplierCombobox value={row.source} onValueChange={val => update(i, 'source', val)} suppliers={suppliers} disabled={disabled} />
                       </div>
                     ) : (
                       <div className={`${roInp} flex items-center gap-1.5`}>
@@ -214,9 +205,11 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   </td>
 
                   <td className="px-2 py-1.5">
-                    <button onClick={() => removeRow(i)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                      <Trash2 size={14} />
-                    </button>
+                    {!disabled && (
+                      <button onClick={() => removeRow(i)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -225,7 +218,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
               <tr><td colSpan={12} className="px-4 py-6 text-center text-gray-400 text-sm">No materials added yet.</td></tr>
             )}
             {items.length > 0 && (
-              <tr className="bg-gray-50 font-semibold">
+              <tr className="bg-gray-50 font-semibold sticky bottom-0">
                 <td colSpan={8} className="px-3 py-2.5 text-right text-gray-600">BOM Total:</td>
                 <td className="px-3 py-2.5 text-gray-900">{fmt(total)}</td>
                 <td colSpan={3} />
@@ -234,9 +227,11 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
           </tbody>
         </table>
       </div>
-      <button onClick={addRow} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
-        <Plus size={14} /> Add Material
-      </button>
+      {!disabled && (
+        <button onClick={addRow} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
+          <Plus size={14} /> Add Material
+        </button>
+      )}
     </div>
   )
 }

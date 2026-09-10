@@ -96,8 +96,9 @@ export default function Dashboard() {
   const totalGeneral = filteredTransactions
     .filter(t => t.transaction_type === 'General Expenditure')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+  // Direct Hire attendance is paid by the client directly, not a company cost.
   const totalLabor = filterByDateRange(attendance, 'date')
-    .reduce((sum, a) => sum + (parseFloat(a.total_salary) || 0), 0)
+    .reduce((sum, a) => sum + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
   const totalExpenses = totalMaterials + totalGeneral + totalLabor
 
   const activeProjects = projects.filter(p => p.status === 'Active').length
@@ -117,7 +118,7 @@ export default function Dashboard() {
       const projectTx = transactions.filter(t => t.project_id === project.id)
       const projectAtt = attendance.filter(a => a.project_id === project.id)
       const totalContract = parseFloat(project.contract_cost) || 0
-      const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+      const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
       const materialsCost = projectTx
         .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
         .reduce((s, t) => {

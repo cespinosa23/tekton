@@ -5,7 +5,13 @@ class CompanyCreate(BaseModel):
     company_name: str
     short_name: Optional[str] = None
     logo_url: Optional[str] = None
-    address: Optional[str] = None
+    address: Optional[str] = None  # deprecated: superseded by address_line1/2, city, etc.
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state_province: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = "Philippines"
     contact_number: Optional[str] = None
     telephone_number: Optional[str] = None
     email: Optional[str] = None

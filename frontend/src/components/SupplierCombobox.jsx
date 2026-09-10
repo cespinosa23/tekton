@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronsUpDown, Check } from 'lucide-react'
 
-export default function SupplierCombobox({ value, onValueChange, suppliers = [] }) {
+export default function SupplierCombobox({ value, onValueChange, suppliers = [], disabled = false }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [rect, setRect] = useState(null)
@@ -50,8 +50,10 @@ export default function SupplierCombobox({ value, onValueChange, suppliers = [] 
 
   return (
     <div className="relative w-full">
-      <button ref={btnRef} type="button" onClick={toggleOpen}
-        className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400">
+      <button ref={btnRef} type="button" onClick={toggleOpen} disabled={disabled}
+        className={`w-full flex items-center justify-between px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+          disabled ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed' : 'border-gray-300 bg-white hover:bg-gray-50'
+        }`}>
         {selected ? (
           <span className="truncate">{selected.name}</span>
         ) : (

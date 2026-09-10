@@ -31,7 +31,13 @@ class Quotation(Base):
     company_footer = Column(String(500), nullable=True)
     company_payment_method = Column(Text, nullable=True)  # snapshotted from Company.payment_method
     addressee_name = Column(String(255), nullable=True)
-    addressee_address = Column(String(255), nullable=True)
+    addressee_address = Column(String(255), nullable=True)  # deprecated: superseded by addressee_address_line1/2, addressee_city, etc.
+    addressee_address_line1 = Column(String(255), nullable=True)
+    addressee_address_line2 = Column(String(255), nullable=True)
+    addressee_city = Column(String(100), nullable=True)
+    addressee_state_province = Column(String(100), nullable=True)
+    addressee_postal_code = Column(String(20), nullable=True)
+    addressee_country = Column(String(100), nullable=True, default='Philippines')
     # THROUGH / attention-to, same shape as Billing's Company Owned/Personal
     # attention block, so both documents present it consistently.
     attention_account_type = Column(String(20), nullable=True)  # 'Company Owned' | 'Personal'

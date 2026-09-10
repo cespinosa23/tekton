@@ -69,7 +69,12 @@ export function buildProjectPrefillFromQuotation(quote) {
   return {
     source_quotation_id: quote.id,
     owner_company_name: quote.addressee_name || '',
-    address: quote.addressee_address || '',
+    address_line1: quote.addressee_address_line1 || quote.addressee_address || '',
+    address_line2: quote.addressee_address_line2 || '',
+    city: quote.addressee_city || '',
+    state_province: quote.addressee_state_province || '',
+    postal_code: quote.addressee_postal_code || '',
+    country: quote.addressee_country || 'Philippines',
     project_name: quote.subject || '',
     quotation_date: quote.quotation_date || '',
     status: 'Active',

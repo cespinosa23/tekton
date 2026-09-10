@@ -233,7 +233,7 @@ function renderBlock(block, letterheadColor) {
       const out = []
       if (block.name) out.push(ph(block.name.toUpperCase(), { bold: true }))
       if (block.name && block.address) out.push(blank())
-      if (block.address) out.push(ph(block.address))
+      if (block.address) block.address.split('\n').forEach(line => out.push(ph(line)))
       out.push(blank(), blank())
       return out
     }

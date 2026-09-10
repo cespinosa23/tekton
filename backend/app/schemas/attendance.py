@@ -9,6 +9,7 @@ class AttendanceCreate(BaseModel):
     project_id: Optional[int] = None
     project_name: Optional[str] = None
     is_office_based: bool = False
+    is_direct_hire: bool = False
     date: date_type
     regular_time_in: Optional[str] = None
     regular_time_out: Optional[str] = None
@@ -30,6 +31,7 @@ class AttendanceUpdate(BaseModel):
     project_id: Optional[int] = None
     project_name: Optional[str] = None
     is_office_based: Optional[bool] = None
+    is_direct_hire: Optional[bool] = None
     date: Optional[date_type] = None
     regular_time_in: Optional[str] = None
     regular_time_out: Optional[str] = None
@@ -52,6 +54,7 @@ class AttendanceRead(BaseModel):
     project_id: Optional[int] = None
     project_name: Optional[str] = None
     is_office_based: bool = False
+    is_direct_hire: bool = False
     date: Optional[date_type] = None
     regular_time_in: Optional[str] = None
     regular_time_out: Optional[str] = None

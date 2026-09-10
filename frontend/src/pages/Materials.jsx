@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { format } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
   getMaterials, getMaterialTypes, getSettings, createMaterial, updateMaterial, archiveMaterial,
   downloadMaterialsTemplate, importMaterials,
 } from '../api/materials'
+import { getInventoryRecords } from '../api/inventory'
 import { Plus, Search, Pencil, Trash2, Archive, X, Download, Upload } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { bestInventoryFor } from '../lib/inventoryPricing'
 
 const emptyForm = { rating_size: '', material_type: '', unit: '', description: '', min_stock: '', max_stock: '' }
 
@@ -31,6 +34,7 @@ export default function Materials() {
   const { data: materials = [], isLoading } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
+  const { data: inventoryRecords = [] } = useQuery({ queryKey: ['inventory'], queryFn: getInventoryRecords })
 
   const createMutation = useMutation({
     mutationFn: createMaterial,
@@ -128,6 +132,14 @@ export default function Materials() {
       m.description?.toLowerCase().includes(search.toLowerCase())
     const matchesType = typeFilter === 'all' || m.material_type === typeFilter
     return matchesSearch && matchesType
+  }).map(m => {
+    const best = bestInventoryFor(m.id, inventoryRecords)
+    return {
+      ...m,
+      top_price: best ? Number(best.latest_unit_cost) || 0 : 0,
+      price_entry_date: best?.latest_cost_date || null,
+      supplier: best?.latest_cost_supplier || '',
+    }
   })
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'rating_size')
   const [toolbarRef, toolbarHeight] = useElementHeight()
@@ -203,14 +215,17 @@ export default function Materials() {
                 <SortableHeader label="Type" field="material_type" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <SortableHeader label="Unit" field="unit" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Min / Max Stock</th>
+                <SortableHeader label="Top Price" field="top_price" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
+                <SortableHeader label="Price Entry Date" field="price_entry_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Supplier" field="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={8} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400">No materials found</td></tr>
+                <tr><td colSpan={8} className="text-center py-8 text-gray-400">No materials found</td></tr>
               ) : sorted.map(mat => (
                 <tr key={mat.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -229,6 +244,15 @@ export default function Materials() {
                     <span className="text-xs text-gray-700 font-medium">{mat.min_stock ?? 0}</span>
                     <span className="text-xs text-gray-400 mx-1">/</span>
                     <span className="text-xs text-gray-500">{mat.max_stock ?? '—'}</span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-600">
+                    {mat.top_price ? `₱${mat.top_price.toLocaleString()}` : 'NA'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {mat.price_entry_date ? format(new Date(mat.price_entry_date + 'T00:00:00'), 'MMM d, yyyy') : 'NA'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {mat.supplier || 'NA'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">

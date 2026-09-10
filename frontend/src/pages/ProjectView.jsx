@@ -13,6 +13,7 @@ import { formatBillingSerial } from '../utils/billingSerial'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { formatAddress } from '../lib/address'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
@@ -60,7 +61,7 @@ export default function ProjectView() {
     account_type: '', salutation: '', first_name: '', last_name: '',
   }
   const [dpForm, setDpForm] = useState(emptyDpForm)
-  const [progressForm, setProgressForm] = useState({ billing_date: '', current_percentage: '', notes: '' })
+  const [progressForm, setProgressForm] = useState({ billing_date: '', current_percentage: '', amount: '', input_mode: 'percentage', notes: '' })
   const [billingError, setBillingError] = useState('')
   const [printPickerFor, setPrintPickerFor] = useState(null)
   const [printCompanyId, setPrintCompanyId] = useState('')
@@ -190,14 +191,21 @@ export default function ProjectView() {
 
   const handleCreateProgress = (e) => {
     e.preventDefault()
+    const previousPct = latestProgress ? parseFloat(latestProgress.current_percentage) || 0 : 0
+    // Amount mode is just a convenience for typing this billing's peso value
+    // instead of doing the percentage math by hand — it's converted to the same
+    // cumulative current_percentage the backend actually stores and validates.
+    const currentPercentage = progressForm.input_mode === 'amount'
+      ? Math.round((previousPct + (deductibleBase > 0 ? (parseFloat(progressForm.amount) || 0) / deductibleBase * 100 : 0)) * 100) / 100
+      : parseFloat(progressForm.current_percentage)
     billingMutation.mutate({
       project_id: project.id,
       billing_type: 'progress',
       billing_date: progressForm.billing_date,
-      current_percentage: parseFloat(progressForm.current_percentage),
+      current_percentage: currentPercentage,
       notes: progressForm.notes || null,
     }, {
-      onSuccess: () => setProgressForm({ billing_date: '', current_percentage: '', notes: '' }),
+      onSuccess: () => setProgressForm({ billing_date: '', current_percentage: '', amount: '', input_mode: 'percentage', notes: '' }),
     })
   }
 
@@ -213,7 +221,9 @@ export default function ProjectView() {
   const totalPayments = projectTx.filter(t => t.transaction_type === 'Payment')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
 
-  const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+  // Direct Hire attendance is paid by the client directly — it's tracked here but
+  // never counted as a company labor cost.
+  const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
 
   const procurementCost = projectTx.filter(t => t.transaction_type === 'Materials Procurement')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
@@ -266,7 +276,7 @@ export default function ProjectView() {
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-gray-500">
               <div className="flex items-center gap-1"><User size={13} />{project.owner_company_name}</div>
-              <div className="flex items-center gap-1"><MapPin size={13} />{project.address}</div>
+              <div className="flex items-center gap-1"><MapPin size={13} />{formatAddress(project)}</div>
               {project.quotation_date && (
                 <div className="flex items-center gap-1">
                   <Calendar size={13} />{format(new Date(project.quotation_date), 'MMM d, yyyy')}
@@ -675,22 +685,59 @@ export default function ProjectView() {
                   <div className="bg-white border border-gray-200 rounded-lg p-5">
                     <h3 className="text-sm font-semibold text-gray-900 mb-4">New Progress Billing</h3>
                     <form onSubmit={handleCreateProgress} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">
-                            Current Progress % (previous: {latestProgress ? latestProgress.current_percentage : 0}%)
-                          </label>
-                          <input type="text" inputMode="decimal" required
-                            value={formatNumberDisplay(progressForm.current_percentage)}
-                            onChange={e => {
-                              const sanitized = sanitizeNumberInput(e.target.value)
-                              if (sanitized === null) return
-                              if (parseFloat(sanitized) > 100) return
-                              setProgressForm({ ...progressForm, current_percentage: sanitized })
-                            }}
-                            onBlur={() => setProgressForm(p => ({ ...p, current_percentage: normalizeNumberInput(p.current_percentage) }))}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Input as</label>
+                        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                          {[['percentage', 'Percentage'], ['amount', 'Amount']].map(([val, label]) => (
+                            <button key={val} type="button"
+                              onClick={() => setProgressForm(p => ({ ...p, input_mode: val }))}
+                              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                                progressForm.input_mode === val ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                              }`}>
+                              {label}
+                            </button>
+                          ))}
                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {progressForm.input_mode === 'percentage' ? (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Current Progress % (previous: {latestProgress ? latestProgress.current_percentage : 0}%)
+                            </label>
+                            <input type="text" inputMode="decimal" required
+                              value={formatNumberDisplay(progressForm.current_percentage)}
+                              onChange={e => {
+                                const sanitized = sanitizeNumberInput(e.target.value)
+                                if (sanitized === null) return
+                                if (parseFloat(sanitized) > 100) return
+                                setProgressForm({ ...progressForm, current_percentage: sanitized })
+                              }}
+                              onBlur={() => setProgressForm(p => ({ ...p, current_percentage: normalizeNumberInput(p.current_percentage) }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Billing Amount (of {fmt(deductibleBase)} deductible base)
+                            </label>
+                            <input type="text" inputMode="decimal" required
+                              value={formatNumberDisplay(progressForm.amount)}
+                              onChange={e => {
+                                const sanitized = sanitizeNumberInput(e.target.value)
+                                if (sanitized === null) return
+                                setProgressForm({ ...progressForm, amount: sanitized })
+                              }}
+                              onBlur={() => setProgressForm(p => ({ ...p, amount: normalizeNumberInput(p.amount) }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                            {progressForm.amount !== '' && deductibleBase > 0 && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                = {(parseFloat(progressForm.amount) / deductibleBase * 100).toFixed(2)}% this billing,
+                                cumulative {(((latestProgress ? parseFloat(latestProgress.current_percentage) : 0)) + (parseFloat(progressForm.amount) / deductibleBase * 100)).toFixed(2)}%
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Date</label>
                           <input type="date" required
@@ -772,7 +819,12 @@ export default function ProjectView() {
                         <td className="px-4 py-3 text-gray-600">
                           {att.date ? format(new Date(att.date + 'T00:00:00'), 'MMM d, yyyy') : '-'}
                         </td>
-                        <td className="px-4 py-3 font-medium text-gray-900">{att.employee_name}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {att.employee_name}
+                          {att.is_direct_hire && (
+                            <span className="ml-1.5 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">Direct Hire</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <p>{att.regular_hours || 0}h</p>
                           {att.regular_time_in && att.regular_time_out && (

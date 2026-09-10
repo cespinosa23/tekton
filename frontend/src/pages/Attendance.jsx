@@ -8,7 +8,7 @@ import {
   getAttendance, getEmployees, getProjects,
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
-import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search, Split } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, HandCoins, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search, Split } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
@@ -26,6 +26,7 @@ const emptyForm = {
   employee_id: '',
   employee_name: '',
   is_office_based: false,
+  is_direct_hire: false,
   project_id: '',
   project_name: '',
   date: format(new Date(), 'yyyy-MM-dd'),
@@ -183,6 +184,7 @@ export default function Attendance() {
       employee_id: att.employee_id || '',
       employee_name: att.employee_name || '',
       is_office_based: att.is_office_based || false,
+      is_direct_hire: att.is_direct_hire || false,
       project_id: att.project_id || '',
       project_name: att.project_name || '',
       date: att.date || format(new Date(), 'yyyy-MM-dd'),
@@ -333,7 +335,9 @@ export default function Attendance() {
 
   const summaryRegularHours = filtered.reduce((s, a) => s + (parseFloat(a.regular_hours) || 0), 0)
   const summaryOTHours = filtered.reduce((s, a) => s + (parseFloat(a.overtime_hours) || 0), 0)
-  const summaryTotalSalary = filtered.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+  // Direct Hire records are paid by the client directly — tracked for headcount
+  // and hours, but excluded from this company labor cost total.
+  const summaryTotalSalary = filtered.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
   const summaryHeadcount = new Set(filtered.map(a => a.employee_id)).size
   const summaryDaysPresent = parseFloat((summaryRegularHours / 8).toFixed(1))
 
@@ -498,6 +502,9 @@ export default function Attendance() {
                     {att.is_office_based && (
                       <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">Office</span>
                     )}
+                    {att.is_direct_hire && (
+                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">Direct Hire</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     {att.is_office_based ? <span className="text-gray-400 italic">Office Expense</span> : att.project_name || '-'}
@@ -587,6 +594,18 @@ export default function Attendance() {
                     <Building2 size={15} /> Office-based assignment (salary charged as office expense)
                   </label>
                 </div>
+
+                {/* Direct Hire */}
+                {!formData.is_office_based && (
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <input type="checkbox" id="direct_hire" checked={formData.is_direct_hire}
+                      onChange={e => setFormData(prev => ({ ...prev, is_direct_hire: e.target.checked }))}
+                      className="w-4 h-4 rounded" />
+                    <label htmlFor="direct_hire" className="flex items-center gap-2 text-sm font-medium text-amber-800 cursor-pointer">
+                      <HandCoins size={15} /> Direct Hire (client pays labor directly — excluded from company costing)
+                    </label>
+                  </div>
+                )}
 
                 {editingAttendance ? (
                   /* ── EDIT MODE: single employee, project editable ── */
@@ -907,6 +926,18 @@ export default function Attendance() {
                     <Building2 size={15} /> Office-based assignment
                   </label>
                 </div>
+
+                {/* Direct Hire */}
+                {!splitFormData.is_office_based && (
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <input type="checkbox" id="split_direct_hire" checked={splitFormData.is_direct_hire}
+                      onChange={e => setSplitFormData(prev => ({ ...prev, is_direct_hire: e.target.checked }))}
+                      className="w-4 h-4 rounded" />
+                    <label htmlFor="split_direct_hire" className="flex items-center gap-2 text-sm font-medium text-amber-800 cursor-pointer">
+                      <HandCoins size={15} /> Direct Hire (client pays labor directly — excluded from company costing)
+                    </label>
+                  </div>
+                )}
 
                 {/* Project selector (hidden when office-based) */}
                 {!splitFormData.is_office_based && (

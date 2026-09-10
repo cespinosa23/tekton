@@ -18,6 +18,7 @@ import {
   Users, MapPin, Building2, Tag, Ruler, Package, Truck, AlertTriangle, LogOut, ShieldAlert, UserCircle
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { formatCompanyAddress } from '../lib/company'
 import { useSortable } from '../hooks/useSortable'
 import { scrollContentToTop } from '../utils/scroll'
 import { SortableHeader } from '../components/SortableHeader'
@@ -77,7 +78,9 @@ export default function Settings() {
 
   // Company state
   const emptyCompanyForm = {
-    company_name: '', short_name: '', address: '', contact_number: '', telephone_number: '',
+    company_name: '', short_name: '',
+    address_line1: '', address_line2: '', city: '', state_province: '', postal_code: '', country: 'Philippines',
+    contact_number: '', telephone_number: '',
     email: '', website: '', footer_text: '', default_signatory: '', signatory_position: '',
     pcab_license: '', logo_url: '', signature_url: '',
     letterhead_color: '', payment_method: '',
@@ -786,7 +789,7 @@ export default function Settings() {
                           <span className="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">{company.short_name}</span>
                         )}
                       </div>
-                      {company.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin size={11} />{company.address}</p>}
+                      {formatCompanyAddress(company) && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin size={11} />{formatCompanyAddress(company)}</p>}
                       {company.contact_number && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{company.contact_number}</p>}
                       {company.telephone_number && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{company.telephone_number}</p>}
                       {company.email && <p className="text-xs text-gray-500 mt-0.5">{company.email}</p>}
@@ -801,7 +804,12 @@ export default function Settings() {
                           setCompanyForm({
                             company_name: company.company_name || '',
                             short_name: company.short_name || '',
-                            address: company.address || '',
+                            address_line1: company.address_line1 || '',
+                            address_line2: company.address_line2 || '',
+                            city: company.city || '',
+                            state_province: company.state_province || '',
+                            postal_code: company.postal_code || '',
+                            country: company.country || 'Philippines',
                             contact_number: company.contact_number || '',
                             telephone_number: company.telephone_number || '',
                             email: company.email || '',
@@ -923,7 +931,42 @@ export default function Settings() {
               {[
                 ['company_name', 'Company Name *', 'text'],
                 ['short_name', 'Short Name', 'text'],
-                ['address', 'Address', 'text'],
+              ].map(([field, label, type]) => (
+                <div key={field}>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                  <input type={type} value={companyForm[field]}
+                    onChange={e => setCompanyForm(p => ({ ...p, [field]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
+                <div className="space-y-2">
+                  <input type="text" value={companyForm.address_line1} placeholder="Address Line 1 (street, barangay)"
+                    onChange={e => setCompanyForm(p => ({ ...p, address_line1: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  <input type="text" value={companyForm.address_line2} placeholder="Address Line 2 (unit, floor — optional)"
+                    onChange={e => setCompanyForm(p => ({ ...p, address_line2: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={companyForm.city} placeholder="City"
+                      onChange={e => setCompanyForm(p => ({ ...p, city: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <input type="text" value={companyForm.state_province} placeholder="State / Province"
+                      onChange={e => setCompanyForm(p => ({ ...p, state_province: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={companyForm.postal_code} placeholder="Postal Code"
+                      onChange={e => setCompanyForm(p => ({ ...p, postal_code: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <input type="text" value={companyForm.country} placeholder="Country"
+                      onChange={e => setCompanyForm(p => ({ ...p, country: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  </div>
+                </div>
+              </div>
+              {[
                 ['email', 'Email', 'email'],
                 ['website', 'Website', 'url'],
                 ['pcab_license', 'PCAB License', 'text'],

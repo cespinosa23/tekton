@@ -19,7 +19,13 @@ class QuotationCreate(BaseModel):
     company_footer: Optional[str] = None
     company_payment_method: Optional[str] = None
     addressee_name: Optional[str] = None
-    addressee_address: Optional[str] = None
+    addressee_address: Optional[str] = None  # deprecated: superseded by addressee_address_line1/2, addressee_city, etc.
+    addressee_address_line1: Optional[str] = None
+    addressee_address_line2: Optional[str] = None
+    addressee_city: Optional[str] = None
+    addressee_state_province: Optional[str] = None
+    addressee_postal_code: Optional[str] = None
+    addressee_country: Optional[str] = "Philippines"
     attention_account_type: Optional[str] = None
     attention_salutation: Optional[str] = None
     attention_first_name: Optional[str] = None

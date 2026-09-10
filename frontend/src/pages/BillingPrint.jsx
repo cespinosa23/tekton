@@ -8,6 +8,7 @@ import { formatBillingSerial } from '../utils/billingSerial'
 import DocumentLetterhead from '../components/DocumentLetterhead'
 import DocumentFooter from '../components/DocumentFooter'
 import { ArrowLeft, Printer } from 'lucide-react'
+import { formatAddressLines } from '../lib/address'
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -130,7 +131,7 @@ export default function BillingPrint() {
                   ? [dpRow.salutation, dpRow.first_name, dpRow.last_name].filter(Boolean).join(' ')
                   : project.owner_company_name}
               </p>
-              {project.address && <p>{project.address}</p>}
+              {formatAddressLines(project).map((line, i) => <p key={i}>{line}</p>)}
             </div>
 
             {/* Billing No / Subject */}

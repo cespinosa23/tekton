@@ -17,6 +17,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import { scrollContentToTop } from '../utils/scroll'
+import { formatAddress } from '../lib/address'
 
 
 const SCOPES = [
@@ -52,7 +53,8 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
 
 const emptyForm = {
   source_quotation_id: null,
-  owner_company_name: '', address: '', project_name: '',
+  owner_company_name: '', project_name: '',
+  address_line1: '', address_line2: '', city: '', state_province: '', postal_code: '', country: 'Philippines',
   quotation_date: '', status: 'Active',
   scope_wiring_permit: false, scope_electrical_plan: false,
   scope_installation: false, scope_cfei: false,
@@ -106,7 +108,7 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
             <User size={13} /><span className="truncate">{project.owner_company_name}</span>
           </div>
           <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-3">
-            <MapPin size={13} /><span className="truncate">{project.address}</span>
+            <MapPin size={13} /><span className="truncate">{formatAddress(project)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">Contract: <span className="font-semibold text-gray-900">{fmt(project.contract_cost)}</span></span>
@@ -174,7 +176,8 @@ function PaymentsView({ projects }) {
         const encumbrance = parseFloat(project.encumbrance) || 0
         const contractCost = totalContract - encumbrance // pure scope cost, excluding encumbrance, for the chart segment below
 
-        const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+        // Direct Hire attendance is paid by the client directly, not a company cost.
+        const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
         const materialsCost = projectTx
           .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
           .reduce((s, t) => {
@@ -268,7 +271,12 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
       setFormData({
         source_quotation_id: project.source_quotation_id || null,
         owner_company_name: project.owner_company_name || '',
-        address: project.address || '',
+        address_line1: project.address_line1 || '',
+        address_line2: project.address_line2 || '',
+        city: project.city || '',
+        state_province: project.state_province || '',
+        postal_code: project.postal_code || '',
+        country: project.country || 'Philippines',
         project_name: project.project_name || '',
         quotation_date: project.quotation_date || '',
         status: project.status || 'Active',
@@ -376,8 +384,35 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Address *</label>
-              <input value={formData.address} onChange={e => setFormData(p => ({ ...p, address: e.target.value }))}
+              <label className="block text-xs font-medium text-gray-700 mb-1">Address Line 1 *</label>
+              <input value={formData.address_line1} placeholder="Street, barangay"
+                onChange={e => setFormData(p => ({ ...p, address_line1: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Address Line 2</label>
+              <input value={formData.address_line2} placeholder="Unit, floor — optional"
+                onChange={e => setFormData(p => ({ ...p, address_line2: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">City</label>
+              <input value={formData.city} onChange={e => setFormData(p => ({ ...p, city: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">State / Province</label>
+              <input value={formData.state_province} onChange={e => setFormData(p => ({ ...p, state_province: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Postal Code</label>
+              <input value={formData.postal_code} onChange={e => setFormData(p => ({ ...p, postal_code: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Country</label>
+              <input value={formData.country} onChange={e => setFormData(p => ({ ...p, country: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
             </div>
             <div>
@@ -518,7 +553,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
         <div className="flex justify-end gap-2 px-6 py-4 border-t">
           <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
           <button onClick={() => onSave(formData)}
-            disabled={!formData.owner_company_name || !formData.address || !formData.project_name || !formData.referred_by || !scopeCostValid}
+            disabled={!formData.owner_company_name || !formData.address_line1 || !formData.project_name || !formData.referred_by || !scopeCostValid}
             className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
             {project?.id ? 'Update' : 'Create'} Project
           </button>
@@ -638,7 +673,7 @@ export default function Projects() {
     const matchesSearch =
       p.project_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.owner_company_name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.address?.toLowerCase().includes(search.toLowerCase())
+      formatAddress(p).toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
     const matchesPM = pmFilter === 'all' || p.project_manager === pmFilter
     return matchesSearch && matchesStatus && matchesPM

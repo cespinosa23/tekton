@@ -5,7 +5,13 @@ from datetime import date
 class ProjectCreate(BaseModel):
     source_quotation_id: Optional[int] = None
     owner_company_name: str
-    address: Optional[str] = None
+    address: Optional[str] = None  # deprecated: superseded by address_line1/2, city, etc.
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state_province: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = "Philippines"
     project_name: str
     project_manager: Optional[str] = None
     quotation_date: Optional[date] = None

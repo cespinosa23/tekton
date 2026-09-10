@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronsUpDown, Check } from 'lucide-react'
+import { formatAddress } from '../lib/address'
 
 export default function ProjectCombobox({ value, onValueChange, projects = [] }) {
   const [open, setOpen] = useState(false)
@@ -9,7 +10,7 @@ export default function ProjectCombobox({ value, onValueChange, projects = [] })
   const selected = projects.find(p => p.id === value)
 
   const filtered = projects.filter(p =>
-    `${p.project_name} ${p.owner_company_name || ''} ${p.address || ''}`.toLowerCase().includes(search.toLowerCase())
+    `${p.project_name} ${p.owner_company_name || ''} ${formatAddress(p)}`.toLowerCase().includes(search.toLowerCase())
   )
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function ProjectCombobox({ value, onValueChange, projects = [] })
                 <div>
                   <p className="text-sm font-medium text-gray-900">{proj.project_name}</p>
                   <p className="text-xs text-gray-400">
-                    {proj.owner_company_name}{proj.address ? ` · ${proj.address}` : ''}
+                    {proj.owner_company_name}{formatAddress(proj) ? ` · ${formatAddress(proj)}` : ''}
                   </p>
                 </div>
               </button>

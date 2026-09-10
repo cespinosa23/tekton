@@ -62,7 +62,8 @@ export default function Reports() {
 
     const totalContract = parseFloat(project.contract_cost) || 0
 
-    const laborCost = projectAtt.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+    // Direct Hire attendance is paid by the client directly, not a company cost.
+    const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
     const materialsCost = projectTx
       .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
       .reduce((s, t) => {
@@ -117,7 +118,7 @@ export default function Reports() {
     const revenue = transactions
       .filter(t => t.transaction_type === 'Payment' && inMonth(t.transaction_date))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
-    const labor = attendance.filter(a => inMonth(a.date)).reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+    const labor = attendance.filter(a => inMonth(a.date) && !a.is_direct_hire).reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
     const materials = transactions
       .filter(t => t.transaction_type === 'Materials Procurement' && inMonth(t.transaction_date))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
@@ -143,7 +144,8 @@ export default function Reports() {
   const maxClientRevenue = topClients[0]?.revenue || 1
 
   // ── Expense category breakdown ─────────────────────────────────────────────
-  const totalLabor = attendance.reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+  // Direct Hire attendance is paid by the client directly, not a company cost.
+  const totalLabor = attendance.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
   const totalMaterials = transactions
     .filter(t => ['Materials Procurement', 'Outgoing Materials'].includes(t.transaction_type))
     .reduce((s, t) => s + (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0), 0)
