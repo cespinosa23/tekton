@@ -47,7 +47,7 @@ export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materia
               }`}>
               {t.sow_type_name}
               <span className={`text-xs ${isActive ? 'text-gray-500' : 'text-gray-400'}`}>{fmt(typeTotal)}</span>
-              {invalid && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Missing required Source on a custom material" />}
+              {invalid && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Missing required Source on a custom material, or a material with 0 price not yet confirmed" />}
             </button>
           )
         })}

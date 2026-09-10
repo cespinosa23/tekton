@@ -397,7 +397,7 @@ export default function Quotations() {
       if (!quoteData.subject?.trim()) return 'Subject is required'
     }
     if (stepName === 'Costing' && !scopeCostValid) return 'Every checked Cost Type needs a Contract Cost'
-    if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source'
+    if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)'
     if (stepName === 'Payment Terms' && !(quoteData.payment_term_items?.length > 0)) return 'Select a Payment Term'
     return null
   }
@@ -412,7 +412,7 @@ export default function Quotations() {
     if (!quoteData.attention_last_name?.trim()) errors.push('Last Name is required')
     if (!quoteData.subject?.trim()) errors.push('Subject is required')
     if (!scopeCostValid) errors.push('Every checked Cost Type needs a Contract Cost')
-    if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source')
+    if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)')
     if (!(quoteData.payment_term_items?.length > 0)) errors.push('Select a Payment Term')
     return errors
   }
@@ -421,6 +421,18 @@ export default function Quotations() {
     const error = validateStep(steps[step])
     if (error) { toast.error(error); return }
     setStep(s => Math.min(s + 1, steps.length - 1))
+  }
+
+  // Jumping via the step indicator (not just Next) must run the same
+  // per-step checks — otherwise clicking straight to a later step skips
+  // right past an invalid Bill of Materials or Costing step unnoticed.
+  // Going backward never skips anything, so it's left unvalidated.
+  const handleStepJump = (targetStep) => {
+    for (let s = step; s < targetStep; s++) {
+      const error = validateStep(steps[s])
+      if (error) { toast.error(error); return }
+    }
+    setStep(targetStep)
   }
 
   const handleFinalize = async () => {
@@ -1079,7 +1091,7 @@ export default function Quotations() {
 
         <ApprovalHistoryPanel history={quoteData.approval_history} />
 
-        <StepIndicator steps={steps} current={step} onStepClick={setStep} canJump={!!editingQuote} />
+        <StepIndicator steps={steps} current={step} onStepClick={handleStepJump} canJump={!!editingQuote} />
 
         {/* Step card */}
         <div className="bg-white border border-gray-200 rounded-lg">

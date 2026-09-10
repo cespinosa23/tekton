@@ -18,6 +18,7 @@ export const emptyBomRow = () => ({
   source: '',
   price_entry_date: null,
   is_canvass_price: false,
+  zero_price_confirmed: false,
 })
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -30,7 +31,13 @@ function calcRow(row) {
 }
 
 // A custom row needs a Source typed in manually (no DB material to derive it from).
-export const bomValid = (items = []) => items.every(row => !row.is_custom || row.source?.trim())
+// A zero price is rejected unless the user has explicitly confirmed the material
+// really is free/zero-cost (e.g. supplied by the client, included elsewhere) via
+// zero_price_confirmed.
+export const bomValid = (items = []) => items.every(row =>
+  (!row.is_custom || row.source?.trim()) &&
+  (Number(row.unit_price) > 0 || row.zero_price_confirmed)
+)
 
 export const calcBomTotal = (items = []) => items.reduce((s, r) => s + (r.adjusted_subtotal || 0), 0)
 
@@ -103,6 +110,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                 ? materials.filter(m => m.material_type === row.material_type)
                 : materials
               const sourceMissing = row.is_custom && !row.source?.trim()
+              const zeroPriceUnconfirmed = Number(row.unit_price) === 0 && !row.zero_price_confirmed
 
               return (
                 <tr key={i} className="bg-white align-top">
@@ -150,15 +158,25 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   </td>
 
                   <td className="px-2 py-1.5 w-24">
-                    <input type="text" value={row.unit_price === 0 ? '' : row.unit_price} placeholder="0.00"
-                      onChange={e => {
-                        const raw = e.target.value.trim()
-                        if (!/^\d*\.?\d*$/.test(raw)) return
-                        if (/^0\d/.test(raw)) return
-                        update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
-                      }}
-                      disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
-                      className={row.is_custom && !disabled ? inp : roInp} />
+                    <div className={zeroPriceUnconfirmed ? 'rounded ring-1 ring-red-400' : ''}>
+                      <input type="text" value={row.unit_price === 0 ? '' : row.unit_price} placeholder="0.00"
+                        onChange={e => {
+                          const raw = e.target.value.trim()
+                          if (!/^\d*\.?\d*$/.test(raw)) return
+                          if (/^0\d/.test(raw)) return
+                          update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
+                        }}
+                        disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
+                        className={row.is_custom && !disabled ? inp : roInp} />
+                    </div>
+                    {Number(row.unit_price) === 0 && (
+                      <label className="flex items-center gap-1 mt-1 text-[10px] text-gray-500 whitespace-nowrap cursor-pointer">
+                        <input type="checkbox" checked={!!row.zero_price_confirmed}
+                          onChange={e => update(i, 'zero_price_confirmed', e.target.checked)}
+                          disabled={disabled} className="w-3 h-3 rounded accent-gray-800" />
+                        Price is really 0
+                      </label>
+                    )}
                   </td>
 
                   <td className="px-3 py-2.5 text-gray-700 font-medium whitespace-nowrap">{fmt(row.subtotal)}</td>
