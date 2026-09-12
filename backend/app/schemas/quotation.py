@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List, Any
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 class QuotationCreate(BaseModel):
@@ -60,6 +60,10 @@ class QuotationRead(QuotationCreate):
     approval_requested_by_id: Optional[int] = None
     approval_note: Optional[str] = None
     approval_history: Optional[List[Any]] = None
+    client_rejected: bool = False
+    client_rejected_note: Optional[str] = None
+    client_rejected_by_id: Optional[int] = None
+    client_rejected_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
 
 class RequestApprovalPayload(BaseModel):
@@ -67,3 +71,6 @@ class RequestApprovalPayload(BaseModel):
 
 class RejectQuotationPayload(BaseModel):
     reason: str
+
+class MarkClientRejectedPayload(BaseModel):
+    note: Optional[str] = None

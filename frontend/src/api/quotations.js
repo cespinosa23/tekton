@@ -33,3 +33,13 @@ export const rejectQuotation = async ({ id, reason }) => {
   const { data } = await client.post(`/quotations/${id}/reject`, { reason })
   return data
 }
+
+export const markQuotationClientRejected = async ({ id, note }) => {
+  const { data } = await client.post(`/quotations/${id}/mark-client-rejected`, { note })
+  return data
+}
+
+export const reverseQuotationClientRejected = async (id) => {
+  const { data } = await client.post(`/quotations/${id}/reverse-client-rejected`)
+  return data
+}

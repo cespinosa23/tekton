@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, JSON, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Numeric, JSON, Text, ForeignKey
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from app.db.database import Base
 
@@ -65,3 +65,12 @@ class Quotation(Base):
     other_items = Column(JSON, nullable=True)
     total_contract_cost = Column(Numeric(12, 2), default=0)
     archived = Column(Boolean, default=False)
+
+    # Set only on a Finalized quote once the client (not an internal approver)
+    # turns it down — distinct from approval_status, which is the internal
+    # PM sign-off before a quote is even Finalized. A client-rejected quote
+    # can no longer be converted into a Project.
+    client_rejected = Column(Boolean, default=False)
+    client_rejected_note = Column(String(1000), nullable=True)
+    client_rejected_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    client_rejected_at = Column(DateTime, nullable=True)

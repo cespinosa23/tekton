@@ -6,10 +6,11 @@ from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.core.email import send_approval_requested_email
 from app.models.quotation import Quotation
+from app.models.project import Project
 from app.models.user import User
 from app.schemas.quotation import (
     QuotationCreate, QuotationUpdate, QuotationRead,
-    RequestApprovalPayload, RejectQuotationPayload,
+    RequestApprovalPayload, RejectQuotationPayload, MarkClientRejectedPayload,
 )
 
 
@@ -229,6 +230,51 @@ def reject_quotation(item_id: int, payload: RejectQuotationPayload, db: Session 
         "reason": payload.reason.strip(),
         "at": datetime.utcnow().isoformat(),
     }]
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+# ── Client decision — distinct from the internal approval workflow above.
+# A Finalized quote is presented to the client; if they turn it down, this
+# marks it so it can no longer be converted into a Project. One-way for
+# whoever marks it; only Admin can reverse a mistaken mark. ──
+
+@router.post("/{item_id}/mark-client-rejected", response_model=QuotationRead)
+def mark_client_rejected(item_id: int, payload: MarkClientRejectedPayload, db: Session = Depends(get_db), current_user: User = Depends(_write_auth)):
+    item = db.query(Quotation).filter(Quotation.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+    if not (_can_edit(item, current_user) or _has_role(current_user, "Project Manager")):
+        raise HTTPException(status_code=403, detail="Only the quotation's owner, a Project Manager, or an Admin can mark this")
+    if item.status != "Finalized":
+        raise HTTPException(status_code=400, detail="Only a Finalized quotation can be marked as rejected by the client")
+    if item.client_rejected:
+        raise HTTPException(status_code=400, detail="This quotation is already marked as rejected by the client")
+    if db.query(Project).filter(Project.source_quotation_id == item.id).first():
+        raise HTTPException(status_code=400, detail="A Project was already created from this quotation — it can no longer be marked as rejected")
+
+    item.client_rejected = True
+    item.client_rejected_note = (payload.note or "").strip() or None
+    item.client_rejected_by_id = current_user.id
+    item.client_rejected_at = datetime.utcnow()
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/reverse-client-rejected", response_model=QuotationRead)
+def reverse_client_rejected(item_id: int, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
+    item = db.query(Quotation).filter(Quotation.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+    if not item.client_rejected:
+        raise HTTPException(status_code=400, detail="This quotation is not marked as rejected by the client")
+
+    item.client_rejected = False
+    item.client_rejected_note = None
+    item.client_rejected_by_id = None
+    item.client_rejected_at = None
     db.commit()
     db.refresh(item)
     return item

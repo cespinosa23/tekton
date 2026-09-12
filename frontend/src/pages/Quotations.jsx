@@ -7,6 +7,7 @@ import Layout from '../components/Layout'
 import {
   getQuotations, createQuotation, updateQuotation, archiveQuotation,
   requestQuotationApproval, approveQuotation, rejectQuotation,
+  markQuotationClientRejected, reverseQuotationClientRejected,
 } from '../api/quotations'
 import { getCompanies, getSowTypes, getQuotationTemplateItems, getSuppliers, getSettings, getUsersByRole } from '../api/settings'
 import { getMaterials, getMaterialTypes } from '../api/materials'
@@ -29,7 +30,7 @@ import { buildProjectPrefillFromQuotation } from '../lib/projectFromQuotation'
 import {
   Plus, FileText, Eye, Download, CheckCircle, ArrowLeft, Pencil, Archive,
   Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
-  Clock, ChevronDown, ChevronUp, Link2, ListChecks,
+  Clock, ChevronDown, ChevronUp, Link2, ListChecks, UserX, RotateCcw,
 } from 'lucide-react'
 
 const STEPS_SOLAR = [
@@ -202,6 +203,8 @@ export default function Quotations() {
   const [selectedApproverId, setSelectedApproverId] = useState('')
   const [rejectTarget, setRejectTarget] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [clientRejectTarget, setClientRejectTarget] = useState(null)
+  const [clientRejectNote, setClientRejectNote] = useState('')
 
   const { data: quotations = [], isLoading } = useQuery({ queryKey: ['quotations'], queryFn: getQuotations })
   const { data: projectManagers = [] } = useQuery({ queryKey: ['usersByRole', 'Project Manager'], queryFn: () => getUsersByRole('Project Manager') })
@@ -271,6 +274,24 @@ export default function Quotations() {
       toast.success('Quotation disapproved')
     },
     onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to disapprove'),
+  })
+  const clientRejectMutation = useMutation({
+    mutationFn: markQuotationClientRejected,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      setClientRejectTarget(null)
+      setClientRejectNote('')
+      toast.success('Quotation marked as rejected by the client')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to mark as client-rejected'),
+  })
+  const reverseClientRejectMutation = useMutation({
+    mutationFn: reverseQuotationClientRejected,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      toast.success('Client-rejected mark reversed')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to reverse'),
   })
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
@@ -879,6 +900,11 @@ export default function Quotations() {
                     {q.approval_status === 'rejected' && (
                       <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium" title={q.approval_note || undefined}>Disapproved</span>
                     )}
+                    {q.client_rejected && (
+                      <span className="px-2 py-0.5 bg-gray-800 text-white rounded text-xs font-medium" title={q.client_rejected_note || 'Rejected by the client — not convertible into a Project'}>
+                        Client Rejected
+                      </span>
+                    )}
                     {projectByQuoteId[q.id] && (
                       <button onClick={() => navigate(`/projects/${projectByQuoteId[q.id].id}`)}
                         className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-medium hover:bg-emerald-200 flex items-center gap-1"
@@ -926,6 +952,18 @@ export default function Quotations() {
                       <ListChecks size={15} />
                     </button>
                   )}
+                  {q.status === 'Finalized' && !q.client_rejected && !projectByQuoteId[q.id] && (isOwner(q) || hasRole('Project Manager')) && (
+                    <button onClick={() => { setClientRejectTarget(q); setClientRejectNote('') }}
+                      className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-800" title="Mark as Rejected by Client">
+                      <UserX size={15} />
+                    </button>
+                  )}
+                  {q.client_rejected && isAdmin() && (
+                    <button onClick={() => reverseClientRejectMutation.mutate(q.id)} disabled={reverseClientRejectMutation.isPending}
+                      className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-50" title="Reverse Client Rejected (Admin only)">
+                      <RotateCcw size={15} />
+                    </button>
+                  )}
                   {canWrite('quotations') && (
                     <button onClick={() => handleClone(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Clone / Duplicate">
                       <Copy size={15} />
@@ -936,7 +974,7 @@ export default function Quotations() {
                     className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Preview">
                     <Eye size={15} />
                   </button>
-                  {q.status === 'Finalized' && canWrite('projects') && !projectByQuoteId[q.id] && (
+                  {q.status === 'Finalized' && !q.client_rejected && canWrite('projects') && !projectByQuoteId[q.id] && (
                     <button onClick={() => handleCreateProject(q)}
                       className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
                       <Briefcase size={15} />
@@ -971,6 +1009,31 @@ export default function Quotations() {
                   disabled={!rejectReason.trim() || rejectMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50">
                   <ThumbsDown size={14} /> Disapprove
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mark as Rejected by Client dialog */}
+        {clientRejectTarget && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Mark as Rejected by Client</h3>
+              <p className="text-sm text-gray-500 mb-3">
+                Mark <strong>{clientRejectTarget.addressee_name || 'this quotation'}</strong> as rejected by the client?
+                This can&apos;t be converted into a Project afterward, and only an Admin can undo it.
+              </p>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Reason (optional)</label>
+              <textarea value={clientRejectNote} onChange={e => setClientRejectNote(e.target.value)} rows={3} autoFocus
+                placeholder="e.g. went with another contractor, budget fell through…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setClientRejectTarget(null); setClientRejectNote('') }} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                <button onClick={() => clientRejectMutation.mutate({ id: clientRejectTarget.id, note: clientRejectNote.trim() })}
+                  disabled={clientRejectMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 disabled:opacity-50">
+                  <UserX size={14} /> Mark Rejected
                 </button>
               </div>
             </div>
@@ -1085,6 +1148,17 @@ export default function Quotations() {
             <div className="text-sm text-red-800">
               <span className="font-medium">This quotation was disapproved.</span>
               {quoteData.approval_note && <p className="text-red-700 mt-0.5">{quoteData.approval_note}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Client-rejected banner — a business outcome, distinct from the internal approval above */}
+        {quoteData.client_rejected && (
+          <div className="mb-4 flex items-start gap-2 bg-gray-100 border border-gray-300 rounded-lg px-4 py-3">
+            <UserX size={15} className="text-gray-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-gray-800">
+              <span className="font-medium">This quotation was rejected by the client — it can no longer be converted into a Project.</span>
+              {quoteData.client_rejected_note && <p className="text-gray-600 mt-0.5">{quoteData.client_rejected_note}</p>}
             </div>
           </div>
         )}
