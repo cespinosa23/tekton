@@ -23,7 +23,7 @@ export const NAV_ROLES = {
   '/settings':      [],                     // Admin only
   '/quotations':    ['Project Coordinator', 'Project Manager', 'Engineer'],
   '/archive':       [],                     // Admin only
-  '/materials':     [],                     // Admin only
+  '/materials':     ['Project Coordinator'], // View only — WRITE_ROLES.materials stays Admin-only
   '/inventory':     ['Project Coordinator', 'Project Manager'],
   '/transactions':  ['Project Coordinator'],
   '/employees':     ['Project Coordinator'],
