@@ -296,11 +296,15 @@ export default function Quotations() {
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
   const isPreviewStep = steps[step] === 'Preview'
-  // Admin can edit anything, any status, no restriction — everyone else must
   // Finalized is a one-way door for everyone, Admin included — no exceptions.
   // The only way to change a Finalized quote's content is to Clone it into a
   // new Draft and route that through approval.
-  const isLocked = editingQuote?.status === 'Finalized'
+  const isFinalizedLocked = editingQuote?.status === 'Finalized'
+  // While an approval request is pending, content is frozen too — matches
+  // the backend, which rejects any edit that isn't itself the direct-finalize
+  // bypass below, so content can never drift from what the approver sees.
+  const isPendingLocked = editingQuote?.approval_status === 'pending'
+  const isLocked = isFinalizedLocked || isPendingLocked
   // Downloads are only for the finished document — everyone, regardless of
   // role, has to wait until the quote is actually Finalized.
   const canDownloadQuote = quoteData.status === 'Finalized'
@@ -1134,10 +1138,23 @@ export default function Quotations() {
         {/* Finalized lock banner — reachable via the read-only builder view
             (Admin/PM/PC only, see canViewFinalizedBuilder), and kept as a
             defensive last line for any other path that ever reaches here. */}
-        {isLocked && (
+        {isFinalizedLocked && (
           <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800">
             <Lock size={15} />
             <span className="text-sm font-medium">This quotation is Finalized — fields are read-only. Clone it to make changes.</span>
+          </div>
+        )}
+
+        {/* Pending-approval lock banner — content is frozen so the approver's
+            decision can never end up applying to different content than they
+            reviewed. Admin/PM can still Finalize directly below to bypass. */}
+        {isPendingLocked && (
+          <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-blue-800">
+            <Lock size={15} />
+            <span className="text-sm font-medium">
+              This quotation has a pending approval request — fields are read-only until the approver responds.
+              {canFinalizeDirectly && ' You can still Finalize it directly below to bypass the request.'}
+            </span>
           </div>
         )}
 
@@ -1209,19 +1226,23 @@ export default function Quotations() {
                   <Download size={15} /> {downloading ? 'Generating…' : 'Download PDF'}
                 </button>
                 )}
-                {!isLocked && (
-                  canFinalizeDirectly ? (
+                {canFinalizeDirectly ? (
+                  // Deliberately gated on isFinalizedLocked, not isLocked — finalizing
+                  // directly is exactly how Admin/PM supersede a pending approval
+                  // request, so this must stay available while content is otherwise
+                  // frozen for editing (isPendingLocked).
+                  !isFinalizedLocked && (
                     <button onClick={handleFinalize} disabled={updateMutation.isPending || createMutation.isPending}
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
                       <CheckCircle size={15} /> Finalize Quote
                     </button>
-                  ) : (
+                  )
+                ) : !isLocked && (
                     <button onClick={handleRequestApproval} disabled={updateMutation.isPending || createMutation.isPending}
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
                       <Send size={15} /> Request Approval
                     </button>
-                  )
-                )}
+                  )}
               </>
             ) : (
               <button onClick={handleNext}

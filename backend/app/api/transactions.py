@@ -32,6 +32,10 @@ def _reapply_linked_billing(db: Session, tx: Transaction):
         billing.is_paid = True
         billing.paid_date = tx.transaction_date
 
+def _is_admin(user) -> bool:
+    return any(ur.role.name == "Admin" for ur in user.roles)
+
+
 _write_auth = require_role(["Admin", "Project Coordinator"])
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -47,13 +51,13 @@ def get_material_ids(materials):
     return list(ids)
 
 @router.get("/", response_model=list[TransactionRead])
-def list_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Transaction).filter(Transaction.archived == False).offset(skip).limit(limit).all()
+def list_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Transaction).filter(Transaction.archived == False).order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
 
 # Must be before /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[TransactionRead])
-def list_archived_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Transaction).filter(Transaction.archived == True).offset(skip).limit(limit).all()
+def list_archived_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Transaction).filter(Transaction.archived == True).order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
 
 @router.get("/{item_id}", response_model=TransactionRead)
 def get_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
@@ -63,7 +67,14 @@ def get_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(get_c
     return tx
 
 @router.post("/", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
-def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
+def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
+    # billing_id links a transaction to a specific billing's paid status — only
+    # the Admin-only mark-paid flow (billing.py) is allowed to set it, so a
+    # lower-privileged transaction writer can't fabricate a payment that
+    # appears linked to (and reportable against) a billing it never touched.
+    if payload.billing_id is not None and not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only an Admin can link a transaction to a billing")
+
     tx = Transaction(**payload.model_dump())
     db.add(tx)
     db.commit()
@@ -75,16 +86,38 @@ def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db)
 
     return tx
 
+_BILLING_SENSITIVE_FIELDS = {"amount", "billing_id", "transaction_type", "transaction_date"}
+
+
 @router.put("/{item_id}", response_model=TransactionRead)
-def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = Depends(get_db), _=Depends(_write_auth)):
+def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    updates = payload.model_dump(exclude_unset=True)
+
+    if payload.billing_id is not None and not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only an Admin can link a transaction to a billing")
+
+    # A transaction linked to a billing (existing or being newly linked here)
+    # is a system-managed payment record — the amount/date/type it was created
+    # with must match what billing.py's mark-paid flow set, or the billing's
+    # own is_paid/amount silently desyncs from the transaction that's supposed
+    # to represent it. Changing any of that has to go through unmark-paid /
+    # mark-paid-again instead, which already keeps both sides in sync.
+    linked_billing_id = updates.get("billing_id", tx.billing_id)
+    if linked_billing_id and _BILLING_SENSITIVE_FIELDS.intersection(updates):
+        raise HTTPException(
+            status_code=400,
+            detail="This transaction is linked to a billing — mark the billing unpaid and paid again "
+                   "instead of editing its amount, date, type, or billing link directly.",
+        )
+
     # Get material IDs before and after update for full sync
     old_material_ids = get_material_ids(tx.materials or [])
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    for field, value in updates.items():
         setattr(tx, field, value)
     db.commit()
     db.refresh(tx)

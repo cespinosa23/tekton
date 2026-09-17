@@ -71,7 +71,11 @@ export default function Dashboard() {
   const filterByDateRange = (items, dateField) => {
     const { start, end } = getDateRange()
     return items.filter(item => {
-      const d = item[dateField] ? new Date(item[dateField]) : null
+      // Append T00:00:00 so a plain 'YYYY-MM-DD' string parses as local
+      // midnight, not UTC midnight — otherwise browsers west of UTC read a
+      // date one day earlier than intended and it can fall outside the
+      // range (e.g. the 1st of the month excluded from "Month to Date").
+      const d = item[dateField] ? new Date(item[dateField] + 'T00:00:00') : null
       return d && d >= start && d <= end
     })
   }
@@ -90,9 +94,17 @@ export default function Dashboard() {
   const totalPayments = filteredTransactions
     .filter(t => t.transaction_type === 'Payment')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+  // Nets Incoming Materials (returns) against Procurement/Outgoing — matches
+  // the materials-cost calc used everywhere else (ProjectView, Reports,
+  // Projects' PaymentsView, and adminWidgets just below). Previously this
+  // only counted 'Materials Procurement', silently dropping Outgoing/
+  // Incoming Materials transactions from Total Expenses and understating cost.
   const totalMaterials = filteredTransactions
-    .filter(t => t.transaction_type === 'Materials Procurement')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+    .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
+    .reduce((sum, t) => {
+      const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
+      return sum + sign * (parseFloat(t.amount) || 0)
+    }, 0)
   const totalGeneral = filteredTransactions
     .filter(t => t.transaction_type === 'General Expenditure')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)

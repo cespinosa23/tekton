@@ -1,20 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_role
 from app.models.sow_type import SowType, SowTypeItem
 from app.schemas.sow_type import (
     SowTypeCreate, SowTypeUpdate, SowTypeRead, SowTypeItemCreate, SowTypeItemRead
 )
 
 router = APIRouter(prefix="/sow-types", tags=["sow_types"])
+_write_auth = require_role(["Admin"])
 
 @router.get("/", response_model=list[SowTypeRead])
 def list_types(db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(SowType).filter(SowType.archived == False).all()
 
 @router.post("/", response_model=SowTypeRead, status_code=status.HTTP_201_CREATED)
-def create_type(payload: SowTypeCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_type(payload: SowTypeCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     existing = db.query(SowType).filter(SowType.name == payload.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Scope of Work type already exists")
@@ -25,7 +26,7 @@ def create_type(payload: SowTypeCreate, db: Session = Depends(get_db), _=Depends
     return st
 
 @router.put("/{type_id}", response_model=SowTypeRead)
-def update_type(type_id: int, payload: SowTypeUpdate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def update_type(type_id: int, payload: SowTypeUpdate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     st = db.query(SowType).filter(SowType.id == type_id).first()
     if not st:
         raise HTTPException(status_code=404, detail="Scope of Work type not found")
@@ -36,7 +37,7 @@ def update_type(type_id: int, payload: SowTypeUpdate, db: Session = Depends(get_
     return st
 
 @router.delete("/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
     st = db.query(SowType).filter(SowType.id == type_id).first()
     if not st:
         raise HTTPException(status_code=404, detail="Scope of Work type not found")
@@ -44,7 +45,7 @@ def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(get_curr
     db.commit()
 
 @router.post("/{type_id}/items", response_model=SowTypeItemRead, status_code=status.HTTP_201_CREATED)
-def add_item(type_id: int, payload: SowTypeItemCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def add_item(type_id: int, payload: SowTypeItemCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     st = db.query(SowType).filter(SowType.id == type_id).first()
     if not st:
         raise HTTPException(status_code=404, detail="Scope of Work type not found")
@@ -61,7 +62,7 @@ def add_item(type_id: int, payload: SowTypeItemCreate, db: Session = Depends(get
     return item
 
 @router.delete("/{type_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_item(type_id: int, item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def remove_item(type_id: int, item_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
     item = db.query(SowTypeItem).filter(
         SowTypeItem.id == item_id,
         SowTypeItem.sow_type_id == type_id

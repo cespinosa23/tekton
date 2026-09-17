@@ -24,18 +24,6 @@ class CompleteRegistration(BaseModel):
     last_name: str
     middle_name: Optional[str] = None
 
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    roles: list[RoleName] = []
-
-    @field_validator("roles")
-    @classmethod
-    def validate_roles(cls, roles):
-        if RoleName.admin in roles and len(roles) > 1:
-            raise ValueError("Admin role cannot be combined with other roles")
-        return roles
-
 class UserRead(BaseModel):
     id: int
     email: str

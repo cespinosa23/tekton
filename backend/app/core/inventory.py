@@ -23,9 +23,12 @@ def sync_inventory(db: Session, material_id: int):
     than a real purchase, so callers never mistake a market quote for a
     verified paid price.
     """
+    # id as a secondary sort key makes same-day entries deterministic — without
+    # it, the DB is free to return same-date rows in any order, so which one
+    # counts as "most recent" for a tied top price could change between syncs.
     transactions = db.query(Transaction).filter(
         Transaction.archived == False
-    ).order_by(Transaction.transaction_date.asc()).all()
+    ).order_by(Transaction.transaction_date.asc(), Transaction.id.asc()).all()
 
     # Group by brand
     brand_data = {}  # key: brand -> {balance, procurement_entries: [{unit_cost, date, supplier}]}

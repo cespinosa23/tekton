@@ -32,14 +32,14 @@ def _is_zero_amount(amount) -> bool:
 
 
 @router.get("/", response_model=list[BillingRead])
-def list_billings(skip: int = 0, limit: int = 200, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Billing).filter(Billing.archived == False).offset(skip).limit(limit).all()
+def list_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Billing).filter(Billing.archived == False).order_by(Billing.id.asc()).offset(skip).limit(limit).all()
 
 
 # Must be before /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[BillingRead])
-def list_archived_billings(skip: int = 0, limit: int = 200, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Billing).filter(Billing.archived == True).offset(skip).limit(limit).all()
+def list_archived_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Billing).filter(Billing.archived == True).order_by(Billing.id.asc()).offset(skip).limit(limit).all()
 
 
 @router.get("/{item_id}", response_model=BillingRead)
@@ -160,7 +160,11 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
 
 @router.put("/{item_id}/paid", response_model=BillingRead)
 def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
-    billing = db.query(Billing).filter(Billing.id == item_id).first()
+    # Row-locked so two concurrent "mark paid" requests for the same billing
+    # can't both pass the already_linked check below and each create their
+    # own Payment transaction — the second request blocks here until the
+    # first commits, at which point it sees the transaction the first one made.
+    billing = db.query(Billing).filter(Billing.id == item_id).with_for_update().first()
     if not billing:
         raise HTTPException(status_code=404, detail="Billing not found")
 

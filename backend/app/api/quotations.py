@@ -99,7 +99,16 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
     # Draft and route that through approval again.
     if item.status == "Finalized":
         raise HTTPException(status_code=400, detail="Finalized quotations can no longer be edited — clone it to make changes")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    # While an approval request is pending, the content must match what the
+    # approver is actually reviewing — block edits so a "Finalized" decision
+    # can never end up applying to different content than was requested.
+    # The one exception is finalizing directly (Admin/PM bypassing the
+    # approval flow), which already intentionally supersedes the pending
+    # request below — that path must still go through.
+    payload_fields = payload.model_dump(exclude_unset=True)
+    if item.approval_status == "pending" and payload_fields.get("status") != "Finalized":
+        raise HTTPException(status_code=400, detail="This quotation has a pending approval request — it can't be edited until the approver responds")
+    for field, value in payload_fields.items():
         setattr(item, field, value)
     # Finalizing directly (Admin/PM bypassing the approval flow) supersedes
     # any outstanding approval request — clear it server-side so a stale

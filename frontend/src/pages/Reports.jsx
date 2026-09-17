@@ -110,18 +110,27 @@ export default function Reports() {
     d.setMonth(d.getMonth() - (5 - i))
     const yr = d.getFullYear()
     const mo = d.getMonth()
+    // T00:00:00 forces local-time parsing of the plain 'YYYY-MM-DD' date
+    // strings these records store — otherwise a browser west of UTC reads a
+    // date one day earlier and can attribute it to the wrong month.
     const inMonth = (dateStr) => {
       if (!dateStr) return false
-      const dd = new Date(dateStr)
+      const dd = new Date(dateStr + 'T00:00:00')
       return dd.getFullYear() === yr && dd.getMonth() === mo
     }
     const revenue = transactions
       .filter(t => t.transaction_type === 'Payment' && inMonth(t.transaction_date))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
     const labor = attendance.filter(a => inMonth(a.date) && !a.is_direct_hire).reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
+    // Nets Incoming Materials (returns) against Procurement/Outgoing — matches
+    // the materials-cost calc used everywhere else. Previously this only
+    // counted 'Materials Procurement', understating this month's expenses.
     const materials = transactions
-      .filter(t => t.transaction_type === 'Materials Procurement' && inMonth(t.transaction_date))
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+      .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type) && inMonth(t.transaction_date))
+      .reduce((s, t) => {
+        const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
+        return s + sign * (parseFloat(t.amount) || 0)
+      }, 0)
     const general = transactions
       .filter(t => t.transaction_type === 'General Expenditure' && inMonth(t.transaction_date))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
@@ -146,9 +155,16 @@ export default function Reports() {
   // ── Expense category breakdown ─────────────────────────────────────────────
   // Direct Hire attendance is paid by the client directly, not a company cost.
   const totalLabor = attendance.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
+  // Nets Incoming Materials (returns) against Procurement/Outgoing — matches
+  // projectData's materialsCost above. Previously this dropped Incoming
+  // Materials entirely instead of netting them, so this KPI/pie chart could
+  // disagree with the Project Profitability table on the very same page.
   const totalMaterials = transactions
-    .filter(t => ['Materials Procurement', 'Outgoing Materials'].includes(t.transaction_type))
-    .reduce((s, t) => s + (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0), 0)
+    .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
+    .reduce((s, t) => {
+      const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
+      return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
+    }, 0)
   const totalGeneral = transactions
     .filter(t => t.transaction_type === 'General Expenditure')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
@@ -165,7 +181,7 @@ export default function Reports() {
   const monthEnd = endOfMonth(now)
   const thisMonthAtt = attendance.filter(a => {
     if (!a.date) return false
-    const d = new Date(a.date)
+    const d = new Date(a.date + 'T00:00:00')
     return d >= monthStart && d <= monthEnd
   })
   const activeEmployeeCount = employees.filter(e => e.status === 'Active').length

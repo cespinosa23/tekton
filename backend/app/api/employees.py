@@ -17,11 +17,11 @@ router = APIRouter(prefix="/employees", tags=["employees"])
 @router.get("/", response_model=List[EmployeeRead])
 def list_employees(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10000,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Employee).filter(Employee.archived == False).offset(skip).limit(limit).all()
+    return db.query(Employee).filter(Employee.archived == False).order_by(Employee.id.asc()).offset(skip).limit(limit).all()
 
 
 # Must be before /{employee_id} — otherwise "archived" is captured as the id
@@ -30,7 +30,7 @@ def list_archived_employees(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Employee).filter(Employee.archived == True).all()
+    return db.query(Employee).filter(Employee.archived == True).order_by(Employee.id.asc()).all()
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)

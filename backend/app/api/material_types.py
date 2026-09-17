@@ -1,20 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_role
 from app.models.material_type import MaterialType, MaterialTypeBrand
 from app.schemas.material_type import (
     MaterialTypeCreate, MaterialTypeUpdate, MaterialTypeRead, MaterialTypeBrandCreate, MaterialTypeBrandRead
 )
 
 router = APIRouter(prefix="/material-types", tags=["material_types"])
+_write_auth = require_role(["Admin"])
 
 @router.get("/", response_model=list[MaterialTypeRead])
 def list_types(db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(MaterialType).filter(MaterialType.archived == False).all()
 
 @router.post("/", response_model=MaterialTypeRead, status_code=status.HTTP_201_CREATED)
-def create_type(payload: MaterialTypeCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_type(payload: MaterialTypeCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     existing = db.query(MaterialType).filter(MaterialType.name == payload.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Material type already exists")
@@ -25,7 +26,7 @@ def create_type(payload: MaterialTypeCreate, db: Session = Depends(get_db), _=De
     return mt
 
 @router.put("/{type_id}", response_model=MaterialTypeRead)
-def update_type(type_id: int, payload: MaterialTypeUpdate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def update_type(type_id: int, payload: MaterialTypeUpdate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     mt = db.query(MaterialType).filter(MaterialType.id == type_id).first()
     if not mt:
         raise HTTPException(status_code=404, detail="Material type not found")
@@ -36,7 +37,7 @@ def update_type(type_id: int, payload: MaterialTypeUpdate, db: Session = Depends
     return mt
 
 @router.delete("/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
     mt = db.query(MaterialType).filter(MaterialType.id == type_id).first()
     if not mt:
         raise HTTPException(status_code=404, detail="Material type not found")
@@ -44,7 +45,7 @@ def archive_type(type_id: int, db: Session = Depends(get_db), _=Depends(get_curr
     db.commit()
 
 @router.post("/{type_id}/brands", response_model=MaterialTypeBrandRead, status_code=status.HTTP_201_CREATED)
-def add_brand(type_id: int, payload: MaterialTypeBrandCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def add_brand(type_id: int, payload: MaterialTypeBrandCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     mt = db.query(MaterialType).filter(MaterialType.id == type_id).first()
     if not mt:
         raise HTTPException(status_code=404, detail="Material type not found")
@@ -61,7 +62,7 @@ def add_brand(type_id: int, payload: MaterialTypeBrandCreate, db: Session = Depe
     return brand
 
 @router.delete("/{type_id}/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_brand(type_id: int, brand_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def remove_brand(type_id: int, brand_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
     brand = db.query(MaterialTypeBrand).filter(
         MaterialTypeBrand.id == brand_id,
         MaterialTypeBrand.material_type_id == type_id

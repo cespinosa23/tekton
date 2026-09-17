@@ -2,13 +2,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_role
 from app.models.quotation_template_item import QuotationTemplateItem
 from app.schemas.quotation_template_item import (
     QuotationTemplateItemCreate, QuotationTemplateItemUpdate, QuotationTemplateItemRead
 )
 
 router = APIRouter(prefix="/quotation-template-items", tags=["quotation_template_items"])
+_write_auth = require_role(["Admin"])
 
 @router.get("/", response_model=list[QuotationTemplateItemRead])
 def list_items(category: Optional[str] = Query(default=None), db: Session = Depends(get_db), _=Depends(get_current_user)):
@@ -18,7 +19,7 @@ def list_items(category: Optional[str] = Query(default=None), db: Session = Depe
     return q.all()
 
 @router.post("/", response_model=QuotationTemplateItemRead, status_code=status.HTTP_201_CREATED)
-def create_item(payload: QuotationTemplateItemCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_item(payload: QuotationTemplateItemCreate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     existing = db.query(QuotationTemplateItem).filter(
         QuotationTemplateItem.category == payload.category,
         QuotationTemplateItem.text == payload.text,
@@ -32,7 +33,7 @@ def create_item(payload: QuotationTemplateItemCreate, db: Session = Depends(get_
     return item
 
 @router.put("/{item_id}", response_model=QuotationTemplateItemRead)
-def update_item(item_id: int, payload: QuotationTemplateItemUpdate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def update_item(item_id: int, payload: QuotationTemplateItemUpdate, db: Session = Depends(get_db), _=Depends(_write_auth)):
     item = db.query(QuotationTemplateItem).filter(QuotationTemplateItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -43,7 +44,7 @@ def update_item(item_id: int, payload: QuotationTemplateItemUpdate, db: Session 
     return item
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_item(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def archive_item(item_id: int, db: Session = Depends(get_db), _=Depends(_write_auth)):
     item = db.query(QuotationTemplateItem).filter(QuotationTemplateItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
