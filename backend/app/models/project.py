@@ -5,6 +5,13 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Human-facing tracking number, e.g. PRJ-202609-0001 — auto-generated at
+    # creation (see crud_router's before_create hook in main.py), sequential
+    # within its creation month, never user-editable. Nullable only because
+    # projects that predate this column were backfilled from quotation_date
+    # instead of a real creation timestamp (which this table doesn't track),
+    # so a project with no quotation_date at all was left without one.
+    reference_id = Column(String(20), unique=True, nullable=True)
     # Set once, at creation, by the Quotation -> Project handoff — lets
     # Quotations know a project already exists for a given quote.
     source_quotation_id = Column(Integer, ForeignKey("quotations.id"), nullable=True)

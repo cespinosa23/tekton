@@ -91,7 +91,10 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
-            <h3 className="font-semibold text-gray-900 text-base">{project.project_name}</h3>
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base">{project.project_name}</h3>
+              {project.reference_id && <p className="text-xs text-gray-400 font-mono">{project.reference_id}</p>}
+            </div>
             <div className="flex items-center gap-2 ml-2 flex-shrink-0">
               {project.source_quotation_id && (
                 <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium flex items-center gap-1"
@@ -673,6 +676,7 @@ export default function Projects() {
     const matchesSearch =
       p.project_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.owner_company_name?.toLowerCase().includes(search.toLowerCase()) ||
+      p.reference_id?.toLowerCase().includes(search.toLowerCase()) ||
       formatAddress(p).toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
     const matchesPM = pmFilter === 'all' || p.project_manager === pmFilter

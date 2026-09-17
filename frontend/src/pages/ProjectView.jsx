@@ -262,6 +262,7 @@ export default function ProjectView() {
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
+            {project.reference_id && <p className="text-xs text-gray-400 font-mono mb-0.5">{project.reference_id}</p>}
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-gray-900">{project.project_name}</h1>
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] || STATUS_COLORS.Inactive}`}>

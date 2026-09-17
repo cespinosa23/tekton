@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Callable, Optional
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_role
 
 def make_crud_router(
     prefix, tag, Model, CreateSchema, UpdateSchema, ReadSchema,
-    allow_archive=True, write_roles: Optional[list[str]] = None
+    allow_archive=True, write_roles: Optional[list[str]] = None,
+    # Optional (payload_dict, db) -> None hook run just before insert, so a
+    # resource can compute a server-generated field (e.g. a sequential
+    # reference number) without needing its own hand-rolled router.
+    before_create: Optional[Callable[[dict, Session], None]] = None,
 ):
     router = APIRouter(prefix=prefix, tags=[tag])
     write_auth = Depends(require_role(write_roles)) if write_roles else Depends(get_current_user)
@@ -34,7 +38,10 @@ def make_crud_router(
 
     @router.post("/", response_model=ReadSchema, status_code=status.HTTP_201_CREATED)
     def create_item(payload: CreateSchema, db: Session = Depends(get_db), _=write_auth):
-        item = Model(**payload.model_dump())
+        data = payload.model_dump()
+        if before_create:
+            before_create(data, db)
+        item = Model(**data)
         db.add(item)
         db.commit()
         db.refresh(item)

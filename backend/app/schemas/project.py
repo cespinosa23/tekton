@@ -65,6 +65,9 @@ class ProjectUpdate(ProjectCreate):
 
 class ProjectRead(ProjectCreate):
     id: int
+    # Server-set only — auto-generated at creation, never accepted from
+    # ProjectCreate/Update payloads.
+    reference_id: Optional[str] = None
     archived: bool = False
     archived_by: Optional[str] = None
     model_config = {"from_attributes": True}

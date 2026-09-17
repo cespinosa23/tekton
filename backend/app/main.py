@@ -38,6 +38,7 @@ from app.api import billing as billing_router
 from app.api import quotations as quotations_router
 from app.api import materials_import
 from app.api import canvass_import
+from app.core.project_reference import assign_reference_id
 
 app = FastAPI(title="Tekton")
 
@@ -60,7 +61,7 @@ app.include_router(quotation_template_items.router)
 app.include_router(admin.router)
 
 # CRUD routes
-app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
+app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Project Coordinator", "Project Manager"], before_create=assign_reference_id))
 app.include_router(make_crud_router("/attendance", "attendance", Attendance, AttendanceCreate, AttendanceUpdate, AttendanceRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
 app.include_router(make_crud_router("/calendar-days", "calendar_days", CalendarDay, CalendarDayCreate, CalendarDayUpdate, CalendarDayRead, allow_archive=False, write_roles=["Admin"]))
 app.include_router(make_crud_router("/companies", "companies", Company, CompanyCreate, CompanyUpdate, CompanyRead, allow_archive=False, write_roles=["Admin"]))
