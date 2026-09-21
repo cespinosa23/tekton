@@ -92,21 +92,26 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
     item = db.query(Quotation).filter(Quotation.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Quotation not found")
-    if not _can_edit(item, current_user):
-        raise HTTPException(status_code=403, detail="You can only edit quotations you created")
+    # Only currently meaningful while pending — approval_requested_to_id
+    # lingers after a decision, so this must not be treated as standing
+    # access once the quote is no longer actually pending.
+    is_assigned_pending_approver = item.approval_status == "pending" and item.approval_requested_to_id == current_user.id
+    if not (_can_edit(item, current_user) or is_assigned_pending_approver):
+        raise HTTPException(status_code=403, detail="You can only edit quotations you created, or one currently pending your approval")
     # Finalized is a one-way door — no exceptions, Admin included. The only
     # way to change a Finalized quote's content is to clone it into a new
     # Draft and route that through approval again.
     if item.status == "Finalized":
         raise HTTPException(status_code=400, detail="Finalized quotations can no longer be edited — clone it to make changes")
-    # While an approval request is pending, the content must match what the
-    # approver is actually reviewing — block edits so a "Finalized" decision
-    # can never end up applying to different content than was requested.
-    # The one exception is finalizing directly (Admin/PM bypassing the
-    # approval flow), which already intentionally supersedes the pending
-    # request below — that path must still go through.
+    # While an approval request is pending, content is frozen for everyone
+    # except Admin and the specific PM assigned to approve it — they're
+    # trusted to fix something during review without bouncing it back to
+    # Draft first. Everyone else (e.g. the PC/Engineer who submitted it)
+    # stays locked out so the approver's decision can't end up applying to
+    # content they never actually saw.
     payload_fields = payload.model_dump(exclude_unset=True)
-    if item.approval_status == "pending" and payload_fields.get("status") != "Finalized":
+    can_edit_while_pending = _is_admin(current_user) or is_assigned_pending_approver
+    if item.approval_status == "pending" and not can_edit_while_pending and payload_fields.get("status") != "Finalized":
         raise HTTPException(status_code=400, detail="This quotation has a pending approval request — it can't be edited until the approver responds")
     for field, value in payload_fields.items():
         setattr(item, field, value)

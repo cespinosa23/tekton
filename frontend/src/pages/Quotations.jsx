@@ -300,10 +300,12 @@ export default function Quotations() {
   // The only way to change a Finalized quote's content is to Clone it into a
   // new Draft and route that through approval.
   const isFinalizedLocked = editingQuote?.status === 'Finalized'
-  // While an approval request is pending, content is frozen too — matches
-  // the backend, which rejects any edit that isn't itself the direct-finalize
-  // bypass below, so content can never drift from what the approver sees.
-  const isPendingLocked = editingQuote?.approval_status === 'pending'
+  // While an approval request is pending, content is frozen for everyone
+  // except Admin and the specific PM assigned to approve it — matches the
+  // backend, which grants those two the same exception so they can fix
+  // something during review without bouncing it back to Draft first.
+  const isAssignedPendingApprover = editingQuote?.approval_status === 'pending' && editingQuote?.approval_requested_to_id === user?.id
+  const isPendingLocked = editingQuote?.approval_status === 'pending' && !isAdmin() && !isAssignedPendingApprover
   const isLocked = isFinalizedLocked || isPendingLocked
   // Downloads are only for the finished document — everyone, regardless of
   // role, has to wait until the quote is actually Finalized.
@@ -950,6 +952,13 @@ export default function Quotations() {
                       </button>
                     )
                   )}
+                  {/* Assigned approver isn't the owner, so they have no other way into
+                      the builder for a quote pending their own decision. */}
+                  {!isOwner(q) && q.approval_status === 'pending' && q.approval_requested_to_id === user?.id && (
+                    <button onClick={() => openBuilder(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Edit (pending your approval)">
+                      <Pencil size={15} />
+                    </button>
+                  )}
                   {q.status === 'Finalized' && canViewFinalizedBuilder && (
                     <button onClick={() => openBuilder(q)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
                       title="View full builder (read-only) — Finalized, editing is disabled">
@@ -1145,15 +1154,28 @@ export default function Quotations() {
           </div>
         )}
 
-        {/* Pending-approval lock banner — content is frozen so the approver's
-            decision can never end up applying to different content than they
-            reviewed. Admin/PM can still Finalize directly below to bypass. */}
+        {/* Pending-approval lock banner — content is frozen for everyone
+            except Admin and the assigned approver, so the approver's
+            decision can never end up applying to different content than
+            they reviewed. Admin/PM can also still Finalize directly below
+            to bypass the request entirely. */}
         {isPendingLocked && (
           <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-blue-800">
             <Lock size={15} />
             <span className="text-sm font-medium">
               This quotation has a pending approval request — fields are read-only until the approver responds.
               {canFinalizeDirectly && ' You can still Finalize it directly below to bypass the request.'}
+            </span>
+          </div>
+        )}
+
+        {/* Editable-while-pending note — shown only to the two roles the
+            backend actually exempts from the lock above. */}
+        {editingQuote?.approval_status === 'pending' && !isPendingLocked && (
+          <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-blue-800">
+            <Clock size={15} />
+            <span className="text-sm font-medium">
+              This quotation has a pending approval request. As {isAssignedPendingApprover ? 'the assigned approver' : 'an Admin'}, you can still edit it before deciding.
             </span>
           </div>
         )}
