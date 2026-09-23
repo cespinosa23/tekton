@@ -341,7 +341,9 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
       value={enabled ? formatNumberDisplay(formData[field]) : ''}
       placeholder="Required"
       onChange={e => {
-        const sanitized = sanitizeNumberInput(e.target.value)
+        // Others is the one scope that can legitimately be negative — a
+        // quotation's discount is carried into it as a deduction.
+        const sanitized = sanitizeNumberInput(e.target.value, { allowNegative: field === 'scope_others_cost' })
         if (sanitized === null) return
         setFormData(p => ({ ...p, [field]: sanitized }))
       }}

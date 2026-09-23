@@ -1,4 +1,4 @@
-import { effectiveSupplyCost } from '../components/quotation/CostTypeEditor'
+import { effectiveSupplyCost, calcQuoteDiscount, calcQuoteVat, VAT_RATE } from '../components/quotation/CostTypeEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 
 // Cost categories that are always a plain manual number on a scope-of-work
@@ -65,6 +65,23 @@ export function buildProjectPrefillFromQuotation(quote) {
         : costing.scope_others_text.trim()
     }
   })
+
+  // A quotation's discount and VAT both adjust the agreed price, and a Project's
+  // contract cost is simply the sum of its scope costs — so they ride along
+  // under Others: the discount as a negative amount, VAT (already computed on
+  // the post-discount cost) as a positive one. That keeps the project's
+  // contract cost equal to the quotation's Total Cost, which is what billing
+  // (DP / progress % / retention) runs off.
+  const discount = calcQuoteDiscount(quote)
+  const vat = calcQuoteVat(quote)
+  const addToOthers = (amount, label) => {
+    merged.scope_others = true
+    merged.scope_others_cost += amount
+    merged.scope_others_text = merged.scope_others_text ? `${merged.scope_others_text}; ${label}` : label
+  }
+  if (discount > 0) addToOthers(-discount, 'Discount')
+  if (vat > 0) addToOthers(vat, `VAT (${Math.round(VAT_RATE * 100)}%)`)
+  merged.scope_others_cost = Math.round(merged.scope_others_cost * 100) / 100
 
   return {
     source_quotation_id: quote.id,

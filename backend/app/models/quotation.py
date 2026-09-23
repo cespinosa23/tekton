@@ -63,6 +63,13 @@ class Quotation(Base):
     # Checked items from QuotationTemplateItem, denormalized: [{ item_id, text }]
     payment_term_items = Column(JSON, nullable=True)
     other_items = Column(JSON, nullable=True)
+    # Optional flat deduction shown as a "DISCOUNT" row in the Scope of Works
+    # table; total_contract_cost is stored already net of it.
+    discount_amount = Column(Numeric(12, 2), default=0)
+    # Optional 12% VAT, computed on the cost AFTER the discount. Only the flag
+    # is stored — the VAT amount is derived — and total_contract_cost is stored
+    # already including it.
+    include_vat = Column(Boolean, default=False)
     total_contract_cost = Column(Numeric(12, 2), default=0)
     archived = Column(Boolean, default=False)
 

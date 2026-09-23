@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { calcScopeCostTotal } from '../../components/quotation/CostTypeEditor'
+import { calcScopeCostTotal, calcQuoteDiscount, calcQuoteDirectCost, calcQuoteVat, calcQuoteGrandTotal, VAT_RATE } from '../../components/quotation/CostTypeEditor'
 import { calcBomTotal } from '../../components/quotation/BOMEditor'
 import { addresseeAddress, formatAddressBlock } from '../address'
 
@@ -76,10 +76,8 @@ export function buildQuotationIR(quote) {
   // already folds in that scope's own BOM-derived Supply cost, or a manual
   // override) — never a raw BOM readout.
   if (scopeItems.length > 0) {
-    let scopeGrandTotal = 0
     const rows = scopeItems.map((t, i) => {
       const cost = calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || []))
-      scopeGrandTotal += cost
       return [
         String(i + 1),
         {
@@ -89,6 +87,24 @@ export function buildQuotationIR(quote) {
         num(cost),
       ]
     })
+
+    // Optional discount — its own numbered row at the end of the table, cost
+    // in parentheses (accounting style for a deduction).
+    const discount = calcQuoteDiscount(quote)
+    if (discount > 0) {
+      rows.push([String(scopeItems.length + 1), 'DISCOUNT', `(${num(discount)})`])
+    }
+
+    // Footer: DIRECT COST is the cost after the discount. With VAT included it's
+    // followed by the VAT line and a TOTAL COST; without VAT, DIRECT COST is the
+    // only line. Amounts come from the same helpers the builder and the stored
+    // total use, so the document can never disagree with them.
+    const totalRows = [['DIRECT COST', num(calcQuoteDirectCost(quote))]]
+    if (quote.include_vat) {
+      totalRows.push([`VAT (${Math.round(VAT_RATE * 100)}%)`, num(calcQuoteVat(quote))])
+      totalRows.push(['TOTAL COST', num(calcQuoteGrandTotal(quote))])
+    }
+
     blocks.push({
       type: 'section',
       number: scopeNum,
@@ -97,7 +113,7 @@ export function buildQuotationIR(quote) {
         kind: 'table',
         columns: [{ header: 'ITEM', width: 8 }, { header: 'SCOPE DESCRIPTION', width: 72 }, { header: 'COST (PHP)', width: 20 }],
         rows,
-        totalRow: ['TOTAL COST', num(scopeGrandTotal)],
+        totalRows,
       },
     })
   }

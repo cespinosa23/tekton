@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { calcScopeCostTotal } from './CostTypeEditor'
+import { calcScopeCostTotal, calcQuoteDiscount, calcQuoteDirectCost, calcQuoteVat, calcQuoteGrandTotal, VAT_RATE } from './CostTypeEditor'
 import { calcBomTotal } from './BOMEditor'
 import DocumentLetterhead from '../DocumentLetterhead'
 import DocumentFooter from '../DocumentFooter'
@@ -33,7 +33,16 @@ export default function QuotePreview({ quote }) {
     ...t,
     cost: calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || [])),
   }))
-  const scopeGrandTotal = scopeRows.reduce((s, t) => s + t.cost, 0)
+  // Optional discount prints as its own numbered row. The footer is DIRECT COST
+  // (after the discount), and — only when VAT is included — VAT and TOTAL COST.
+  // Same helpers as the PDF/Word output (see buildQuotationIR).
+  const discount = calcQuoteDiscount(quote)
+  const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const footerRows = [['DIRECT COST', calcQuoteDirectCost(quote)]]
+  if (quote.include_vat) {
+    footerRows.push([`VAT (${Math.round(VAT_RATE * 100)}%)`, calcQuoteVat(quote)])
+    footerRows.push(['TOTAL COST', calcQuoteGrandTotal(quote)])
+  }
   const bomTypes = scopeItems.filter(t => t.bom_items?.length > 0)
   const otherItems = quote.other_items || []
   const paymentTermItems = quote.payment_term_items || []
@@ -140,12 +149,21 @@ export default function QuotePreview({ quote }) {
                   </td>
                 </tr>
               ))}
-              <tr className="text-white font-bold" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
-                <td colSpan={2} className="border border-gray-800 px-3 py-2 text-right">TOTAL COST</td>
-                <td className="border border-gray-800 px-3 py-2 text-center whitespace-nowrap">
-                  {scopeGrandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-              </tr>
+              {discount > 0 && (
+                <tr>
+                  <td className="border border-gray-800 px-3 py-2 text-center align-top">{scopeRows.length + 1}</td>
+                  <td className="border border-gray-800 px-3 py-2 align-top font-bold uppercase">DISCOUNT</td>
+                  <td className="border border-gray-800 px-3 py-2 text-center align-top whitespace-nowrap">
+                    ({discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                  </td>
+                </tr>
+              )}
+              {footerRows.map(([label, amount]) => (
+                <tr key={label} className="text-white font-bold" style={{ backgroundColor: quote.company_letterhead_color || '#1e40af' }}>
+                  <td colSpan={2} className="border border-gray-800 px-3 py-2 text-right">{label}</td>
+                  <td className="border border-gray-800 px-3 py-2 text-center whitespace-nowrap">{money(amount)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

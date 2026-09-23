@@ -115,14 +115,22 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
         raise HTTPException(status_code=400, detail="This quotation has a pending approval request — it can't be edited until the approver responds")
     for field, value in payload_fields.items():
         setattr(item, field, value)
-    # Finalizing directly (Admin/PM bypassing the approval flow) supersedes
-    # any outstanding approval request — clear it server-side so a stale
-    # 'pending' from before this save doesn't leave the Pending Approval
+    # Finalizing directly (Admin/PM bypassing the approval flow) supersedes any
+    # outstanding approval request — clear approval_status server-side so a
+    # stale 'pending' from before this save doesn't leave the Pending Approval
     # badge/actions stuck on for an already-Finalized quote.
+    #
+    # approval_requested_to_id/_by_id are deliberately left alone: visibility
+    # (_scope_visible / get_quotation) keys off approval_requested_to_id, with
+    # no additional check that a request is still pending — it's meant to be
+    # permanent, so whoever was ever asked to review a quote keeps access to
+    # it. Nulling it here used to strip that access from the assigned PM the
+    # moment they finalized it themselves (e.g. via the "Finalize Quote"
+    # button while reviewing a pending quote they didn't create) — the quote
+    # would vanish from their list and 404 on direct access, since they're
+    # not its creator either.
     if item.status == "Finalized":
         item.approval_status = None
-        item.approval_requested_to_id = None
-        item.approval_requested_by_id = None
     db.commit()
     db.refresh(item)
     return item

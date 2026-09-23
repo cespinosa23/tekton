@@ -20,7 +20,8 @@ import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEdito
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
 import TemplateChecklistEditor from '../components/quotation/TemplateChecklistEditor'
-import CostTypeEditor, { FORM_SCOPES, calcAllScopeCostsTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
+import CostTypeEditor, { FORM_SCOPES, VAT_RATE, calcAllScopeCostsTotal, calcQuoteDiscount, calcQuoteDirectCost, calcQuoteVat, calcQuoteGrandTotal, emptyCosting } from '../components/quotation/CostTypeEditor'
+import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import QuotePreview from '../components/quotation/QuotePreview'
 import { buildQuotationIR } from '../lib/documents/buildQuotationIR'
 import { downloadAsDocx } from '../lib/documents/toDocx'
@@ -83,8 +84,17 @@ const EMPTY_QUOTE = {
   scope_of_work_items: [],
   payment_term_items: [],
   other_items: [],
+  discount_amount: '',
+  include_vat: false,
   total_contract_cost: 0,
 }
+
+// The API returns discount_amount as e.g. "0.00" for a quote with none — show
+// that as an empty field rather than a stray "0.00" the user has to clear.
+const withDiscountField = (quote) => ({
+  ...quote,
+  discount_amount: Number(quote.discount_amount) > 0 ? String(Number(quote.discount_amount)) : '',
+})
 
 const STATUS_COLORS = {
   Draft: 'bg-amber-100 text-amber-700',
@@ -104,6 +114,8 @@ function isQuoteStalled(q) {
 }
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400'
+
+const peso2 = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function StepIndicator({ steps, current, onStepClick, canJump }) {
   return (
@@ -319,9 +331,18 @@ export default function Quotations() {
 
   // BOM total is already folded into calcAllScopeCostsTotal (Supply of Materials
   // per scope type is auto-priced from that type's own BOM) — don't add it again here.
-  const calcTotal = (data = quoteData) => {
-    return calcAllScopeCostsTotal(data.scope_of_work_items)
-  }
+  // total_contract_cost is always stored as the final Total Cost: scope costs,
+  // minus the optional discount, plus the optional VAT on what's left.
+  const calcTotal = (data = quoteData) => calcQuoteGrandTotal(data)
+
+  // What every save payload sends for money: discount as a real number (the
+  // field is a string in state, and '' would fail the backend's Decimal
+  // validation), the VAT flag as a real boolean, and the final total.
+  const quoteFinancials = (data = quoteData) => ({
+    discount_amount: calcQuoteDiscount(data),
+    include_vat: !!data.include_vat,
+    total_contract_cost: calcTotal(data),
+  })
 
   // Auto-generate Q-YYYY-NNN based on existing quotations for the current year
   const generateQuoteNumber = () => {
@@ -335,7 +356,7 @@ export default function Quotations() {
   }
 
   const openBuilder = (quote = null) => {
-    const base = quote ? { ...EMPTY_QUOTE, ...quote } : { ...EMPTY_QUOTE, quote_number: generateQuoteNumber() }
+    const base = quote ? withDiscountField({ ...EMPTY_QUOTE, ...quote }) : { ...EMPTY_QUOTE, quote_number: generateQuoteNumber() }
     setQuoteData(base)
     setEditingQuote(quote)
     setStep(0)
@@ -345,13 +366,13 @@ export default function Quotations() {
   const handleClone = (quote) => {
     // eslint-disable-next-line no-unused-vars
     const { id, created_at, updated_at, ...rest } = quote
-    setQuoteData({
+    setQuoteData(withDiscountField({
       ...EMPTY_QUOTE,
       ...rest,
       status: 'Draft',
       quote_number: generateQuoteNumber(),
       quotation_date: format(new Date(), 'yyyy-MM-dd'),
-    })
+    }))
     setEditingQuote(null)
     setStep(0)
     setView('builder')
@@ -395,7 +416,7 @@ export default function Quotations() {
   }
 
   const handleSaveDraft = async () => {
-    const data = { ...quoteData, total_contract_cost: calcTotal(), status: 'Draft' }
+    const data = { ...quoteData, ...quoteFinancials(), status: 'Draft' }
     if (editingQuote) {
       await updateMutation.mutateAsync({ id: editingQuote.id, data })
       toast.success('Draft saved')
@@ -413,6 +434,12 @@ export default function Quotations() {
     return FORM_SCOPES.every(s => s.skipCost || !costing[`scope_${s.key}`] || costing[s.costField] !== '')
   })
 
+  // A discount bigger than everything it's deducted from would print a
+  // negative/zero contract cost. Checked at Costing (where the costs it's
+  // measured against are actually entered) and again before finalizing.
+  const discountTooLarge = calcQuoteDiscount(quoteData) > calcAllScopeCostsTotal(quoteData.scope_of_work_items || [])
+  const DISCOUNT_TOO_LARGE_MSG = 'Discount can’t be more than the total scope cost'
+
   // Returns an error message if the given step has unfilled required fields
   const validateStep = (stepName) => {
     if (stepName === 'Addressee') {
@@ -424,6 +451,7 @@ export default function Quotations() {
       if (!quoteData.subject?.trim()) return 'Subject is required'
     }
     if (stepName === 'Costing' && !scopeCostValid) return 'Every checked Cost Type needs a Contract Cost'
+    if (stepName === 'Costing' && discountTooLarge) return DISCOUNT_TOO_LARGE_MSG
     if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)'
     if (stepName === 'Payment Terms' && !(quoteData.payment_term_items?.length > 0)) return 'Select a Payment Term'
     return null
@@ -439,6 +467,7 @@ export default function Quotations() {
     if (!quoteData.attention_last_name?.trim()) errors.push('Last Name is required')
     if (!quoteData.subject?.trim()) errors.push('Subject is required')
     if (!scopeCostValid) errors.push('Every checked Cost Type needs a Contract Cost')
+    if (discountTooLarge) errors.push(DISCOUNT_TOO_LARGE_MSG)
     if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)')
     if (!(quoteData.payment_term_items?.length > 0)) errors.push('Select a Payment Term')
     return errors
@@ -468,7 +497,7 @@ export default function Quotations() {
       errors.forEach(e => toast.error(e))
       return
     }
-    const data = { ...quoteData, total_contract_cost: calcTotal(), status: 'Finalized' }
+    const data = { ...quoteData, ...quoteFinancials(), status: 'Finalized' }
     if (editingQuote) {
       await updateMutation.mutateAsync({ id: editingQuote.id, data })
     } else {
@@ -486,7 +515,7 @@ export default function Quotations() {
       errors.forEach(e => toast.error(e))
       return
     }
-    const data = { ...quoteData, total_contract_cost: calcTotal() }
+    const data = { ...quoteData, ...quoteFinancials() }
     let quote
     if (editingQuote) {
       quote = await updateMutation.mutateAsync({ id: editingQuote.id, data })
@@ -732,12 +761,44 @@ export default function Quotations() {
     )
 
     if (s === 'Scope of Works') return (
-      <SowEditor
-        items={quoteData.scope_of_work_items}
-        onChange={items => set('scope_of_work_items', items)}
-        sowTypes={sowTypes}
-        disabled={isLocked}
-      />
+      <div className="space-y-6">
+        <SowEditor
+          items={quoteData.scope_of_work_items}
+          onChange={items => set('scope_of_work_items', items)}
+          sowTypes={sowTypes}
+          disabled={isLocked}
+        />
+
+        {/* Optional flat discount — a separate field rather than a scope type,
+            since it has no sub-items, BOM, or cost categories of its own. Only
+            offered once there's a Scope of Works table for it to appear in. */}
+        {(quoteData.scope_of_work_items || []).length > 0 && (
+          <div className="border border-gray-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800">
+                Discount <span className="text-xs font-normal text-gray-400">(optional)</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Deducted from the total and shown as a DISCOUNT line in the Scope of Works table.
+              </p>
+            </div>
+            <div className="relative w-48">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₱</span>
+              <input
+                type="text" inputMode="decimal" placeholder="0.00"
+                value={formatNumberDisplay(quoteData.discount_amount)}
+                disabled={isLocked}
+                onChange={e => {
+                  const sanitized = sanitizeNumberInput(e.target.value)
+                  if (sanitized === null) return
+                  set('discount_amount', sanitized)
+                }}
+                onBlur={() => set('discount_amount', normalizeNumberInput(quoteData.discount_amount))}
+                className={`${inp} pl-7 text-right`} />
+            </div>
+          </div>
+        )}
+      </div>
     )
 
     if (s === 'Costing') return (
@@ -746,22 +807,65 @@ export default function Quotations() {
           No Scope of Work types selected yet — go back to Scope of Works first.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {quoteData.scope_of_work_items.map(t => (
-            <CostTypeEditor
-              key={t.sow_type_id}
-              label={t.sow_type_name}
-              data={t.costing || emptyCosting()}
-              bomTotal={calcBomTotal(t.bom_items || [])}
-              disabled={isLocked}
-              onChange={(field, value) => setQuoteData(prev => ({
-                ...prev,
-                scope_of_work_items: prev.scope_of_work_items.map(x =>
-                  x.sow_type_id !== t.sow_type_id ? x : { ...x, costing: { ...(x.costing || emptyCosting()), [field]: value } }
-                ),
-              }))}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {quoteData.scope_of_work_items.map(t => (
+              <CostTypeEditor
+                key={t.sow_type_id}
+                label={t.sow_type_name}
+                data={t.costing || emptyCosting()}
+                bomTotal={calcBomTotal(t.bom_items || [])}
+                disabled={isLocked}
+                onChange={(field, value) => setQuoteData(prev => ({
+                  ...prev,
+                  scope_of_work_items: prev.scope_of_work_items.map(x =>
+                    x.sow_type_id !== t.sow_type_id ? x : { ...x, costing: { ...(x.costing || emptyCosting()), [field]: value } }
+                  ),
+                }))}
+              />
+            ))}
+          </div>
+
+          {/* Where the price is assembled, in order: subtotal → discount → Direct
+              Cost → VAT (on Direct Cost, so the discount is always applied first)
+              → Total Cost. VAT lives here because this is the one place every
+              line it depends on is visible together. */}
+          <div className="border border-gray-200 rounded-lg px-4 py-3 text-sm space-y-1.5 max-w-sm ml-auto">
+            {calcQuoteDiscount(quoteData) > 0 && (
+              <>
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">₱{peso2(calcAllScopeCostsTotal(quoteData.scope_of_work_items))}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Discount</span>
+                  <span className={`tabular-nums ${discountTooLarge ? 'text-red-600 font-medium' : ''}`}>
+                    −₱{peso2(calcQuoteDiscount(quoteData))}
+                  </span>
+                </div>
+              </>
+            )}
+            <div className={`flex justify-between ${quoteData.include_vat ? 'text-gray-600' : 'font-semibold text-gray-900'} ${calcQuoteDiscount(quoteData) > 0 ? 'pt-1.5 border-t border-gray-100' : ''}`}>
+              <span>Direct Cost</span>
+              <span className="tabular-nums">₱{peso2(calcQuoteDirectCost(quoteData))}</span>
+            </div>
+            <div className="flex justify-between items-center text-gray-600">
+              <label className={`flex items-center gap-2 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                <input type="checkbox" checked={!!quoteData.include_vat} disabled={isLocked}
+                  onChange={e => set('include_vat', e.target.checked)}
+                  className="w-4 h-4 rounded accent-gray-800" />
+                <span>Add VAT ({Math.round(VAT_RATE * 100)}%)</span>
+              </label>
+              {quoteData.include_vat && <span className="tabular-nums">₱{peso2(calcQuoteVat(quoteData))}</span>}
+            </div>
+            {quoteData.include_vat && (
+              <div className="flex justify-between font-semibold text-gray-900 pt-1.5 border-t border-gray-100">
+                <span>Total Cost</span>
+                <span className="tabular-nums">₱{peso2(calcTotal())}</span>
+              </div>
+            )}
+            {discountTooLarge && <p className="text-xs text-red-600">{DISCOUNT_TOO_LARGE_MSG}</p>}
+          </div>
         </div>
       )
     )

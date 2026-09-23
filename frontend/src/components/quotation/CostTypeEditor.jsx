@@ -47,6 +47,27 @@ export function calcAllScopeCostsTotal(scopeOfWorkItems = []) {
   return scopeOfWorkItems.reduce((sum, t) => sum + calcScopeCostTotal(t.costing || {}, calcBomTotal(t.bom_items || [])), 0)
 }
 
+// Optional flat discount on the whole quotation — printed as a DISCOUNT row in
+// the Scope of Works table and deducted from the total. Quotations saved before
+// this existed have no value for it, which must read as 0.
+export const calcQuoteDiscount = (quote) => Math.max(parseFloat(quote?.discount_amount) || 0, 0)
+
+// Direct Cost: the scope subtotal minus the discount, never below zero. This
+// is what VAT is computed on — the discount always comes off first.
+export const calcQuoteDirectCost = (quote) =>
+  Math.max(calcAllScopeCostsTotal(quote?.scope_of_work_items || []) - calcQuoteDiscount(quote), 0)
+
+export const VAT_RATE = 0.12
+const roundCents = (n) => Math.round((n + Number.EPSILON) * 100) / 100
+
+// Optional VAT (a checkbox on the Costing step): 12% of the Direct Cost, or 0.
+export const calcQuoteVat = (quote) =>
+  quote?.include_vat ? roundCents(calcQuoteDirectCost(quote) * VAT_RATE) : 0
+
+// Total Cost: Direct Cost plus VAT when it's included. This is what's stored as
+// total_contract_cost, so every total the app shows agrees with the document.
+export const calcQuoteGrandTotal = (quote) => roundCents(calcQuoteDirectCost(quote) + calcQuoteVat(quote))
+
 // Shows the auto BOM-derived Supply amount, with a pencil icon that lets the
 // user override it for this quotation only — never writes back to the BOM.
 function SupplyAmountCell({ data, bomTotal, disabled, onChange }) {

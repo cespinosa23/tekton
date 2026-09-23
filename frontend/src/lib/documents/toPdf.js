@@ -147,14 +147,14 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   const widths = table.columns.map(c => `${c.width}%`)
   const body = [table.columns.map(c => ({ text: c.header, bold: true, color: 'white', fillColor: color }))]
   table.rows.forEach(row => body.push(row.map(renderCellContent)))
-  if (table.totalRow) {
-    const [label, amount] = table.totalRow
-    const span = table.columns.length - 1
+  // One or more footer rows (e.g. DIRECT COST / VAT / TOTAL COST).
+  const span = table.columns.length - 1
+  ;(table.totalRows || []).forEach(([label, amount]) => {
     const row = [{ text: label, bold: true, color: 'white', fillColor: color, colSpan: span, alignment: 'right' }]
     for (let i = 1; i < span; i++) row.push({})
     row.push({ text: amount, bold: true, color: 'white', fillColor: color })
     body.push(row)
-  }
+  })
   // dontBreakRows — without it, pdfmake can split a single row's cell content
   // across a page boundary (e.g. a BOM row showing its quantity on one page
   // and its description on the next). Force the whole row to move to the

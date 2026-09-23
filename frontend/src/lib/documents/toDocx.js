@@ -168,8 +168,8 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
   })
   const dataRows = table.rows.map(row => new TableRow({ children: row.map(renderCell) }))
   const rows = [headerRow, ...dataRows]
-  if (table.totalRow) {
-    const [label, amount] = table.totalRow
+  // One or more footer rows (e.g. DIRECT COST / VAT / TOTAL COST).
+  ;(table.totalRows || []).forEach(([label, amount]) => {
     rows.push(new TableRow({
       children: [
         new TableCell({
@@ -183,7 +183,7 @@ function renderTable(table, color = DEFAULT_LETTERHEAD_COLOR) {
         }),
       ],
     }))
-  }
+  })
   return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } })
 }
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 from datetime import date, datetime
 from decimal import Decimal
@@ -45,7 +45,19 @@ class QuotationCreate(BaseModel):
     scope_of_work_items: Optional[List[Any]] = None
     payment_term_items: Optional[List[Any]] = None
     other_items: Optional[List[Any]] = None
+    discount_amount: Optional[Decimal] = Decimal("0")
+    # Optional[bool], not bool — a NULL in an existing row must still serialize
+    # (a plain bool here previously broke a whole list endpoint on NULL rows).
+    include_vat: Optional[bool] = False
     total_contract_cost: Optional[Decimal] = Decimal("0")
+
+    @field_validator("discount_amount")
+    @classmethod
+    def discount_not_negative(cls, v):
+        # A negative "discount" would silently inflate the quoted total.
+        if v is not None and v < 0:
+            raise ValueError("discount_amount cannot be negative")
+        return v
 
 class QuotationUpdate(QuotationCreate):
     template_type: Optional[str] = None
