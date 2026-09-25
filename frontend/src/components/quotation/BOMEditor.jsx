@@ -1,34 +1,14 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, FileSpreadsheet } from 'lucide-react'
 import MaterialCombobox from '../MaterialCombobox'
+import MaterialTypeCombobox from '../MaterialTypeCombobox'
 import SupplierCombobox from '../SupplierCombobox'
+import BomImportModal from './BomImportModal'
 import { bestInventoryFor } from '../../lib/inventoryPricing'
+import { emptyBomRow, calcRow } from '../../lib/bomRow'
 
-export const emptyBomRow = () => ({
-  is_custom: false,
-  material_type: '',
-  material_id: null,
-  material_name: '',
-  unit: '',
-  quantity: 1,
-  unit_price: 0,
-  subtotal: 0,
-  adjustment_pct: 20,
-  adjusted_subtotal: 0,
-  source: '',
-  price_entry_date: null,
-  is_canvass_price: false,
-  zero_price_confirmed: false,
-})
-
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
-
-function calcRow(row) {
-  const subtotal = (Number(row.quantity) || 0) * (Number(row.unit_price) || 0)
-  const adjPct = Number.isFinite(Number(row.adjustment_pct)) ? Number(row.adjustment_pct) : 20
-  const adjustedSubtotal = subtotal * (1 + adjPct / 100)
-  return { ...row, subtotal: round2(subtotal), adjusted_subtotal: round2(adjustedSubtotal) }
-}
+export { emptyBomRow, calcRow }
 
 // A custom row needs a Source typed in manually (no DB material to derive it from).
 // A zero price is rejected unless the user has explicitly confirmed the material
@@ -47,8 +27,20 @@ const inp = 'px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-no
 const roInp = 'px-2 py-1.5 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500 w-full'
 
 export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
+  const [importOpen, setImportOpen] = useState(false)
+
   const update = (index, field, value) => {
-    onChange(items.map((item, i) => i !== index ? item : calcRow({ ...item, [field]: value })))
+    onChange(items.map((item, i) => i !== index ? item : calcRow({
+      ...item,
+      [field]: value,
+      // An imported row flagged "needs review" resolves itself once it's
+      // actually been looked at: either a real price gets entered, or the
+      // reviewer explicitly confirms the material really is zero-cost via
+      // the existing checkbox (a different, deliberate resolution — not a
+      // way to dodge review, but a legitimate answer to it).
+      ...(field === 'unit_price' && Number(value) > 0 ? { needs_review: false } : {}),
+      ...(field === 'zero_price_confirmed' && value ? { needs_review: false } : {}),
+    })))
   }
 
   const toggleCustom = (index, checked) => {
@@ -57,6 +49,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       is_custom: checked,
       material_type: '', material_id: null, material_name: '',
       unit: '', unit_price: 0, source: '', price_entry_date: null,
+      needs_review: false,
     })))
   }
 
@@ -124,11 +117,8 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                       <input value={row.material_type} onChange={e => update(i, 'material_type', e.target.value)}
                         disabled={disabled} placeholder="Type" className={disabled ? roInp : inp} />
                     ) : (
-                      <select value={row.material_type} onChange={e => updateMaterialType(i, e.target.value)}
-                        disabled={disabled} className={disabled ? roInp : inp}>
-                        <option value="">All types</option>
-                        {activeTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                      </select>
+                      <MaterialTypeCombobox value={row.material_type} onValueChange={typeName => updateMaterialType(i, typeName)}
+                        types={activeTypes} disabled={disabled} />
                     )}
                   </td>
 
@@ -138,6 +128,11 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                         disabled={disabled} placeholder="Material name" className={disabled ? roInp : inp} />
                     ) : (
                       <MaterialCombobox value={row.material_id} onValueChange={id => updateMaterial(i, id)} materials={filteredMaterials} disabled={disabled} />
+                    )}
+                    {row.needs_review && (
+                      <p className="mt-1 text-[10px] text-amber-600 font-medium">
+                        ⚠ Not found in catalog — set a price and source
+                      </p>
                     )}
                   </td>
 
@@ -246,10 +241,19 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
         </table>
       </div>
       {!disabled && (
-        <button onClick={addRow} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
-          <Plus size={14} /> Add Material
-        </button>
+        <div className="flex gap-2">
+          <button onClick={addRow} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
+            <Plus size={14} /> Add Material
+          </button>
+          <button onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
+            <FileSpreadsheet size={14} /> Import from Excel
+          </button>
+        </div>
       )}
+
+      <BomImportModal open={importOpen} onClose={() => setImportOpen(false)}
+        materialTypes={materialTypes} materials={materials} inventoryRecords={inventoryRecords}
+        onImport={newRows => onChange([...items, ...newRows])} />
     </div>
   )
 }
