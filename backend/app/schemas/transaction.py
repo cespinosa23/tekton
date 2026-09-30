@@ -40,6 +40,8 @@ class TransactionCreate(BaseModel):
     remarks: Optional[str] = None
     adjustment_direction: Optional[str] = None
     billing_id: Optional[int] = None
+    requested_by_employee_id: Optional[int] = None
+    requested_by_name: Optional[str] = None
 
 class TransactionUpdate(TransactionCreate):
     transaction_type: Optional[str] = None

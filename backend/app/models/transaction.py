@@ -22,3 +22,9 @@ class Transaction(Base):
     remarks = Column(String(500), nullable=True)
     adjustment_direction = Column(String(10), nullable=True)  # 'add' or 'deduct'
     billing_id = Column(Integer, ForeignKey("billings.id"), nullable=True)
+    # Who requested the transaction — currently only set from the Materials
+    # tab. requested_by_name is a snapshot taken at save time (same pattern
+    # as project_name alongside project_id), so it keeps reading correctly
+    # even if the employee record is later renamed or archived.
+    requested_by_employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    requested_by_name = Column(String(255), nullable=True)

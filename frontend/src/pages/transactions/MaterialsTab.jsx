@@ -10,11 +10,13 @@ import { TYPE_COLORS, TYPE_ICONS, MATERIAL_DIRECTIONS, fmt } from './constants'
 import ProjectCombobox from '../../components/ProjectCombobox'
 import MaterialCombobox from '../../components/MaterialCombobox'
 import SupplierCombobox from '../../components/SupplierCombobox'
+import EmployeeCombobox from '../../components/EmployeeCombobox'
 import {
   getTransactions, getProjects, getMaterials, getSuppliers,
   getInventory, getMaterialTypes, createTransaction, updateTransaction, archiveTransaction,
   downloadCanvassTemplate, importCanvass,
 } from '../../api/transactions'
+import { getEmployees } from '../../api/employees'
 
 const MATERIAL_TX_TYPES = ['Outgoing Materials', 'Incoming Materials', 'Materials Procurement', 'Adjustment', 'Canvass']
 
@@ -25,6 +27,8 @@ const emptyForm = {
   project_name: '',
   is_office_expense: true, // always true for adjustment
   supplier: '',
+  requested_by_employee_id: '',
+  requested_by_name: '',
   materials: [],
   description: '',
   remarks: '',
@@ -56,6 +60,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
     refetchOnWindowFocus: true,
   })
   const { data: materialTypes = [] } = useQuery({ queryKey: ['materialTypes'], queryFn: getMaterialTypes })
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
 
   const transactions = allTransactions.filter(t => MATERIAL_TX_TYPES.includes(t.transaction_type))
 
@@ -147,6 +152,8 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       project_name: tx.project_name || '',
       is_office_expense: tx.is_office_expense || false,
       supplier: tx.supplier || '',
+      requested_by_employee_id: tx.requested_by_employee_id || '',
+      requested_by_name: tx.requested_by_name || '',
       materials: tx.materials || [],
       description: tx.description || '',
       remarks: tx.remarks || '',
@@ -157,7 +164,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
   }
 
   const handleSave = () => {
-    const data = { ...formData }
+    const data = { ...formData, requested_by_employee_id: formData.requested_by_employee_id || null }
     if (data.transaction_type === 'Adjustment') {
       data.is_office_expense = true
       data.project_id = null
@@ -451,6 +458,18 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
                     </div>
 
+                    {/* Requested By — applies to every direction, not type-restricted like Project/Supplier */}
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Requested By</label>
+                      <EmployeeCombobox value={formData.requested_by_employee_id}
+                        onValueChange={id => {
+                          const emp = employees.find(x => x.id === id)
+                          const name = emp ? [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(' ') : ''
+                          setFormData(prev => ({ ...prev, requested_by_employee_id: id, requested_by_name: name }))
+                        }}
+                        employees={employees} />
+                    </div>
+
                     {/* Project — Canvass isn't tied to a project or real spend, same as Adjustment */}
                     {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && !formData.is_office_expense && (
                       <div className="col-span-2">
@@ -686,6 +705,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
                 <div><p className="text-xs text-gray-400 mb-0.5">Project</p><p className="font-medium">{viewTx.is_office_expense ? 'Office Expense' : viewTx.project_name || '-'}</p></div>
                 <div><p className="text-xs text-gray-400 mb-0.5">Total Amount</p><p className="text-xl font-bold text-gray-900">{fmt(viewTx.amount)}</p></div>
                 {viewTx.supplier && <div><p className="text-xs text-gray-400 mb-0.5">Supplier</p><p className="font-medium">{viewTx.supplier}</p></div>}
+                {viewTx.requested_by_name && <div><p className="text-xs text-gray-400 mb-0.5">Requested By</p><p className="font-medium">{viewTx.requested_by_name}</p></div>}
               </div>
               {viewTx.materials?.length > 0 && (
                 <div>

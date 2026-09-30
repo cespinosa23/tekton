@@ -26,6 +26,10 @@ class Employee(Base):
     address = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     status = Column(Enum(EmployeeStatus), default=EmployeeStatus.Active)
+    # When the employee became Resigned or Terminated. One shared field for
+    # both, not two separate ones — status is a single mutually-exclusive
+    # enum, so there's never a case needing both dates at once.
+    separation_date = Column(Date, nullable=True)
     archived = Column(Boolean, default=False)
     archived_by = Column(String(255), nullable=True)
     email = Column(String(255), nullable=True)

@@ -19,6 +19,7 @@ class EmployeeCreate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     status: EmployeeStatus = EmployeeStatus.Active
+    separation_date: Optional[date] = None
     email: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
@@ -39,6 +40,7 @@ class EmployeeUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[EmployeeStatus] = None
+    separation_date: Optional[date] = None
     email: Optional[str] = None
     department: Optional[str] = None
     id_number: Optional[str] = None
@@ -60,6 +62,7 @@ class EmployeeRead(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     status: EmployeeStatus
+    separation_date: Optional[date] = None
     email: Optional[str] = None
     archived: bool
     archived_by: Optional[str] = None

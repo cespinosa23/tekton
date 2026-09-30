@@ -28,6 +28,20 @@ const roInp = 'px-2 py-1.5 border border-gray-200 bg-gray-50 rounded text-sm tex
 
 export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
   const [importOpen, setImportOpen] = useState(false)
+  // While a Price field is focused, show the raw value so reformatting
+  // doesn't fight the user mid-keystroke; once they click away, snap to a
+  // clean, consistent 2-decimal comma format (matches Subtotal/fmt()) —
+  // fixes 890.5 / 45,678.9 / 1,890,450 all showing different decimal
+  // precision next to each other at rest.
+  const [focusedPriceRow, setFocusedPriceRow] = useState(null)
+  // The literal text being typed, kept separate from unit_price itself.
+  // Deriving the focused display from String(unit_price) instead loses
+  // anything the parsed number can't represent mid-entry — a trailing "."
+  // (typing "10" then "." re-renders back to "10", so the next digit lands
+  // as "105" instead of "10.5") or a leading "0." (unit_price is 0 the
+  // instant you type just "0", which the old row.unit_price === 0 ? '' logic
+  // then blanked back out before you could type the rest).
+  const [priceDrafts, setPriceDrafts] = useState({})
 
   const update = (index, field, value) => {
     onChange(items.map((item, i) => i !== index ? item : calcRow({
@@ -152,18 +166,44 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                       disabled={disabled} className={disabled ? roInp : inp} />
                   </td>
 
-                  <td className="px-2 py-1.5 w-24">
-                    <div className={zeroPriceUnconfirmed ? 'rounded ring-1 ring-red-400' : ''}>
-                      <input type="text" value={row.unit_price === 0 ? '' : row.unit_price} placeholder="0.00"
-                        onChange={e => {
-                          const raw = e.target.value.trim()
-                          if (!/^\d*\.?\d*$/.test(raw)) return
-                          if (/^0\d/.test(raw)) return
-                          update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
-                        }}
-                        disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
-                        className={row.is_custom && !disabled ? inp : roInp} />
-                    </div>
+                  <td className="px-2 py-1.5 w-32">
+                    {(() => {
+                      // Comma-formatted at rest, always to 2 decimals (never
+                      // the uneven 890.5 / 45,678.9 / 1,890,450 mix plain
+                      // toLocaleString gives you) — but shown as the raw
+                      // typed value while focused, so reformatting doesn't
+                      // fight mid-keystroke. Fixed width, same as Unit Cost
+                      // on the Transactions Materials tab — real per-item
+                      // prices top out in the hundred-thousands, so a stable
+                      // ~₱999,999.99-sized box (not one that visibly grows
+                      // as you type) is both enough room and the better look.
+                      const isFocused = focusedPriceRow === i
+                      const priceText = isFocused
+                        ? (priceDrafts[i] ?? (row.unit_price === 0 ? '' : String(row.unit_price)))
+                        : (row.unit_price === 0 ? '' : Number(row.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                      return (
+                        <div className={zeroPriceUnconfirmed ? 'rounded ring-1 ring-red-400' : ''}>
+                          <input type="text" value={priceText} placeholder="0.00"
+                            onChange={e => {
+                              const raw = e.target.value.replace(/,/g, '')
+                              if (!/^\d*\.?\d*$/.test(raw)) return
+                              if (/^0\d/.test(raw)) return
+                              setPriceDrafts(p => ({ ...p, [i]: raw }))
+                              update(i, 'unit_price', raw === '' ? 0 : parseFloat(raw) || 0)
+                            }}
+                            onFocus={() => {
+                              setFocusedPriceRow(i)
+                              setPriceDrafts(p => ({ ...p, [i]: row.unit_price === 0 ? '' : String(row.unit_price) }))
+                            }}
+                            onBlur={() => {
+                              setFocusedPriceRow(prev => prev === i ? null : prev)
+                              setPriceDrafts(p => { const next = { ...p }; delete next[i]; return next })
+                            }}
+                            disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
+                            className={row.is_custom && !disabled ? inp : roInp} />
+                        </div>
+                      )
+                    })()}
                     {Number(row.unit_price) === 0 && (
                       <label className="flex items-center gap-1 mt-1 text-[10px] text-gray-500 whitespace-nowrap cursor-pointer">
                         <input type="checkbox" checked={!!row.zero_price_confirmed}

@@ -9,6 +9,7 @@ from app.models.employee import Employee
 from app.models.user import User
 from app.models.attendance import Attendance
 from app.models.quotation import Quotation
+from app.models.transaction import Transaction
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -157,8 +158,17 @@ def permanent_delete_employee(
             )
         db.delete(linked_user)
 
+    # 3. Clear the FK on any transaction that named this employee as the
+    # requester (FK: transactions.requested_by_employee_id → employees.id).
+    # requested_by_name is a separate snapshot column, kept as-is so the
+    # transaction still shows who requested it even after the employee
+    # record is gone — only the live reference is cleared.
+    db.query(Transaction).filter(Transaction.requested_by_employee_id == employee_id).update(
+        {Transaction.requested_by_employee_id: None}
+    )
+
     db.flush()
 
-    # 3. Delete the employee
+    # 4. Delete the employee
     db.delete(employee)
     db.commit()

@@ -26,7 +26,7 @@ const emptyForm = {
   date_hired: '', daily_salary: 0, sss_number: '',
   philhealth_number: '', pagibig_number: '', tin_number: '',
   emergency_contact: '', emergency_phone: '',
-  address: '', phone: '', email: '', status: 'Active',
+  address: '', phone: '', email: '', status: 'Active', separation_date: '',
   role: '', department: '', id_number: '',
 }
 
@@ -195,6 +195,7 @@ export default function Employees() {
       phone: emp.phone || '',
       email: emp.email || '',
       status: emp.status || 'Active',
+      separation_date: emp.separation_date || '',
       role: employeeRoles[emp.id]?.roles?.[0] || emp.role || '',
       department: emp.department || '',
       id_number: emp.id_number || '',
@@ -202,10 +203,16 @@ export default function Employees() {
     setFormOpen(true)
   }
 
+  const isSeparated = (status) => status === 'Resigned' || status === 'Terminated'
+
   const handleSave = () => {
     const payload = {
       ...formData,
       date_hired: formData.date_hired === '' ? null : formData.date_hired,
+      // Only meaningful for Resigned/Terminated — clear it if the status
+      // isn't one of those, so reactivating someone doesn't leave a stale
+      // separation date sitting on an Active/Inactive record.
+      separation_date: isSeparated(formData.status) && formData.separation_date !== '' ? formData.separation_date : null,
     }
     if (editingEmployee) {
       updateMutation.mutate({ id: editingEmployee.id, data: payload, oldEmail: editingEmployee.email || '' })
@@ -474,6 +481,15 @@ export default function Employees() {
                       <option>Terminated</option>
                     </select>
                   </div>
+                  {isSeparated(formData.status) && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {formData.status} Date
+                      </label>
+                      <input type="date" value={formData.separation_date} onChange={set('separation_date')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">ID Number</label>
                     <input value={formData.id_number} onChange={set('id_number')}
@@ -579,6 +595,9 @@ export default function Employees() {
                     ['ID Number', viewEmployee.id_number || '-'],
                     ['Department / Team', viewEmployee.department || '-'],
                     ['Date Hired', viewEmployee.date_hired ? format(new Date(viewEmployee.date_hired), 'MMM d, yyyy') : '-'],
+                    ...(isSeparated(viewEmployee.status)
+                      ? [[`${viewEmployee.status} Date`, viewEmployee.separation_date ? format(new Date(viewEmployee.separation_date), 'MMM d, yyyy') : '-']]
+                      : []),
                     ...(isAdmin() ? [['Daily Salary', `₱${(viewEmployee.daily_salary || 0).toLocaleString()}`]] : []),
                     ['Phone', viewEmployee.phone || '-'],
                     ['Email', viewEmployee.email || '-'],
