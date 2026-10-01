@@ -13,11 +13,19 @@ export default function BomImportModal({ open, onClose, materialTypes = [], mate
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null) // { rows, matchedCount, reviewCount }
+  const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef(null)
+  // Counts nested dragenter/dragleave pairs fired as the pointer crosses
+  // child elements inside the drop zone — only clear the highlight once this
+  // hits 0, otherwise it flickers off over every element boundary.
+  const dragDepth = useRef(0)
 
   if (!open) return null
 
-  const reset = () => { setError(''); setResult(null); setBusy(false); if (fileInputRef.current) fileInputRef.current.value = '' }
+  const reset = () => {
+    setError(''); setResult(null); setBusy(false); setDragActive(false); dragDepth.current = 0
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
   const close = () => { reset(); onClose() }
 
   const handleDownloadTemplate = async () => {
@@ -32,9 +40,12 @@ export default function BomImportModal({ open, onClose, materialTypes = [], mate
     }
   }
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0]
+  const processFile = async (file) => {
     if (!file) return
+    if (!/\.xlsx$/i.test(file.name)) {
+      setError('That file is not an .xlsx — please use the downloaded template.')
+      return
+    }
     setError('')
     setResult(null)
     setBusy(true)
@@ -46,6 +57,32 @@ export default function BomImportModal({ open, onClose, materialTypes = [], mate
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleFile = (e) => processFile(e.target.files?.[0])
+
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    if (busy) return
+    dragDepth.current += 1
+    setDragActive(true)
+  }
+  const handleDragOver = (e) => {
+    // Required for onDrop to fire at all — a dragover with no
+    // preventDefault() tells the browser to refuse the drop.
+    e.preventDefault()
+  }
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragActive(false)
+  }
+  const handleDrop = (e) => {
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragActive(false)
+    if (busy) return
+    processFile(e.dataTransfer.files?.[0])
   }
 
   const confirmImport = () => {
@@ -71,11 +108,17 @@ export default function BomImportModal({ open, onClose, materialTypes = [], mate
         </button>
 
         {!result && (
-          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg py-8 text-sm ${
-            busy ? 'border-gray-200 text-gray-300 cursor-wait' : 'border-gray-300 text-gray-500 hover:bg-gray-50 cursor-pointer'
-          }`}>
+          <label
+            onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+            className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg py-8 text-sm transition-colors ${
+              busy ? 'border-gray-200 text-gray-300 cursor-wait'
+                : dragActive ? 'border-gray-500 bg-gray-50 text-gray-600 cursor-pointer'
+                : 'border-gray-300 text-gray-500 hover:bg-gray-50 cursor-pointer'
+            }`}>
             <Upload size={20} />
-            {busy ? 'Reading file…' : 'Click to upload the filled-in template (.xlsx)'}
+            {busy ? 'Reading file…' : dragActive ? 'Drop it here' : (
+              <span>Drag and drop the filled-in template here, or <span className="underline">click to browse</span> (.xlsx)</span>
+            )}
             <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleFile} disabled={busy} className="hidden" />
           </label>
         )}

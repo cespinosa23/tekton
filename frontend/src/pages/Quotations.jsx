@@ -205,6 +205,7 @@ export default function Quotations() {
   const [quoteData, setQuoteData] = useState(EMPTY_QUOTE)
   const [step, setStep] = useState(0)
   const [downloading, setDownloading] = useState(false)
+  const [downloadingListId, setDownloadingListId] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -547,6 +548,25 @@ export default function Quotations() {
       toast.error('Download failed')
     }
     setDownloading(false)
+  }
+
+  // Quick-download straight from the list row — no need to open the builder
+  // first. list_quotations returns the same full QuotationRead shape as the
+  // detail endpoint (the existing Preview button already relies on this, via
+  // the same {...EMPTY_QUOTE, ...q} merge), so this can build the PDF
+  // directly off the row's own data.
+  const handleListDownload = async (q) => {
+    setDownloadingListId(q.id)
+    try {
+      const full = { ...EMPTY_QUOTE, ...q }
+      const ir = buildQuotationIR(full)
+      const fileName = buildDocFileName('Quotation', full.addressee_name)
+      await downloadAsPdf(ir, `${fileName}.pdf`)
+      toast.success('Downloaded')
+    } catch {
+      toast.error('Download failed')
+    }
+    setDownloadingListId(null)
   }
 
   const activeQuotes = quotations.filter(q => !q.archived)
@@ -1091,6 +1111,13 @@ export default function Quotations() {
                     className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Preview">
                     <Eye size={15} />
                   </button>
+                  {q.status === 'Finalized' && (
+                    <button onClick={() => handleListDownload(q)} disabled={downloadingListId === q.id}
+                      className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-wait"
+                      title="Download PDF">
+                      <Download size={15} />
+                    </button>
+                  )}
                   {q.status === 'Finalized' && !q.client_rejected && canWrite('projects') && !projectByQuoteId[q.id] && (
                     <button onClick={() => handleCreateProject(q)}
                       className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" title="Create Project from this Quotation">
