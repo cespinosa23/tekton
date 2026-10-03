@@ -36,6 +36,17 @@ class Project(Base):
     encumbrance = Column(Numeric(12, 2), default=0)
     other_notes = Column(Text, nullable=True)
 
+    # Copied once from the source quotation's own attention_* fields at
+    # Quotation -> Project handoff (see projectFromQuotation.js) — not kept
+    # in sync afterward, same as every other handed-off field. Used only to
+    # prefill the Down Payment setup form in ProjectView.jsx; nothing else
+    # reads these, and a manually-created project (no source quotation)
+    # simply leaves them null.
+    attention_account_type = Column(String(20), nullable=True)
+    attention_salutation = Column(String(20), nullable=True)
+    attention_first_name = Column(String(100), nullable=True)
+    attention_last_name = Column(String(100), nullable=True)
+
     # Scope fields
     scope_wiring_permit = Column(Boolean, default=False)
     scope_wiring_permit_status = Column(String(50), default="not_included")

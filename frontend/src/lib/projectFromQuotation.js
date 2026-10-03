@@ -106,6 +106,14 @@ export function buildProjectPrefillFromQuotation(quote) {
     // from the scope_*_cost fields on save regardless, so passing a stale
     // number here would just be overwritten.
     other_notes: (quote.other_items || []).map(i => i.text).join('\n'),
+    // Copied once, not kept in sync — same as everything else here. Used
+    // only to prefill the Down Payment setup form on the project (see
+    // ProjectView.jsx); editing the quotation's own Through/Attention-To
+    // afterward doesn't retroactively update the project.
+    attention_account_type: quote.attention_account_type || '',
+    attention_salutation: quote.attention_salutation || '',
+    attention_first_name: quote.attention_first_name || '',
+    attention_last_name: quote.attention_last_name || '',
     ...merged,
   }
 }

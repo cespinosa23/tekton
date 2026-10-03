@@ -56,6 +56,10 @@ const emptyForm = {
   owner_company_name: '', project_name: '',
   address_line1: '', address_line2: '', city: '', state_province: '', postal_code: '', country: 'Philippines',
   quotation_date: '', status: 'Active',
+  // No form control edits these — carried straight through from a source
+  // quotation (see projectFromQuotation.js) purely to prefill the Down
+  // Payment setup form in ProjectView.jsx.
+  attention_account_type: '', attention_salutation: '', attention_first_name: '', attention_last_name: '',
   scope_wiring_permit: false, scope_electrical_plan: false,
   scope_installation: false, scope_cfei: false,
   scope_supply: false, scope_meralco: false,
@@ -283,6 +287,10 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
         project_name: project.project_name || '',
         quotation_date: project.quotation_date || '',
         status: project.status || 'Active',
+        attention_account_type: project.attention_account_type || '',
+        attention_salutation: project.attention_salutation || '',
+        attention_first_name: project.attention_first_name || '',
+        attention_last_name: project.attention_last_name || '',
         scope_wiring_permit: project.scope_wiring_permit || false,
         scope_electrical_plan: project.scope_electrical_plan || false,
         scope_installation: project.scope_installation || false,

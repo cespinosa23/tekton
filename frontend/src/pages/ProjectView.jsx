@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -107,6 +107,27 @@ export default function ProjectView() {
   const deductibleBase = dpRow ? (parseFloat(project?.contract_cost) || 0) - (parseFloat(dpRow.dp_amount) || 0) - (parseFloat(dpRow.retention_amount) || 0) : 0
   const totalBilled = projectBillings.reduce((s, b) => s + (b.is_paid ? parseFloat(b.amount) || 0 : 0), 0)
   const allBilledPaid = dpRow?.is_paid && progressRows.every(b => b.is_paid)
+
+  // Pre-fills the DP form's Through fields from whatever the source
+  // quotation's Attention-To carried onto this project (see
+  // projectFromQuotation.js) — once only, guarded by the ref, so a
+  // background refetch of `project` (a new object reference, same data)
+  // doesn't come along later and silently overwrite what the user is
+  // mid-typing into the form.
+  const dpAttentionPrefilled = useRef(false)
+  useEffect(() => {
+    if (dpAttentionPrefilled.current || !project || dpRow) return
+    dpAttentionPrefilled.current = true
+    const { attention_account_type, attention_salutation, attention_first_name, attention_last_name } = project
+    if (!attention_account_type && !attention_salutation && !attention_first_name && !attention_last_name) return
+    setDpForm(prev => ({
+      ...prev,
+      account_type: attention_account_type || prev.account_type,
+      salutation: attention_salutation || prev.salutation,
+      first_name: attention_first_name || prev.first_name,
+      last_name: attention_last_name || prev.last_name,
+    }))
+  }, [project, dpRow])
 
   // PM can only view their own projects
   const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null

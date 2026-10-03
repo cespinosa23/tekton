@@ -22,6 +22,10 @@ class ProjectCreate(BaseModel):
     contract_cost: Optional[float] = 0
     encumbrance: Optional[float] = 0
     other_notes: Optional[str] = None
+    attention_account_type: Optional[str] = None
+    attention_salutation: Optional[str] = None
+    attention_first_name: Optional[str] = None
+    attention_last_name: Optional[str] = None
     scope_wiring_permit: bool = False
     scope_wiring_permit_status: str = "not_included"
     scope_wiring_permit_date: Optional[date] = None
