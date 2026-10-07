@@ -28,6 +28,8 @@ def test_full_billing_chain(client, admin_token):
     resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 30000,
         "retention_amount": 10000,
@@ -77,6 +79,8 @@ def test_cannot_record_second_down_payment(client, admin_token):
     payload = {
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -104,6 +108,8 @@ def test_retention_release_requires_100_percent(client, admin_token):
     client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 10000,
@@ -128,6 +134,8 @@ def test_duplicate_retention_release_rejected(client, admin_token):
     client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 10000,
@@ -157,6 +165,8 @@ def test_engineer_cannot_create_billing(client, engineer_token):
     resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -170,6 +180,8 @@ def test_only_latest_billing_can_be_archived(client, admin_token):
     dp_resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -194,6 +206,8 @@ def test_mark_billing_paid(client, admin_token):
     dp_resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 30000,
         "retention_amount": 10000,
@@ -221,6 +235,8 @@ def test_engineer_cannot_mark_billing_paid(client, admin_token, engineer_token):
     dp_resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -238,6 +254,8 @@ def test_down_payment_stores_scope_description(client, admin_token):
     resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 30000,
         "retention_amount": 10000,
@@ -253,6 +271,8 @@ def test_zero_amount_down_payment_is_auto_paid(client, admin_token):
     resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -270,6 +290,8 @@ def test_zero_amount_billing_cannot_be_unpaid(client, admin_token):
     dp_resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 0,
         "retention_amount": 0,
@@ -286,6 +308,8 @@ def test_reset_project_billing(client, admin_token):
     client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 30000,
         "retention_amount": 10000,
@@ -307,6 +331,8 @@ def test_reset_project_billing(client, admin_token):
     resp = client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-03-01",
         "dp_amount": 5000,
         "retention_amount": 0,
@@ -320,6 +346,8 @@ def test_reset_project_billing_requires_admin(client, admin_token, engineer_toke
     client.post("/billing/", json={
         "project_id": project_id,
         "billing_type": "down_payment",
+        # Required on every down payment since the payee ("Through") fields were added.
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
         "billing_date": "2026-01-01",
         "dp_amount": 30000,
         "retention_amount": 10000,

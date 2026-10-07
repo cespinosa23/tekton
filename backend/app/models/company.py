@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, Text
-from sqlalchemy.dialects.mysql import MEDIUMTEXT
+from app.db.types import LongText
 from app.db.database import Base
 
 class Company(Base):
@@ -8,7 +8,7 @@ class Company(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String(255), nullable=False)
     short_name = Column(String(100), nullable=True)
-    logo_url = Column(MEDIUMTEXT, nullable=True)
+    logo_url = Column(LongText, nullable=True)
     address = Column(String(255), nullable=True)  # deprecated: superseded by address_line1/2, city, etc. Kept as fallback until re-entered.
     address_line1 = Column(String(255), nullable=True)
     address_line2 = Column(String(255), nullable=True)
@@ -24,7 +24,7 @@ class Company(Base):
     default_signatory = Column(String(100), nullable=True)
     signatory_position = Column(String(100), nullable=True)
     pcab_license = Column(String(100), nullable=True)
-    signature_url = Column(MEDIUMTEXT, nullable=True)
+    signature_url = Column(LongText, nullable=True)
     letterhead_color = Column(String(20), nullable=True)
     payment_method = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)

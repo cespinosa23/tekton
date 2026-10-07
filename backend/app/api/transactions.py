@@ -32,6 +32,18 @@ def _reapply_linked_billing(db: Session, tx: Transaction):
         billing.is_paid = True
         billing.paid_date = tx.transaction_date
 
+def _block_if_commission_linked(tx: Transaction, action: str):
+    """A released commission's expense is owned by api/commissions.py —
+    editing, archiving, or restoring it here would silently desync it from
+    the commission it represents (an archive would undo the release behind
+    the Commissions page's back, bypassing its Admin-only reverse)."""
+    if tx.commission_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This expense is a released commission — {action} it from the Commissions page instead.",
+        )
+
+
 def _is_admin(user) -> bool:
     return any(ur.role.name == "Admin" for ur in user.roles)
 
@@ -95,6 +107,8 @@ def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = D
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    _block_if_commission_linked(tx, "change")
+
     updates = payload.model_dump(exclude_unset=True)
 
     if payload.billing_id is not None and not _is_admin(current_user):
@@ -136,6 +150,8 @@ def archive_transaction(item_id: int, db: Session = Depends(get_db), current_use
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    _block_if_commission_linked(tx, "reverse")
+
     material_ids = get_material_ids(tx.materials or [])
     tx.archived = True
     tx.archived_by = current_user.email
@@ -151,6 +167,10 @@ def restore_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(r
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Archived only by a commission reverse — bringing it back here would
+    # double-count against a commission that's no longer released.
+    _block_if_commission_linked(tx, "re-release")
 
     if tx.billing_id:
         duplicate = db.query(Transaction).filter(
@@ -180,6 +200,10 @@ def permanent_delete_transaction(item_id: int, db: Session = Depends(get_db), _=
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    # An archived commission expense is already reversed, so deleting it is
+    # harmless; a live one is still the record of a released commission.
+    if not tx.archived:
+        _block_if_commission_linked(tx, "reverse")
     material_ids = get_material_ids(tx.materials or [])
     _revert_linked_billing(db, tx)
     db.delete(tx)

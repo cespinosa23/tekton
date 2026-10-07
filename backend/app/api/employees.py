@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.attendance import Attendance
 from app.models.quotation import Quotation
 from app.models.transaction import Transaction
+from app.models.commission import Commission
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -165,6 +166,12 @@ def permanent_delete_employee(
     # record is gone — only the live reference is cleared.
     db.query(Transaction).filter(Transaction.requested_by_employee_id == employee_id).update(
         {Transaction.requested_by_employee_id: None}
+    )
+    # Same for commission payees (FK: commissions.payee_employee_id ->
+    # employees.id) — payee_name is the snapshot that keeps a released
+    # commission readable afterward.
+    db.query(Commission).filter(Commission.payee_employee_id == employee_id).update(
+        {Commission.payee_employee_id: None}
     )
 
     db.flush()

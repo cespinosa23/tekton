@@ -17,10 +17,10 @@ def test_engineer_cannot_write_supplier(client, engineer_token):
     assert resp.status_code == 403
 
 
-def test_accounting_can_write_supplier(client, accounting_token):
+def test_accounting_cannot_write_supplier(client, accounting_token):
+    # Suppliers are Admin-only (main.py write_roles, config/permissions.js).
     resp = client.post("/suppliers/", json=SUPPLIER_PAYLOAD, headers={"Authorization": f"Bearer {accounting_token}"})
-    # 201 = created, 422 = wrong schema shape — both mean auth passed
-    assert resp.status_code in (201, 422)
+    assert resp.status_code == 403
 
 
 def test_admin_can_write_supplier(client, admin_token):
@@ -38,19 +38,21 @@ def test_accounting_cannot_write_project(client, accounting_token):
     assert resp.status_code == 403
 
 
-def test_engineer_can_write_project(client, engineer_token):
+def test_engineer_cannot_write_project(client, engineer_token):
+    # Projects are writable by Admin / Project Coordinator / Project Manager only.
     resp = client.post("/projects/", json={"project_name": "X"}, headers={"Authorization": f"Bearer {engineer_token}"})
-    assert resp.status_code in (201, 422)
+    assert resp.status_code == 403
 
 
-def test_accounting_can_write_transaction(client, accounting_token):
+def test_accounting_cannot_write_transaction(client, accounting_token):
+    # Transactions are writable by Admin / Project Coordinator only.
     payload = {
         "transaction_type": "Payment",
         "transaction_date": "2026-01-01",
         "amount": "1000.00",
     }
     resp = client.post("/transactions/", json=payload, headers={"Authorization": f"Bearer {accounting_token}"})
-    assert resp.status_code in (201, 422)
+    assert resp.status_code == 403
 
 
 def test_engineer_cannot_write_transaction(client, engineer_token):

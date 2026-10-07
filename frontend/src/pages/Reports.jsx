@@ -45,15 +45,21 @@ function SortTh({ label, field, sort, setSort, className = '' }) {
 
 export default function Reports() {
   const { isAdmin } = useAuth()
-  if (!isAdmin()) return <Navigate to="/dashboard" replace />
+  const admin = isAdmin()
 
-  const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
-  const { data: employees = [] } = useQuery({ queryKey: ['attendance'], queryFn: getEmployees })
-  const { data: attendance = [] } = useQuery({ queryKey: ['attendance-all'], queryFn: getAttendance })
+  // Hooks run before the Admin redirect below, never after an early return.
+  // Cache keys match every other page: employees was cached under
+  // 'attendance' here, so after visiting Reports, Dashboard/Projects/Attendance
+  // briefly showed the employee list as attendance records (and vice versa).
+  const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects, enabled: admin })
+  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions, enabled: admin })
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees, enabled: admin })
+  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance, enabled: admin })
 
   const [profitSort, setProfitSort] = useState({ field: 'margin', dir: 'asc' })
   const [statusFilter, setStatusFilter] = useState('all')
+
+  if (!admin) return <Navigate to="/dashboard" replace />
 
   // ── Per-project financials ─────────────────────────────────────────────────
   const projectData = projects.map(project => {

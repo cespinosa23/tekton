@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import {
   LayoutDashboard, FolderKanban, ArrowLeftRight, Users,
-  Package, Archive, ClipboardList, BookOpen, FolderArchive, Settings, LogOut, BarChart2, Receipt
+  Package, Archive, ClipboardList, BookOpen, FolderArchive, Settings, LogOut, BarChart2, Receipt, HandCoins
 } from 'lucide-react'
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/reports', icon: BarChart2, label: 'Reports' },
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
   { to: '/billings', icon: Receipt, label: 'Billings' },
+  { to: '/commissions', icon: HandCoins, label: 'Commissions' },
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/employees', icon: Users, label: 'Employees' },
   { to: '/materials', icon: Package, label: 'Materials' },

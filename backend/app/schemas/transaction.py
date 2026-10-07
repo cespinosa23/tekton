@@ -51,4 +51,6 @@ class TransactionRead(TransactionCreate):
     id: int
     archived: bool = False
     archived_by: Optional[str] = None
+    # Read-only: only api/commissions.py's release flow ever sets it.
+    commission_id: Optional[int] = None
     model_config = {"from_attributes": True}

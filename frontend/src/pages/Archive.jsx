@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { RotateCcw, Trash2, X, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { RotateCcw, Trash2, X, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, Lock } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -123,14 +123,19 @@ function ArchivedTable({ columns, rows, onRestore, onDelete, isAdmin, canRestore
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {sorted.map(({ id, cells }) => (
+          {sorted.map(({ id, cells, restoreBlocked }) => (
             <tr key={id} className="hover:bg-gray-50">
               {cells.map((cell, i) => (
                 <td key={i} className="px-4 py-3 text-gray-700">{cell}</td>
               ))}
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1">
-                  {canRestore && (
+                  {canRestore && restoreBlocked && (
+                    <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-400" title={restoreBlocked}>
+                      <Lock size={13} /> Commission
+                    </span>
+                  )}
+                  {canRestore && !restoreBlocked && (
                     <button
                       onClick={() => onRestore(id)}
                       disabled={restoring === id}
@@ -176,7 +181,7 @@ export default function Archive() {
   const { data: archivedSuppliers = []    } = useQuery({ queryKey: ['archived', 'suppliers'],    queryFn: getArchivedSuppliers,    enabled: activeTab === 'suppliers' })
 
   // ── Restore mutations ─────────────────────────────────────────────────
-  const makeMutation = (fn, keys, successMsg) => useMutation({
+  const useArchiveMutation = (fn, keys, successMsg) => useMutation({
     mutationFn: fn,
     onSuccess: () => {
       keys.forEach(k => queryClient.invalidateQueries({ queryKey: k }))
@@ -190,17 +195,17 @@ export default function Archive() {
     },
   })
 
-  const restoreEmp  = makeMutation(restoreEmployee,    [['archived', 'employees'], ['employees']],       'Employee restored')
-  const restorePrj  = makeMutation(restoreProject,     [['archived', 'projects'],  ['projects']],        'Project restored')
-  const restoreMat  = makeMutation(restoreMaterial,    [['archived', 'materials'], ['materials']],       'Material restored')
-  const restoreTx   = makeMutation(restoreTransaction, [['archived', 'transactions'], ['transactions'], ['billings']], 'Transaction restored')
-  const restoreSup  = makeMutation(restoreSupplier,    [['archived', 'suppliers'], ['suppliers']],       'Supplier restored')
+  const restoreEmp  = useArchiveMutation(restoreEmployee,    [['archived', 'employees'], ['employees']],       'Employee restored')
+  const restorePrj  = useArchiveMutation(restoreProject,     [['archived', 'projects'],  ['projects']],        'Project restored')
+  const restoreMat  = useArchiveMutation(restoreMaterial,    [['archived', 'materials'], ['materials']],       'Material restored')
+  const restoreTx   = useArchiveMutation(restoreTransaction, [['archived', 'transactions'], ['transactions'], ['billings']], 'Transaction restored')
+  const restoreSup  = useArchiveMutation(restoreSupplier,    [['archived', 'suppliers'], ['suppliers']],       'Supplier restored')
 
-  const deleteEmp  = makeMutation(permanentDeleteEmployee,    [['archived', 'employees']],    'Employee permanently deleted')
-  const deletePrj  = makeMutation(permanentDeleteProject,     [['archived', 'projects']],     'Project permanently deleted')
-  const deleteMat  = makeMutation(permanentDeleteMaterial,    [['archived', 'materials']],    'Material permanently deleted')
-  const deleteTx   = makeMutation(permanentDeleteTransaction, [['archived', 'transactions'], ['billings']], 'Transaction permanently deleted')
-  const deleteSup  = makeMutation(permanentDeleteSupplier,    [['archived', 'suppliers']],    'Supplier permanently deleted')
+  const deleteEmp  = useArchiveMutation(permanentDeleteEmployee,    [['archived', 'employees']],    'Employee permanently deleted')
+  const deletePrj  = useArchiveMutation(permanentDeleteProject,     [['archived', 'projects']],     'Project permanently deleted')
+  const deleteMat  = useArchiveMutation(permanentDeleteMaterial,    [['archived', 'materials']],    'Material permanently deleted')
+  const deleteTx   = useArchiveMutation(permanentDeleteTransaction, [['archived', 'transactions'], ['billings']], 'Transaction permanently deleted')
+  const deleteSup  = useArchiveMutation(permanentDeleteSupplier,    [['archived', 'suppliers']],    'Supplier permanently deleted')
 
   // ── Handlers ─────────────────────────────────────────────────────────
   const handleRestore = (type, id) => {
@@ -251,6 +256,9 @@ export default function Archive() {
 
   const transactionRows = archivedTransactions.map(tx => ({
     id: tx.id,
+    // A reversed commission's expense can't come back from here (the API
+    // refuses it) — it's re-created by releasing again on Commissions.
+    restoreBlocked: tx.commission_id ? 'Reversed commission — release it again from the Commissions page' : null,
     sortValues: [
       tx.transaction_type || '',
       tx.transaction_date || '',

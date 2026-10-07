@@ -18,6 +18,7 @@ import Quotations from './pages/Quotations'
 import Reports from './pages/Reports'
 import BillingPrint from './pages/BillingPrint'
 import Billings from './pages/Billings'
+import Commissions from './pages/Commissions'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -51,6 +52,7 @@ export default function App() {
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectView /></ProtectedRoute>} />
       <Route path="/projects/:id/billing/:billingId/print" element={<ProtectedRoute><BillingPrint /></ProtectedRoute>} />
       <Route path="/billings" element={<ProtectedRoute><Billings /></ProtectedRoute>} />
+      <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />

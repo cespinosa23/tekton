@@ -28,3 +28,7 @@ class Transaction(Base):
     # even if the employee record is later renamed or archived.
     requested_by_employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     requested_by_name = Column(String(255), nullable=True)
+    # Set only by the Commissions release flow (api/commissions.py) on the
+    # expense it creates — the commission equivalent of billing_id. Not part
+    # of TransactionCreate/Update, so nothing outside that flow can set it.
+    commission_id = Column(Integer, ForeignKey("commissions.id"), nullable=True)

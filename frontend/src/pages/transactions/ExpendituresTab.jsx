@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Receipt } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Receipt, Lock } from 'lucide-react'
 import { useSortable } from '../../hooks/useSortable'
 import { SortableHeader } from '../../components/SortableHeader'
 import { useElementHeight } from '../../hooks/useElementHeight'
@@ -146,8 +146,19 @@ export default function ExpendituresTab({ stickyOffset = 0 }) {
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
                     <button onClick={() => setViewTx(tx)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Eye size={15} /></button>
-                    <button onClick={() => handleEdit(tx)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Pencil size={15} /></button>
-                    <button onClick={() => setDeleteTx(tx)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                    {tx.commission_id ? (
+                      // A released commission's expense — owned by the Commissions page,
+                      // which is the only place it can be reversed (the API refuses
+                      // edits/archives here too).
+                      <span className="p-1.5 text-gray-300" title="Released commission — reverse it from the Commissions page">
+                        <Lock size={15} />
+                      </span>
+                    ) : (
+                      <>
+                        <button onClick={() => handleEdit(tx)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Pencil size={15} /></button>
+                        <button onClick={() => setDeleteTx(tx)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

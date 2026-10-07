@@ -31,4 +31,5 @@ export const NAV_ROLES = {
   '/attendance':    ['Project Coordinator', 'Project Manager'],
   '/reports':       [],                     // Admin only
   '/billings':      [],                     // Admin only
+  '/commissions':   [],                     // Admin only
 }

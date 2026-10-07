@@ -28,6 +28,7 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate, Transa
 from app.schemas.setting import SettingCreate, SettingUpdate, SettingRead
 from app.models import material_type  # noqa
 from app.models import billing  # noqa
+from app.models import commission  # noqa
 from app.models import sow_type  # noqa
 from app.models import quotation_template_item  # noqa
 from app.api import material_types
@@ -35,6 +36,7 @@ from app.api import sow_types
 from app.api import quotation_template_items
 from app.api import transactions as transactions_router
 from app.api import billing as billing_router
+from app.api import commissions as commissions_router
 from app.api import quotations as quotations_router
 from app.api import materials_import
 from app.api import canvass_import
@@ -72,5 +74,6 @@ app.include_router(make_crud_router("/suppliers", "suppliers", Supplier, Supplie
 app.include_router(canvass_import.router)
 app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
+app.include_router(commissions_router.router)
 app.include_router(quotations_router.router)
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))
