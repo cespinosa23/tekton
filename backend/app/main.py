@@ -37,10 +37,12 @@ from app.api import quotation_template_items
 from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 from app.api import commissions as commissions_router
+from app.api import labor as labor_router
 from app.api import quotations as quotations_router
 from app.api import materials_import
 from app.api import canvass_import
 from app.core.project_reference import assign_reference_id
+from app.core import attendance_pay
 
 app = FastAPI(title="Tekton")
 
@@ -64,7 +66,13 @@ app.include_router(admin.router)
 
 # CRUD routes
 app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Project Coordinator", "Project Manager"], before_create=assign_reference_id))
-app.include_router(make_crud_router("/attendance", "attendance", Attendance, AttendanceCreate, AttendanceUpdate, AttendanceRead, write_roles=["Admin", "Project Coordinator", "Project Manager"]))
+# Attendance pay is computed server-side and is Admin-only to read
+# (app/core/attendance_pay.py) — PC/PM no longer receive daily salaries.
+app.include_router(make_crud_router(
+    "/attendance", "attendance", Attendance, AttendanceCreate, AttendanceUpdate, AttendanceRead,
+    write_roles=["Admin", "Project Coordinator", "Project Manager"],
+    sanitize=attendance_pay.strip_client_pay, on_save=attendance_pay.apply_pay, read_transform=attendance_pay.mask_pay,
+))
 app.include_router(make_crud_router("/calendar-days", "calendar_days", CalendarDay, CalendarDayCreate, CalendarDayUpdate, CalendarDayRead, allow_archive=False, write_roles=["Admin"]))
 app.include_router(make_crud_router("/companies", "companies", Company, CompanyCreate, CompanyUpdate, CompanyRead, allow_archive=False, write_roles=["Admin"]))
 app.include_router(materials_import.router)
@@ -75,5 +83,6 @@ app.include_router(canvass_import.router)
 app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
 app.include_router(commissions_router.router)
+app.include_router(labor_router.router)
 app.include_router(quotations_router.router)
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))

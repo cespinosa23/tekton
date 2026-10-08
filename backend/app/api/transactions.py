@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
+from app.core.access import project_scope
 from app.core.deps import get_current_user, require_role
 from app.models.transaction import Transaction
 from app.models.billing import Billing
@@ -63,18 +64,29 @@ def get_material_ids(materials):
     return list(ids)
 
 @router.get("/", response_model=list[TransactionRead])
-def list_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Transaction).filter(Transaction.archived == False).order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
+def list_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    # Read scope (app/core/access.py): Admin and PC see everything, a PM
+    # only transactions on their own projects (not office expenses), everyone
+    # else none. An empty list rather than 403 so pages that load
+    # transactions for everyone (the Dashboard) keep working.
+    q = db.query(Transaction).filter(Transaction.archived == False)
+    scope = project_scope(db, current_user)
+    if scope is not None:
+        if not scope:
+            return []
+        q = q.filter(Transaction.project_id.in_(scope))
+    return q.order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
 
 # Must be before /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[TransactionRead])
-def list_archived_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def list_archived_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
     return db.query(Transaction).filter(Transaction.archived == True).order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
 
 @router.get("/{item_id}", response_model=TransactionRead)
-def get_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def get_transaction(item_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     tx = db.query(Transaction).filter(Transaction.id == item_id).first()
-    if not tx:
+    scope = project_scope(db, current_user)
+    if not tx or (scope is not None and tx.project_id not in scope):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return tx
 

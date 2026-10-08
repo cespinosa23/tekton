@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
+from app.core.access import project_scope
 from app.core.deps import get_current_user, require_role
 from app.models.billing import Billing
 from app.models.project import Project
@@ -32,20 +33,31 @@ def _is_zero_amount(amount) -> bool:
 
 
 @router.get("/", response_model=list[BillingRead])
-def list_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Billing).filter(Billing.archived == False).order_by(Billing.id.asc()).offset(skip).limit(limit).all()
+def list_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    # Read scope (app/core/access.py): Admin and PC see every billing, a PM
+    # only their own projects', everyone else none — what the project
+    # pages' read-only Billing tab already implied. Writes stay Admin-only.
+    q = db.query(Billing).filter(Billing.archived == False)
+    scope = project_scope(db, current_user)
+    if scope is not None:
+        if not scope:
+            return []
+        q = q.filter(Billing.project_id.in_(scope))
+    return q.order_by(Billing.id.asc()).offset(skip).limit(limit).all()
 
 
 # Must be before /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[BillingRead])
-def list_archived_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def list_archived_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), _=Depends(require_role(["Admin"]))):
     return db.query(Billing).filter(Billing.archived == True).order_by(Billing.id.asc()).offset(skip).limit(limit).all()
 
 
 @router.get("/{item_id}", response_model=BillingRead)
-def get_billing(item_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def get_billing(item_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     billing = db.query(Billing).filter(Billing.id == item_id).first()
-    if not billing:
+    scope = project_scope(db, current_user)
+    # Out of scope reads as not found, so the API doesn't confirm it exists.
+    if not billing or (scope is not None and billing.project_id not in scope):
         raise HTTPException(status_code=404, detail="Billing not found")
     return billing
 

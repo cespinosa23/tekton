@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
 import { getEmployees } from '../api/employees'
 import { getBillings, createBilling, setBillingPaid, resetProjectBilling } from '../api/billing'
+import { getLaborTotals, laborFor } from '../api/labor'
 import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
@@ -77,6 +78,7 @@ export default function ProjectView() {
   const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: billings = [] } = useQuery({ queryKey: ['billings'], queryFn: getBillings })
+  const { data: laborTotals } = useQuery({ queryKey: ['laborTotals'], queryFn: () => getLaborTotals() })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const salutations = settings.filter(s => s.category === 'Salutation' && s.is_active && !s.archived)
@@ -244,7 +246,9 @@ export default function ProjectView() {
 
   // Direct Hire attendance is paid by the client directly — it's tracked here but
   // never counted as a company labor cost.
-  const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
+  // From the server's labor totals, not summed from attendance records:
+  // per-person pay is Admin-only, but PC/PM still see labor in Total Expenses.
+  const laborCost = laborFor(laborTotals, project?.id)
 
   const procurementCost = projectTx.filter(t => t.transaction_type === 'Materials Procurement')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)

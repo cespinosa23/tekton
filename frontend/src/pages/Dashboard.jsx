@@ -11,6 +11,7 @@ import {
   getProjects, getTransactions, getEmployees, getAttendance,
   getCalendarDays, createCalendarDay, updateCalendarDay
 } from '../api/dashboard'
+import { getLaborTotals, laborSum } from '../api/labor'
 import { useAuth } from '../context/AuthContext'
 import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, TrendingDown, Clock, CheckCircle2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -68,6 +69,14 @@ export default function Dashboard() {
     }
   }
 
+  const laborRange = getDateRange()
+  const laborStart = format(laborRange.start, 'yyyy-MM-dd')
+  const laborEnd = format(laborRange.end, 'yyyy-MM-dd')
+  const { data: laborTotals } = useQuery({
+    queryKey: ['laborTotals', laborStart, laborEnd],
+    queryFn: () => getLaborTotals({ start: laborStart, end: laborEnd }),
+  })
+
   const filterByDateRange = (items, dateField) => {
     const { start, end } = getDateRange()
     return items.filter(item => {
@@ -108,9 +117,8 @@ export default function Dashboard() {
   const totalGeneral = filteredTransactions
     .filter(t => t.transaction_type === 'General Expenditure')
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
-  // Direct Hire attendance is paid by the client directly, not a company cost.
-  const totalLabor = filterByDateRange(attendance, 'date')
-    .reduce((sum, a) => sum + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
+  // Summed on the server (Direct Hire excluded) — per-person pay is Admin-only.
+  const totalLabor = laborSum(laborTotals)
   const totalExpenses = totalMaterials + totalGeneral + totalLabor
 
   const activeProjects = projects.filter(p => p.status === 'Active').length

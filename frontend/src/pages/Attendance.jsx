@@ -110,13 +110,13 @@ export default function Attendance() {
 
   const updateMutation = useMutation({
     mutationFn: updateAttendance,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['attendance'] }); closeForm(); toast.success('Attendance updated') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['attendance'] }); queryClient.invalidateQueries({ queryKey: ['laborTotals'] }); closeForm(); toast.success('Attendance updated') },
     onError: () => toast.error('Failed to update attendance'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteAttendance,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['attendance'] }); setDeleteRecord(null); toast.success('Record deleted') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['attendance'] }); queryClient.invalidateQueries({ queryKey: ['laborTotals'] }); setDeleteRecord(null); toast.success('Record deleted') },
     onError: () => toast.error('Failed to delete record'),
   })
 
@@ -233,7 +233,7 @@ export default function Attendance() {
             return createMutation.mutateAsync(calculateSalaries(base, emp))
           })
         )
-        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }); queryClient.invalidateQueries({ queryKey: ['laborTotals'] })
         setSelectedDate(new Date(formData.date + 'T00:00:00'))
         setEmployeeFilter('all')
         setProjectFilter('all')
@@ -278,7 +278,7 @@ export default function Attendance() {
     }, emp)
     createMutation.mutate(payload, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }); queryClient.invalidateQueries({ queryKey: ['laborTotals'] })
         setSelectedDate(new Date(splitFormData.date + 'T00:00:00'))
         setEmployeeFilter('all')
         setProjectFilter('all')

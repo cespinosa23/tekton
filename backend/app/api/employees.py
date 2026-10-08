@@ -16,6 +16,15 @@ from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
+def _out(employee: Employee, user: User) -> EmployeeRead:
+    """Daily salary is Admin-only to read (see app/core/access.py). Writes
+    were already guarded: a non-Admin can't set or change it."""
+    read = EmployeeRead.model_validate(employee, from_attributes=True)
+    if not _is_admin(user):
+        read.daily_salary = None
+    return read
+
+
 @router.get("/", response_model=List[EmployeeRead])
 def list_employees(
     skip: int = 0,
@@ -23,14 +32,16 @@ def list_employees(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Employee).filter(Employee.archived == False).order_by(Employee.id.asc()).offset(skip).limit(limit).all()
+    rows = db.query(Employee).filter(Employee.archived == False).order_by(Employee.id.asc()).offset(skip).limit(limit).all()
+    return [_out(e, current_user) for e in rows]
 
 
 # Must be before /{employee_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=List[EmployeeRead])
 def list_archived_employees(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # Archived records are Admin-only, matching the Admin-only Archive page.
+    current_user: User = Depends(require_role(["Admin"])),
 ):
     return db.query(Employee).filter(Employee.archived == True).order_by(Employee.id.asc()).all()
 
@@ -47,7 +58,7 @@ def get_employee(
     ).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return employee
+    return _out(employee, current_user)
 
 
 def _is_admin(user: User) -> bool:
@@ -67,7 +78,7 @@ def create_employee(
     db.add(employee)
     db.commit()
     db.refresh(employee)
-    return employee
+    return _out(employee, current_user)
 
 
 @router.put("/{employee_id}", response_model=EmployeeRead)
@@ -93,7 +104,7 @@ def update_employee(
 
     db.commit()
     db.refresh(employee)
-    return employee
+    return _out(employee, current_user)
 
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)

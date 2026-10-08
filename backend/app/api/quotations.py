@@ -61,10 +61,9 @@ def list_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get
 
 # Must be registered BEFORE /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[QuotationRead])
-def list_archived_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    q = db.query(Quotation).filter(Quotation.archived == True).order_by(Quotation.id.asc())
-    q = _scope_visible(q, current_user)
-    return q.offset(skip).limit(limit).all()
+def list_archived_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user: User = Depends(require_role(["Admin"]))):
+    # Archived records are Admin-only, matching the Admin-only Archive page.
+    return db.query(Quotation).filter(Quotation.archived == True).order_by(Quotation.id.asc()).offset(skip).limit(limit).all()
 
 
 @router.get("/{item_id}", response_model=QuotationRead)

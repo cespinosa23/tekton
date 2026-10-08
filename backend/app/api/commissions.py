@@ -33,6 +33,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.access import full_name as _full_name, is_project_manager as _is_project_manager
 from app.core.deps import require_role
 from app.db.database import get_db
 from app.models.attendance import Attendance
@@ -183,15 +184,6 @@ def _row(project: Project, ctype: str, commission: Commission | None, expenses: 
     )
 
 
-def _norm_name(name: str | None) -> str:
-    return " ".join((name or "").split()).lower()
-
-
-def _full_name(employee: Employee) -> str:
-    # Same "First Middle Last" join Projects.jsx stores in project_manager.
-    return " ".join(p.strip() for p in [employee.first_name, employee.middle_name, employee.last_name] if p and p.strip())
-
-
 def _get_project(db: Session, project_id: int) -> Project:
     project = db.query(Project).filter(Project.id == project_id, Project.archived == False).first()
     if not project:
@@ -231,25 +223,6 @@ def _get_or_create(db: Session, project_id: int, ctype: str) -> Commission:
 def _require_applicable(project: Project, ctype: str):
     if ctype == "electrical_plan" and _electrical_plan_cost(project) <= 0:
         raise HTTPException(status_code=400, detail="This project has no Electrical Plan cost, so it has no Electrical Plan commission.")
-
-
-def _is_project_manager(employee: Employee, project_manager: str | None) -> bool:
-    """Whether this employee is the person named in project.project_manager.
-
-    Matches on first + last name, with any middle name/initial (or none) in
-    between — older projects store "Maria Santos" while the employee record
-    is "Maria L. Santos", and an exact full-name match wrongly rejected the
-    right person. Same idea as Projects.jsx's quote-prefill PM match, but
-    compared against the stored string as a prefix/suffix so multi-word
-    names ("Juan Carlos", "Dela Cruz") still work."""
-    pm = _norm_name(project_manager)
-    first = _norm_name(employee.first_name)
-    last = _norm_name(employee.last_name)
-    if not pm or not first or not last:
-        return False
-    if pm == _norm_name(_full_name(employee)) or pm == f"{first} {last}":
-        return True
-    return pm.startswith(first + " ") and pm.endswith(" " + last) and len(pm) > len(first) + len(last) + 1
 
 
 def _check_pm_payee(project: Project, employee: Employee | None):

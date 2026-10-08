@@ -6,9 +6,10 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
   getProjects, createProject, updateProject, archiveProject,
-  getTransactions, getAttendance, getSettings
+  getTransactions, getSettings
 } from '../api/projects'
 import { getEmployees } from '../api/employees'
+import { getLaborTotals, laborFor } from '../api/labor'
 import {
   Plus, Search, Eye, Pencil, Trash2, Archive,
   MapPin, User, Calendar, X, Filter, Link2
@@ -167,7 +168,9 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
 // --- PaymentsView ---
 function PaymentsView({ projects }) {
   const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
-  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
+  // Labor comes from server totals: per-person pay is Admin-only, but the
+  // PM's chart still shows each project's labor segment.
+  const { data: laborTotals } = useQuery({ queryKey: ['laborTotals'], queryFn: () => getLaborTotals() })
 
   if (projects.length === 0) return (
     <div className="text-center py-16 text-gray-400">No projects to display.</div>
@@ -177,14 +180,13 @@ function PaymentsView({ projects }) {
     <div className="space-y-4">
       {projects.map(project => {
         const projectTx = transactions.filter(t => t.project_id === project.id)
-        const projectAtt = attendance.filter(a => a.project_id === project.id)
 
         const totalContract = parseFloat(project.contract_cost) || 0
         const encumbrance = parseFloat(project.encumbrance) || 0
         const contractCost = totalContract - encumbrance // pure scope cost, excluding encumbrance, for the chart segment below
 
         // Direct Hire attendance is paid by the client directly, not a company cost.
-        const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
+        const laborCost = laborFor(laborTotals, project.id)
         const materialsCost = projectTx
           .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
           .reduce((s, t) => {
