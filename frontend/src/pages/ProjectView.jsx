@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
-import { getEmployees } from '../api/employees'
 import { getBillings, createBilling, setBillingPaid, resetProjectBilling } from '../api/billing'
 import { getLaborTotals, laborFor } from '../api/labor'
 import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import { formatBillingSerial } from '../utils/billingSerial'
 import { useSortable } from '../hooks/useSortable'
@@ -68,15 +68,17 @@ export default function ProjectView() {
   const [printCompanyId, setPrintCompanyId] = useState('')
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  const { isAdmin, hasRole, user } = useAuth()
-  const hideFinancials = hasRole('Project Coordinator') || hasRole('Project Manager')
-  const hidePayroll = hasRole('Project Coordinator') || hasRole('Project Manager')
-  const isPM = hasRole('Project Manager') && !isAdmin()
+  const { isAdmin, hasRole } = useAuth()
+  const { canWrite } = usePermissions()
+  // PMs have full access to every project and its billing (Oct 2026);
+  // individual pay stays Admin-only, so the payroll tab does too.
+  const canBill = canWrite('billing')
+  const hideFinancials = !(isAdmin() || hasRole('Project Manager'))
+  const hidePayroll = !isAdmin()
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
-  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: billings = [] } = useQuery({ queryKey: ['billings'], queryFn: getBillings })
   const { data: laborTotals } = useQuery({ queryKey: ['laborTotals'], queryFn: () => getLaborTotals() })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
@@ -131,11 +133,6 @@ export default function ProjectView() {
     }))
   }, [project, dpRow])
 
-  // PM can only view their own projects
-  const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
-  const myFullName = myEmployee
-    ? [myEmployee.first_name, myEmployee.middle_name, myEmployee.last_name].filter(Boolean).join(' ')
-    : null
 
   const updateMutation = useMutation({
     mutationFn: ({ data }) => updateProject({ id: parseInt(id), data }),
@@ -180,16 +177,6 @@ export default function ProjectView() {
   if (!project) return (
     <Layout>
       <div className="p-8 text-center text-gray-400">Project not found.</div>
-    </Layout>
-  )
-
-  if (isPM && isLoadingEmployees) return (
-    <Layout><div className="p-8 text-center text-gray-400">Loading...</div></Layout>
-  )
-
-  if (isPM && (!myFullName || project.project_manager !== myFullName)) return (
-    <Layout>
-      <div className="p-8 text-center text-gray-400">You don't have access to this project.</div>
     </Layout>
   )
 
@@ -313,10 +300,10 @@ export default function ProjectView() {
         </div>
 
         {/* Summary Cards */}
-        <div className={`grid grid-cols-2 gap-4 mb-6 ${!hideFinancials ? 'lg:grid-cols-5' : isPM ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+        <div className={`grid grid-cols-2 gap-4 mb-6 ${!hideFinancials ? 'lg:grid-cols-5' : 'lg:grid-cols-3'}`}>
           {[
             { label: 'Contract Cost', value: fmt(project.contract_cost), color: 'bg-emerald-50', iconColor: 'text-emerald-600', icon: Banknote },
-            ...(!hideFinancials || isPM ? [{ label: 'Total Payments', value: fmt(totalPayments), color: 'bg-green-50', iconColor: 'text-green-600', icon: Receipt }] : []),
+            ...(!hideFinancials ? [{ label: 'Total Payments', value: fmt(totalPayments), color: 'bg-green-50', iconColor: 'text-green-600', icon: Receipt }] : []),
             { label: 'Total Expenses', value: fmt(totalExpenses), color: 'bg-red-50', iconColor: 'text-red-600', icon: Package },
             { label: 'Encumbrance', value: fmt(project.encumbrance), color: 'bg-amber-50', iconColor: 'text-amber-600', icon: Banknote },
             ...(!hideFinancials ? [{ label: 'Labor Cost', value: fmt(laborCost), color: 'bg-purple-50', iconColor: 'text-purple-600', icon: Users }] : []),
@@ -514,7 +501,7 @@ export default function ProjectView() {
             )}
 
             {!dpRow ? (
-              isAdmin() ? (
+              canBill ? (
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Set Up Down Payment & Retention</h3>
                   <form onSubmit={handleCreateDp} className="space-y-4">
@@ -675,7 +662,7 @@ export default function ProjectView() {
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-emerald-600">{fmt(b.amount)}</td>
                           <td className="px-4 py-3 text-center">
-                            {isAdmin() ? (
+                            {canBill ? (
                               <button onClick={() => handleTogglePaid(b)} disabled={paidMutation.isPending || parseFloat(b.amount) === 0}
                                 title={parseFloat(b.amount) === 0 ? 'Zero-amount billing — always paid' : b.is_paid && b.paid_date ? `Paid on ${b.paid_date}` : 'Mark as paid'}
                                 className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -707,7 +694,7 @@ export default function ProjectView() {
                 </div>
 
                 {/* New Progress Billing */}
-                {isAdmin() && !retentionRow && (!latestProgress || parseFloat(latestProgress.current_percentage) < 100) && (
+                {canBill && !retentionRow && (!latestProgress || parseFloat(latestProgress.current_percentage) < 100) && (
                   <div className="bg-white border border-gray-200 rounded-lg p-5">
                     <h3 className="text-sm font-semibold text-gray-900 mb-4">New Progress Billing</h3>
                     <form onSubmit={handleCreateProgress} className="space-y-4">
@@ -781,7 +768,7 @@ export default function ProjectView() {
                 )}
 
                 {/* Release Retention */}
-                {isAdmin() && !retentionRow && latestProgress && parseFloat(latestProgress.current_percentage) === 100 && (
+                {canBill && !retentionRow && latestProgress && parseFloat(latestProgress.current_percentage) === 100 && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-900">
@@ -800,7 +787,7 @@ export default function ProjectView() {
                 )}
 
                 {/* Reset Billing */}
-                {isAdmin() && (
+                {canBill && (
                   <div className="flex items-center justify-between pt-2">
                     <p className="text-xs text-gray-400">Made a mistake in the setup? You can reset billing and start over.</p>
                     <button onClick={() => setShowResetConfirm(true)}

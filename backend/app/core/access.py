@@ -2,22 +2,21 @@
 
 The screens hide plenty per role (permissions.js), but until Oct 2026 the API
 returned every record to any logged-in user. These helpers are the server-side
-rules, decided Oct 7, 2026:
+rules (decided Oct 7, 2026; PM opened to all projects Oct 8, 2026):
 
   Salaries (employee daily salary, attendance pay) .... Admin only
-  Per-project labor totals ............................ Admin, PC (all), PM (own projects)
-  Billings (read) ..................................... Admin, PC (all), PM (own projects)
-  Transactions (read) ................................. Admin, PC (all), PM (own projects)
+  Per-project labor totals ............................ Admin, PC, PM (all projects)
+  Billings (read) ..................................... Admin, PC, PM (all projects)
+  Transactions (read) ................................. Admin, PC, PM (all projects)
   Archived records .................................... Admin only
 
-A PM's "own" projects are the ones whose project_manager names them —
-project_manager is a plain "First Middle Last" string, not a link, so it's
-matched by name (see is_project_manager).
+Billing writes (create, mark paid, archive, reset) are Admin and PM — see
+app/api/billing.py. is_project_manager is still used by Commissions to check
+that a PM commission's payee matches the project's project_manager name.
 """
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee
-from app.models.project import Project
 from app.models.user import User
 
 
@@ -55,28 +54,13 @@ def is_project_manager(employee: Employee, project_manager: str | None) -> bool:
     return pm.startswith(first + " ") and pm.endswith(" " + last) and len(pm) > len(first) + len(last) + 1
 
 
-def pm_project_ids(db: Session, user: User) -> set[int]:
-    """Projects this user manages, by name. A PM login with no linked
-    Employee record manages nothing."""
-    if not user.employee_id:
-        return set()
-    employee = db.query(Employee).filter(Employee.id == user.employee_id).first()
-    if not employee:
-        return set()
-    return {
-        pid for pid, pm in db.query(Project.id, Project.project_manager).all()
-        if is_project_manager(employee, pm)
-    }
-
-
 def project_scope(db: Session, user: User) -> set[int] | None:
     """Which projects' billings, transactions and labor totals this user may
-    read. None means unrestricted (Admin, Project Coordinator); a set means
-    only those project ids (Project Manager); an empty set means none
-    (Engineer, Accounting, Liaison, HR, Others)."""
+    read. None means unrestricted (Admin, Project Coordinator, and — since
+    Oct 2026 — Project Manager, who has full access to every project); an
+    empty set means none (Engineer, Accounting, Liaison, HR, Others). A set
+    of ids would scope to just those projects; no role uses that today."""
     roles = role_names(user)
-    if "Admin" in roles or "Project Coordinator" in roles:
+    if roles & {"Admin", "Project Coordinator", "Project Manager"}:
         return None
-    if "Project Manager" in roles:
-        return pm_project_ids(db, user)
     return set()

@@ -581,7 +581,7 @@ function ProjectForm({ open, onClose, project, onSave, settings, projectManagers
 // --- Main Projects Page ---
 export default function Projects() {
   const { canWrite, canSeeNav } = usePermissions()
-  const { isAdmin, hasRole, user } = useAuth()
+  const { isAdmin, hasRole } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -630,12 +630,6 @@ export default function Projects() {
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state, isLoadingEmployees, projectManagers])
 
-  // For PM role: only show their own projects
-  const myEmployee = user?.employee_id ? employees.find(e => e.id === user.employee_id) : null
-  const myFullName = myEmployee
-    ? [myEmployee.first_name, myEmployee.middle_name, myEmployee.last_name].filter(Boolean).join(' ')
-    : null
-  const isPM = hasRole('Project Manager') && !isAdmin()
 
   const createMutation = useMutation({
     mutationFn: createProject,
@@ -748,7 +742,7 @@ export default function Projects() {
             <option>Active</option><option>Inactive</option><option>Completed</option>
             <option>On Hold</option><option>Cancelled</option>
           </select>
-          {!isPM && (
+          {projectManagers.length > 0 && (
             <select value={pmFilter} onChange={e => setPmFilter(e.target.value)}
               className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
               <option value="all">All Project Managers</option>
@@ -787,17 +781,15 @@ export default function Projects() {
 
         {/* Progress Tab */}
         {activeTab === 'progress' && (() => {
-          const visible = isPM && myFullName
-            ? sortedFiltered.filter(p => p.project_manager === myFullName)
-            : sortedFiltered
-          return (isLoading || (isPM && isLoadingEmployees)) ? (
+          const visible = sortedFiltered
+          return isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-100 rounded-lg animate-pulse" />)}
             </div>
           ) : visible.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Search size={40} className="mx-auto mb-3 opacity-50" />
-              <p>{search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : isPM ? 'No projects assigned to you' : 'Create your first project to get started'}</p>
+              <p>{search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : 'Create your first project to get started'}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -813,9 +805,7 @@ export default function Projects() {
 
         {/* Payments Tab */}
         {(isAdmin() || hasRole('Project Manager')) && activeTab === 'payments' && (() => {
-          const visible = isPM && myFullName
-            ? sortedFiltered.filter(p => p.project_manager === myFullName)
-            : sortedFiltered
+          const visible = sortedFiltered
           return <PaymentsView projects={visible} />
         })()}
 

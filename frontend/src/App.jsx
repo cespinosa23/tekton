@@ -19,11 +19,18 @@ import Reports from './pages/Reports'
 import BillingPrint from './pages/BillingPrint'
 import Billings from './pages/Billings'
 import Commissions from './pages/Commissions'
+import { isHiddenHere } from './utils/environment'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   return user ? children : <Navigate to="/login" replace />
+}
+
+// Pages listed in utils/environment.js HIDDEN_ON_PRODUCTION stay fully
+// available on staging/local but redirect to the Dashboard on production.
+function HiddenOnProduction({ path, children }) {
+  return isHiddenHere(path) ? <Navigate to="/dashboard" replace /> : children
 }
 
 function PublicOnlyRoute({ children }) {
@@ -52,7 +59,7 @@ export default function App() {
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectView /></ProtectedRoute>} />
       <Route path="/projects/:id/billing/:billingId/print" element={<ProtectedRoute><BillingPrint /></ProtectedRoute>} />
       <Route path="/billings" element={<ProtectedRoute><Billings /></ProtectedRoute>} />
-      <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
+      <Route path="/commissions" element={<ProtectedRoute><HiddenOnProduction path="/commissions"><Commissions /></HiddenOnProduction></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />

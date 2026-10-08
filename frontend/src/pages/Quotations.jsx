@@ -16,6 +16,7 @@ import { getProjects } from '../api/projects'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { formatCompanyAddress } from '../lib/company'
+import { formatAddress, addresseeAddress } from '../lib/address'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
@@ -578,11 +579,14 @@ export default function Quotations() {
   )
 
   const filteredQuotes = (listTab === 'pendingApproval' ? pendingApprovalQuotes : activeQuotes).filter(q => {
-    const s = search.toLowerCase()
-    const matchSearch = !s ||
-      q.addressee_name?.toLowerCase().includes(s) ||
-      q.subject?.toLowerCase().includes(s) ||
-      q.quote_number?.toLowerCase().includes(s)
+    // Every word typed must appear somewhere in the client, subject, quote
+    // number or address (any order) — "ayala makati" finds "Ayala Ave…, Makati City".
+    const words = search.toLowerCase().split(/[s,]+/).filter(Boolean)
+    const haystack = [
+      q.addressee_name, q.subject, q.quote_number,
+      formatAddress(addresseeAddress(q)), q.addressee_address,
+    ].filter(Boolean).join(' ').toLowerCase()
+    const matchSearch = words.every(w => haystack.includes(w))
     const matchStatus = statusFilter === 'all' || q.status === statusFilter
     return matchSearch && matchStatus
   })
@@ -972,7 +976,7 @@ export default function Quotations() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by client, subject, or quote number…"
+              placeholder="Search by client, subject, quote number, or address…"
               className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
           </div>

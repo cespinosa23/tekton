@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { isHiddenHere } from '../utils/environment'
 import {
   LayoutDashboard, FolderKanban, ArrowLeftRight, Users,
   Package, Archive, ClipboardList, BookOpen, FolderArchive, Settings, LogOut, BarChart2, Receipt, HandCoins
@@ -52,6 +53,7 @@ export default function Layout({ children }) {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems
+            .filter(({ to }) => !isHiddenHere(to))
             .filter(({ to }) => canSeeNav(to))
             .map(({ to, icon: Icon, label }) => (
             <NavLink

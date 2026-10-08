@@ -8,7 +8,8 @@ from app.models.project import Project
 from app.models.transaction import Transaction
 from app.schemas.billing import BillingCreate, BillingRead, BillingPaidUpdate
 
-_write_auth = require_role(["Admin"])
+# Project Managers have full billing access, same as Admin (Oct 2026).
+_write_auth = require_role(["Admin", "Project Manager"])
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 

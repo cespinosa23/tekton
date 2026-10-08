@@ -7,7 +7,7 @@ import { getProjects } from '../api/projects'
 import { getBillings, setBillingPaid } from '../api/billing'
 import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
-import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import { Search, CheckCircle, Clock, Printer, ArrowUpRight, X } from 'lucide-react'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
@@ -20,7 +20,7 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
 export default function Billings() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isAdmin } = useAuth()
+  const { canWrite } = usePermissions()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -73,7 +73,7 @@ export default function Billings() {
   const { sortKey, sortDir, toggle, sorted } = useSortable(rows, 'id', 'desc')
   const [toolbarRef, toolbarHeight] = useElementHeight()
 
-  if (!isAdmin()) {
+  if (!canWrite('billing')) {
     return (
       <Layout>
         <div className="p-8 text-center text-gray-400">You don&apos;t have access to this page.</div>
