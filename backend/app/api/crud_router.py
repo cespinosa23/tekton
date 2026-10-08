@@ -37,6 +37,10 @@ def make_crud_router(
     # Optional (read_schema_obj, user) -> read_schema_obj, applied to every
     # record sent back (e.g. blank out Admin-only fields for other roles).
     read_transform: Optional[Callable[[Any, Any], Any]] = None,
+    # Optional (db, item) -> None that replaces the plain delete in
+    # /{id}/permanent and commits itself — for a resource whose dependents
+    # have to go with it (e.g. a project's billings and transactions).
+    permanent_delete_with: Optional[Callable[[Session, Any], None]] = None,
 ):
     router = APIRouter(prefix=prefix, tags=[tag])
     write_auth = Depends(require_role(write_roles)) if write_roles else Depends(get_current_user)
@@ -131,6 +135,9 @@ def make_crud_router(
             item = db.query(Model).filter(Model.id == item_id).first()
             if not item:
                 raise HTTPException(status_code=404, detail=f"{tag} not found")
+            if permanent_delete_with:
+                permanent_delete_with(db, item)
+                return
             db.delete(item)
             db.commit()
 

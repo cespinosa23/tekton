@@ -38,6 +38,8 @@ from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 from app.api import commissions as commissions_router
 from app.api import labor as labor_router
+from app.api import project_delete as project_delete_router
+from app.core.project_purge import purge_project
 from app.api import quotations as quotations_router
 from app.api import materials_import
 from app.api import canvass_import
@@ -65,7 +67,8 @@ app.include_router(quotation_template_items.router)
 app.include_router(admin.router)
 
 # CRUD routes
-app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Project Coordinator", "Project Manager"], before_create=assign_reference_id))
+app.include_router(make_crud_router("/projects", "projects", Project, ProjectCreate, ProjectUpdate, ProjectRead, write_roles=["Admin", "Project Coordinator", "Project Manager"], before_create=assign_reference_id,
+    permanent_delete_with=purge_project))
 # Attendance pay is computed server-side and is Admin-only to read
 # (app/core/attendance_pay.py) — PC/PM no longer receive daily salaries.
 app.include_router(make_crud_router(
@@ -84,5 +87,6 @@ app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
 app.include_router(commissions_router.router)
 app.include_router(labor_router.router)
+app.include_router(project_delete_router.router)
 app.include_router(quotations_router.router)
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))

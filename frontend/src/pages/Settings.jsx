@@ -852,8 +852,9 @@ export default function Settings() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Reset All Data</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Wipes employees, projects, attendance, transactions, materials, suppliers, and inventory.
-                      Settings and dropdown options are kept.
+                      Wipes employees, projects, quotations, billings, commissions, attendance, transactions,
+                      materials, suppliers, inventory, and every non-Admin user account. Settings, dropdown options,
+                      companies, templates, and commission rates are kept.
                     </p>
                   </div>
                   <button
@@ -1145,7 +1146,7 @@ export default function Settings() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-700">
-                This will permanently delete all <strong>employees, projects, attendance records, transactions, materials, suppliers, and inventory</strong>. Settings and lookup values will be kept.
+                This will permanently delete all <strong>employees, projects, quotations, billings, commissions, attendance records, transactions, materials, suppliers, inventory, and non-Admin user accounts</strong>. Settings, lookup values, companies, templates, and commission rates will be kept.
               </p>
               <p className="text-sm text-gray-700">
                 Type <strong className="font-mono text-red-600">RESET</strong> below to confirm.

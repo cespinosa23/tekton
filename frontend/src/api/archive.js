@@ -26,6 +26,13 @@ export const restoreMaterial    = restoreIn('materials')
 export const restoreTransaction = restoreIn('transactions')
 export const restoreSupplier    = restoreIn('suppliers')
 
+// Counts of what a project's permanent delete removes with it:
+// { transactions, billings, commissions, attendance } (archived included).
+export const getProjectDeleteImpact = async (id) => {
+  const { data } = await client.get(`/projects/${id}/delete-impact`)
+  return data
+}
+
 export const permanentDeleteEmployee    = permanentDeleteIn('employees')
 export const permanentDeleteProject     = permanentDeleteIn('projects')
 export const permanentDeleteMaterial    = permanentDeleteIn('materials')

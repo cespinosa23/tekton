@@ -11,6 +11,9 @@ from app.models.material import Material
 from app.models.inventory import Inventory
 from app.models.supplier import Supplier
 from app.models.transaction import Transaction
+from app.models.billing import Billing
+from app.models.commission import Commission
+from app.models.quotation import Quotation
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -19,29 +22,23 @@ _admin_only = require_role(["Admin"])
 
 @router.post("/reset", status_code=200)
 def reset_data(db: Session = Depends(get_db), _=Depends(_admin_only)):
-    # Delete in FK-safe order: dependents first
-    db.query(Attendance).delete(synchronize_session=False)
-    db.query(Transaction).delete(synchronize_session=False)
-    db.query(Inventory).delete(synchronize_session=False)
-
-    # Delete non-admin users (keeps Admin accounts so the admin can still log in)
+    """Wipe all business data, keeping Admin accounts, settings and lookups
+    (material/SOW types, companies, templates, calendar, commission rates).
+    Deletes children before parents, so every foreign key is satisfied, in
+    one transaction: it either all goes or nothing does."""
     admin_role = db.query(Role).filter(Role.name == "Admin").first()
-    if admin_role:
-        admin_user_ids = {ur.user_id for ur in db.query(UserRole).filter(UserRole.role_id == admin_role.id).all()}
-    else:
-        admin_user_ids = set()
-    non_admin_users = db.query(User).filter(~User.id.in_(admin_user_ids)).all()
-    for user in non_admin_users:
-        db.delete(user)
-    db.flush()
+    admin_ids = [ur.user_id for ur in db.query(UserRole).filter(UserRole.role_id == admin_role.id)] if admin_role else []
+    non_admin = db.query(User.id).filter(~User.id.in_(admin_ids)) if admin_ids else db.query(User.id)
+    non_admin_ids = [uid for (uid,) in non_admin]
 
-    # Null out admin user→employee FK before deleting employees
+    for Model in (Transaction, Commission, Billing, Attendance, Project, Quotation, Inventory):
+        db.query(Model).delete(synchronize_session=False)
+    if non_admin_ids:
+        db.query(UserRole).filter(UserRole.user_id.in_(non_admin_ids)).delete(synchronize_session=False)
+        db.query(User).filter(User.id.in_(non_admin_ids)).delete(synchronize_session=False)
     db.query(User).update({User.employee_id: None}, synchronize_session=False)
-
-    db.query(Employee).delete(synchronize_session=False)
-    db.query(Project).delete(synchronize_session=False)
-    db.query(Material).delete(synchronize_session=False)
-    db.query(Supplier).delete(synchronize_session=False)
+    for Model in (Employee, Material, Supplier):
+        db.query(Model).delete(synchronize_session=False)
 
     db.commit()
     return {"message": "All data has been reset."}

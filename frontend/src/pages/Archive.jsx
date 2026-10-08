@@ -13,7 +13,7 @@ import {
   restoreEmployee, restoreProject, restoreMaterial,
   restoreTransaction, restoreSupplier,
   permanentDeleteEmployee, permanentDeleteProject, permanentDeleteMaterial,
-  permanentDeleteTransaction, permanentDeleteSupplier,
+  permanentDeleteTransaction, permanentDeleteSupplier, getProjectDeleteImpact,
 } from '../api/archive'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
@@ -35,7 +35,121 @@ const TX_TYPE_COLORS = {
   'Canvass': 'bg-cyan-100 text-cyan-700',
 }
 
+const IMPACT_LABELS = [
+  ['transactions', 'transaction', 'transactions', 'payments, expenses and materials entries'],
+  ['billings', 'billing', 'billings', 'down payment and progress billings'],
+  ['commissions', 'commission', 'commissions', 'including released payouts'],
+  ['attendance', 'attendance record', 'attendance records', 'labor logged to this project'],
+]
+
 function ConfirmDeleteModal({ item, onConfirm, onCancel, loading }) {
+  const isProject = item.type === 'projects'
+  const [typed, setTyped] = useState('')
+  const { data: impact, isLoading: impactLoading, isError: impactError } = useQuery({
+    queryKey: ['projectDeleteImpact', item.id],
+    queryFn: () => getProjectDeleteImpact(item.id),
+    enabled: isProject,
+    staleTime: 0,
+  })
+  const related = isProject && impact ? IMPACT_LABELS.filter(([k]) => impact[k] > 0) : []
+  const num = (k) => parseFloat(impact?.[k]) || 0
+  const money = impact ? [
+    ['Income (payments received)', num('income')],
+    ['Materials cost', num('materials_cost')],
+    ['Other expenses', num('other_expenses'), num('commission_payouts') ? `incl. ${fmt(num('commission_payouts'))} released commission payouts` : null],
+    ['Labor cost', num('labor_cost')],
+    ['Billed but not yet paid', num('unpaid_billed')],
+  ].filter(([, v]) => v !== 0) : []
+  const figuresChange = money.length > 0 || num('stock_materials') > 0
+  const blocked = isProject && (impactLoading || impactError || typed !== 'DELETE')
+
+  if (isProject) return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onCancel}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border-b border-red-100">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <AlertTriangle size={20} className="text-red-600" />
+          </div>
+          <h3 className="text-base font-semibold text-red-700">Permanently Delete Project</h3>
+        </div>
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
+          <p className="text-sm text-gray-700">
+            You are about to permanently delete <strong>{item.label}</strong> and <strong>every record related to it</strong>.
+          </p>
+          {impactLoading && <p className="text-sm text-gray-500">Checking related records…</p>}
+          {impactError && <p className="text-sm text-red-600">Couldn't load the related records. Close this and try again.</p>}
+          {impact && (related.length > 0 ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">These will also be wiped out</p>
+              <ul className="space-y-1.5">
+                {related.map(([k, one, many, note]) => (
+                  <li key={k} className="text-sm text-red-800">
+                    <strong>{impact[k]}</strong> {impact[k] === 1 ? one : many}
+                    <span className="text-red-600/80"> ({note})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-red-600 mt-2">Archived records are included.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">This project has no related records.</p>
+          ))}
+          {impact && figuresChange && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Money and stock figures will change</p>
+              {money.length > 0 && (
+                <>
+                  <p className="text-xs text-amber-800 mb-1.5">These amounts will be removed from every total in the app:</p>
+                  <table className="w-full text-sm mb-2">
+                    <tbody>
+                      {money.map(([label, v, note]) => (
+                        <tr key={label} className="align-top">
+                          <td className="py-0.5 pr-3 text-amber-900">
+                            {label}
+                            {note && <span className="block text-xs text-amber-700">{note}</span>}
+                          </td>
+                          <td className="py-0.5 text-right font-semibold text-amber-900 whitespace-nowrap">{fmt(v)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+              {num('stock_materials') > 0 && (
+                <p className="text-xs text-amber-800 mb-1.5">
+                  Inventory stock will be recalculated for <strong>{num('stock_materials')}</strong> material{num('stock_materials') === 1 ? '' : 's'}. Materials sent to this project count as back in stock.
+                </p>
+              )}
+              <p className="text-xs text-amber-800">
+                Dashboard, Reports, Commissions and Inventory figures will change, including past months.
+                <strong> To keep the history, close this and keep the project archived instead.</strong>
+              </p>
+            </div>
+          )}
+          <p className="text-sm text-red-600 font-medium">This cannot be undone. The source quotation is kept.</p>
+          <div>
+            <p className="text-sm text-gray-700 mb-1.5">Type <strong className="font-mono text-red-600">DELETE</strong> to confirm.</p>
+            <input value={typed} onChange={e => setTyped(e.target.value)} placeholder="Type DELETE to confirm" autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-400" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+          <button onClick={onCancel}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={loading || blocked}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
+            <Trash2 size={14} />
+            {loading ? 'Deleting...' : 'Delete Project and Records'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={onCancel}>
@@ -202,7 +316,9 @@ export default function Archive() {
   const restoreSup  = useArchiveMutation(restoreSupplier,    [['archived', 'suppliers'], ['suppliers']],       'Supplier restored')
 
   const deleteEmp  = useArchiveMutation(permanentDeleteEmployee,    [['archived', 'employees']],    'Employee permanently deleted')
-  const deletePrj  = useArchiveMutation(permanentDeleteProject,     [['archived', 'projects']],     'Project permanently deleted')
+  const deletePrj  = useArchiveMutation(permanentDeleteProject,
+    [['archived'], ['projects'], ['transactions'], ['billings'], ['commissions'], ['attendance'], ['laborTotals'], ['inventoryRecords'], ['quotations']],
+    'Project and its related records permanently deleted')
   const deleteMat  = useArchiveMutation(permanentDeleteMaterial,    [['archived', 'materials']],    'Material permanently deleted')
   const deleteTx   = useArchiveMutation(permanentDeleteTransaction, [['archived', 'transactions'], ['billings']], 'Transaction permanently deleted')
   const deleteSup  = useArchiveMutation(permanentDeleteSupplier,    [['archived', 'suppliers']],    'Supplier permanently deleted')
