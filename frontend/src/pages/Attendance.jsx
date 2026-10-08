@@ -83,8 +83,9 @@ const calculateSalaries = (data, employee) => {
 
 export default function Attendance() {
   const { canWrite, canSeeNav } = usePermissions()
-  const { hasRole } = useAuth()
-  const hideSalary = hasRole('Project Coordinator') || hasRole('Project Manager')
+  const { isAdmin } = useAuth()
+  // Attendance pay is Admin-only — the server returns it empty for everyone else.
+  const hideSalary = !isAdmin()
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingAttendance, setEditingAttendance] = useState(null)
