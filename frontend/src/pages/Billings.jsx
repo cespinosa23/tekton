@@ -15,6 +15,7 @@ import { Search, CheckCircle, Clock, Printer, ArrowUpRight } from 'lucide-react'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { apiErrorMessage } from '../utils/apiError'
 
 const BILLING_TYPE_LABELS = { down_payment: 'Down Payment', progress: 'Progress Billing', retention_release: 'Retention Release' }
 
@@ -41,7 +42,7 @@ export default function Billings() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       setMarkPaidFor(null)
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to update the billing'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update the billing')),
   })
 
   // Marking paid asks for the actual date paid first (MarkPaidDialog);

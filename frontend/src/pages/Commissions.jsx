@@ -11,6 +11,7 @@ import { Search, Lock, ArrowUpRight, X, RotateCcw, Percent } from 'lucide-react'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { apiErrorMessage } from '../utils/apiError'
 
 const TYPE_LABELS = { electrical_plan: 'Electrical Plan', project_management: 'Project Management' }
 const TYPE_PILLS = {
@@ -34,7 +35,7 @@ const isProjectManager = (e, projectManager) => {
 }
 const rowKey = (r) => `${r.project_id}-${r.commission_type}`
 const today = () => format(new Date(), 'yyyy-MM-dd')
-const errMsg = (err, fallback) => err?.response?.data?.detail || fallback
+const errMsg = (err, fallback) => apiErrorMessage(err, fallback)
 // Rates come from the API as percent strings ("5.00") — show "5%", "7.5%".
 const ratePct = (v) => (v == null ? '…' : `${Number(v)}%`)
 // A row's own rate is a fraction (released rows keep the one they were paid at).

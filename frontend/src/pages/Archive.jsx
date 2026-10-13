@@ -15,6 +15,7 @@ import {
   permanentDeleteEmployee, permanentDeleteProject, permanentDeleteMaterial,
   permanentDeleteTransaction, permanentDeleteSupplier, getProjectDeleteImpact,
 } from '../api/archive'
+import { apiErrorMessage } from '../utils/apiError'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString()}`
 
@@ -304,7 +305,7 @@ export default function Archive() {
       setConfirmDelete(null)
     },
     onError: (err) => {
-      toast.error(err?.response?.data?.detail || 'Action failed')
+      toast.error(apiErrorMessage(err, 'Action failed'))
       setRestoringId(null)
     },
   })

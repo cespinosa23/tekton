@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
+import { apiErrorMessage } from '../utils/apiError'
 
 export default function CompleteRegistration() {
   const [searchParams] = useSearchParams()
@@ -60,7 +61,7 @@ export default function CompleteRegistration() {
       })
       setSuccess(true)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Invalid or expired link')
+      setError(apiErrorMessage(err, 'Invalid or expired link'))
     } finally {
       setLoading(false)
     }

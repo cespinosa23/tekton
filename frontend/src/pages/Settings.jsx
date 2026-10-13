@@ -22,6 +22,7 @@ import { formatCompanyAddress } from '../lib/company'
 import { useSortable } from '../hooks/useSortable'
 import { scrollContentToTop } from '../utils/scroll'
 import { SortableHeader } from '../components/SortableHeader'
+import { apiErrorMessage } from '../utils/apiError'
 
 const CATEGORIES = [
   { key: 'Brand', label: 'Brand', icon: Tag, description: 'Master list of material brands' },
@@ -134,7 +135,7 @@ export default function Settings() {
   const addBrandMutation = useMutation({
     mutationFn: addBrandToType,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['materialTypes'] }); setNewBrandName('') },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to add brand'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to add brand')),
   })
 
   const removeBrandMutation = useMutation({
@@ -164,7 +165,7 @@ export default function Settings() {
   const addSowItemMutation = useMutation({
     mutationFn: addItemToSowType,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sowTypes'] }); setNewSowItemName('') },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to add item'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to add item')),
   })
 
   const removeSowItemMutation = useMutation({
@@ -176,7 +177,7 @@ export default function Settings() {
   const createTemplateItemMutation = useMutation({
     mutationFn: createQuotationTemplateItem,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quotationTemplateItems'] }); setNewTemplateItemText(''); toast.success('Item added') },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to add item'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to add item')),
   })
 
   const updateTemplateItemMutation = useMutation({
@@ -268,7 +269,7 @@ export default function Settings() {
       setForceLogoutConfirm(null)
       toast.success('User has been logged out')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to force logout'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to force logout')),
   })
 
   if (!isAdmin()) {

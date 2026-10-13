@@ -12,6 +12,7 @@ import {
   getTransactions, getProjects, getSettings,
   createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
+import { apiErrorMessage } from '../../utils/apiError'
 
 const emptyForm = {
   transaction_type: 'General Expenditure',
@@ -45,19 +46,19 @@ export default function ExpendituresTab({ stickyOffset = 0 }) {
   const createMutation = useMutation({
     mutationFn: createTransaction,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); closeForm(); toast.success('Expenditure recorded') },
-    onError: () => toast.error('Failed to record expenditure'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to record expenditure')),
   })
 
   const updateMutation = useMutation({
     mutationFn: updateTransaction,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); closeForm(); toast.success('Expenditure updated') },
-    onError: () => toast.error('Failed to update expenditure'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update expenditure')),
   })
 
   const archiveMutation = useMutation({
     mutationFn: archiveTransaction,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); setDeleteTx(null); toast.success('Expenditure archived') },
-    onError: () => toast.error('Failed to archive expenditure'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to archive expenditure')),
   })
 
   const closeForm = () => { setFormOpen(false); setEditingTx(null); setFormData(emptyForm) }
@@ -243,8 +244,11 @@ export default function ExpendituresTab({ stickyOffset = 0 }) {
               </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              {!formData.is_office_expense && !formData.project_id && (
+                <p className="text-xs text-gray-500 mr-auto self-center">Pick a project, or tick Office / Operational Expense.</p>
+              )}
               <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} disabled={!formData.transaction_date || formData.amount <= 0}
+              <button onClick={handleSave} disabled={!formData.transaction_date || formData.amount <= 0 || (!formData.is_office_expense && !formData.project_id)}
                 className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                 {editingTx ? 'Update' : 'Record'} Expenditure
               </button>

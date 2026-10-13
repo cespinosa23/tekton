@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
+import { apiErrorMessage } from '../utils/apiError'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -22,7 +23,7 @@ export default function ResetPassword() {
       await client.post(`/users/reset-password?token=${token}&new_password=${encodeURIComponent(password)}`)
       setSuccess(true)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Invalid or expired reset link')
+      setError(apiErrorMessage(err, 'Invalid or expired reset link'))
     } finally {
       setLoading(false)
     }

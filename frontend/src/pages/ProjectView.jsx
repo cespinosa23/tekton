@@ -22,6 +22,7 @@ import {
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
   Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle, Link2
 } from 'lucide-react'
+import { apiErrorMessage } from '../utils/apiError'
 
 const SCOPES = [
   { key: 'wiring_permit', label: 'Wiring Permit' },
@@ -148,7 +149,7 @@ export default function ProjectView() {
       setBillingError('')
       queryClient.invalidateQueries({ queryKey: ['billings'] })
     },
-    onError: (err) => setBillingError(err?.response?.data?.detail || 'Failed to save billing entry.'),
+    onError: (err) => setBillingError(apiErrorMessage(err, 'Failed to save billing entry.')),
   })
 
   const [markPaidFor, setMarkPaidFor] = useState(null) // billing awaiting a paid date
@@ -159,7 +160,7 @@ export default function ProjectView() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       setMarkPaidFor(null)
     },
-    onError: (err) => { setMarkPaidFor(null); setBillingError(err?.response?.data?.detail || 'Failed to update the billing.') },
+    onError: (err) => { setMarkPaidFor(null); setBillingError(apiErrorMessage(err, 'Failed to update the billing.')) },
   })
 
   // Marking paid asks for the actual date paid first (MarkPaidDialog);

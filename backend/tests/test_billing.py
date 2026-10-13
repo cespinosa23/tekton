@@ -437,3 +437,42 @@ def test_print_date_keeps_the_first_date(client, admin_token, engineer_token):
     # A role that can't see billings can't set it either.
     resp = client.put(f"/billing/{billing['id']}/print-date", json={"print_date": "2026-03-09"}, headers=_auth(engineer_token))
     assert resp.status_code == 404
+
+
+def test_cannot_restore_payment_of_a_reset_billing(client, admin_token):
+    """Restoring an archived billing payment whose billing was reset would
+    bring back income with no billing behind it — refused."""
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    billing_id = client.post("/billing/", json={
+        "project_id": project_id, "billing_type": "down_payment",
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
+        "billing_date": "2026-01-01", "dp_amount": 30000, "retention_amount": 10000,
+    }, headers=headers).json()["id"]
+    client.put(f"/billing/{billing_id}/paid", json={"is_paid": True, "paid_date": "2026-01-05"}, headers=headers)
+    tx_id = next(t["id"] for t in client.get("/transactions/", headers=headers).json() if t["billing_id"] == billing_id)
+
+    assert client.post(f"/billing/project/{project_id}/reset", headers=headers).status_code == 204
+    resp = client.post(f"/transactions/{tx_id}/restore", headers=headers)
+    assert resp.status_code == 400
+    assert not any(t["id"] == tx_id for t in client.get("/transactions/", headers=headers).json())
+
+
+def test_restore_payment_of_unmarked_billing_still_works(client, admin_token):
+    """The normal restore path is unaffected: a payment archived by marking its
+    billing unpaid comes back and puts the billing back to Paid."""
+    project_id = _create_project(100000)
+    headers = _auth(admin_token)
+    billing_id = client.post("/billing/", json={
+        "project_id": project_id, "billing_type": "down_payment",
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
+        "billing_date": "2026-01-01", "dp_amount": 30000, "retention_amount": 10000,
+    }, headers=headers).json()["id"]
+    client.put(f"/billing/{billing_id}/paid", json={"is_paid": True, "paid_date": "2026-01-05"}, headers=headers)
+    tx_id = next(t["id"] for t in client.get("/transactions/", headers=headers).json() if t["billing_id"] == billing_id)
+    client.put(f"/billing/{billing_id}/paid", json={"is_paid": False}, headers=headers)
+
+    resp = client.post(f"/transactions/{tx_id}/restore", headers=headers)
+    assert resp.status_code == 200, resp.text
+    billing = next(b for b in client.get("/billing/", headers=headers).json() if b["id"] == billing_id)
+    assert billing["is_paid"] is True and billing["paid_date"] == "2026-01-05"

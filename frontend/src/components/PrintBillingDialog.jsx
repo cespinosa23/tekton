@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { setBillingPrintDate } from '../api/billing'
 import { formatBillingSerial } from '../utils/billingSerial'
+import { apiErrorMessage } from '../utils/apiError'
 
 // "Print Billing Request": pick the company profile and the date shown on the
 // letter. The first date chosen is saved on the billing (print_date) and
@@ -30,7 +31,7 @@ export default function PrintBillingDialog({ billing, companies, onClose }) {
       try {
         await saveFirstDate.mutateAsync({ id: billing.id, print_date: letterDate })
       } catch (err) {
-        setError(err?.response?.data?.detail || 'Could not save the date. Try again.')
+        setError(apiErrorMessage(err, 'Could not save the date. Try again.'))
         return
       }
     }

@@ -197,6 +197,16 @@ def restore_transaction(item_id: int, db: Session = Depends(get_db), _=Depends(r
     _block_if_commission_linked(tx, "re-release")
 
     if tx.billing_id:
+        # Its billing was removed (latest entry archived) or the project's
+        # billing was reset — a restored payment would be income with no
+        # billing behind it.
+        billing = db.query(Billing).filter(Billing.id == tx.billing_id).first()
+        if not billing or billing.archived:
+            raise HTTPException(
+                status_code=400,
+                detail="This payment's billing was removed or reset, so restoring it would count income "
+                       "with no billing behind it. Set up the billing again and mark it paid instead.",
+            )
         duplicate = db.query(Transaction).filter(
             Transaction.billing_id == tx.billing_id,
             Transaction.archived == False,

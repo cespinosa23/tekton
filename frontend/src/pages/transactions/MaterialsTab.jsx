@@ -17,6 +17,7 @@ import {
   downloadCanvassTemplate, importCanvass,
 } from '../../api/transactions'
 import { getEmployees } from '../../api/employees'
+import { apiErrorMessage } from '../../utils/apiError'
 
 const MATERIAL_TX_TYPES = ['Outgoing Materials', 'Incoming Materials', 'Materials Procurement', 'Adjustment', 'Canvass']
 
@@ -90,7 +91,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       closeForm()
       toast.success('Materials transaction recorded')
     },
-    onError: () => toast.error('Failed to record transaction'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to record transaction')),
   })
 
   const updateMutation = useMutation({
@@ -101,7 +102,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       closeForm()
       toast.success('Transaction updated')
     },
-    onError: () => toast.error('Failed to update transaction'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update transaction')),
   })
 
   const archiveMutation = useMutation({
@@ -112,7 +113,7 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
       setDeleteTx(null)
       toast.success('Transaction archived')
     },
-    onError: () => toast.error('Failed to archive transaction'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to archive transaction')),
   })
 
   const closeForm = () => { setFormOpen(false); setEditingTx(null); setFormData(emptyForm) }
@@ -677,9 +678,13 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
               )}
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              {!['Adjustment', 'Canvass'].includes(formData.transaction_type) && !formData.is_office_expense && !formData.project_id && (
+                <p className="text-xs text-gray-500 mr-auto self-center">Pick a project, or tick Office / Operational Expense.</p>
+              )}
               <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
               <button onClick={handleSave}
-                disabled={!formData.transaction_type || !formData.transaction_date || formData.materials.length === 0}
+                disabled={!formData.transaction_type || !formData.transaction_date || formData.materials.length === 0
+                  || (!['Adjustment', 'Canvass'].includes(formData.transaction_type) && !formData.is_office_expense && !formData.project_id)}
                 className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                 {editingTx ? 'Update' : 'Record'} Transaction
               </button>

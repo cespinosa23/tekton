@@ -13,6 +13,7 @@ import {
   getTransactions, getProjects, getSettings,
   createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
+import { apiErrorMessage } from '../../utils/apiError'
 
 // A payment with billing_id was created by marking a billing paid (billing.py);
 // its amount is owned by that billing, so it's labelled wherever it shows.
@@ -58,7 +59,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
   const createMutation = useMutation({
     mutationFn: createTransaction,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); closeForm(); toast.success('Payment recorded') },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to record payment'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to record payment')),
   })
 
   const updateMutation = useMutation({
@@ -69,7 +70,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
       closeForm()
       toast.success('Payment updated')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to update payment'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update payment')),
   })
 
   const archiveMutation = useMutation({
@@ -261,8 +262,11 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
               </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              {!formData.is_office_expense && !formData.project_id && (
+                <p className="text-xs text-gray-500 mr-auto self-center">Pick a project, or tick Office / Operational Expense.</p>
+              )}
               <button onClick={closeForm} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} disabled={!formData.transaction_date || formData.amount <= 0}
+              <button onClick={handleSave} disabled={!formData.transaction_date || formData.amount <= 0 || (!formData.is_office_expense && !formData.project_id)}
                 className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50">
                 {editingTx ? 'Update' : 'Record'} Payment
               </button>

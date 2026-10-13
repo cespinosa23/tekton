@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
+import { apiErrorMessage } from '../utils/apiError'
 
 const ALL_ROLES = ['Engineer', 'Accounting', 'HR', 'Liaison', 'Project Coordinator', 'Project Manager', 'Admin', 'Others']
 
@@ -146,7 +147,7 @@ export default function Employees() {
       toast.success('Invite sent successfully')
     },
     onError: (err) => {
-      const msg = err?.response?.data?.detail || 'Failed to send invite'
+      const msg = apiErrorMessage(err, 'Failed to send invite')
       toast.error(msg)
     },
   })
@@ -160,7 +161,7 @@ export default function Employees() {
       toast.success('Role updated')
     },
     onError: (err) => {
-      const msg = err?.response?.data?.detail || 'Failed to update role'
+      const msg = apiErrorMessage(err, 'Failed to update role')
       toast.error(msg)
     },
   })
@@ -172,7 +173,7 @@ export default function Employees() {
       toast.success('Invite resent — new link valid for 48 hours')
     },
     onError: (err) => {
-      const msg = err?.response?.data?.detail || 'Failed to resend invite'
+      const msg = apiErrorMessage(err, 'Failed to resend invite')
       toast.error(msg)
     },
   })

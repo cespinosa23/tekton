@@ -34,6 +34,7 @@ import {
   Copy, Lock, Printer, Search, Send, ThumbsUp, ThumbsDown, AlertCircle, Briefcase,
   Clock, ChevronDown, ChevronUp, Link2, ListChecks, UserX, RotateCcw,
 } from 'lucide-react'
+import { apiErrorMessage } from '../utils/apiError'
 
 const STEPS_SOLAR = [
   'Template & Company', 'Addressee', 'Solar Details', 'Scope of Works',
@@ -269,7 +270,7 @@ export default function Quotations() {
       setSelectedApproverId('')
       toast.success('Approval requested')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to request approval'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to request approval')),
   })
   const approveMutation = useMutation({
     mutationFn: approveQuotation,
@@ -277,7 +278,7 @@ export default function Quotations() {
       queryClient.invalidateQueries({ queryKey: ['quotations'] })
       toast.success('Quotation approved and finalized')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to approve'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to approve')),
   })
   const rejectMutation = useMutation({
     mutationFn: rejectQuotation,
@@ -287,7 +288,7 @@ export default function Quotations() {
       setRejectReason('')
       toast.success('Quotation disapproved')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to disapprove'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to disapprove')),
   })
   const clientRejectMutation = useMutation({
     mutationFn: markQuotationClientRejected,
@@ -297,7 +298,7 @@ export default function Quotations() {
       setClientRejectNote('')
       toast.success('Quotation marked as rejected by the client')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to mark as client-rejected'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to mark as client-rejected')),
   })
   const reverseClientRejectMutation = useMutation({
     mutationFn: reverseQuotationClientRejected,
@@ -305,7 +306,7 @@ export default function Quotations() {
       queryClient.invalidateQueries({ queryKey: ['quotations'] })
       toast.success('Client-rejected mark reversed')
     },
-    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to reverse'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to reverse')),
   })
 
   const steps = quoteData.template_type === 'Solar' ? STEPS_SOLAR : STEPS_TRADITIONAL
