@@ -51,7 +51,7 @@ export default function BillingPrint() {
   // Date on the letter: the one picked in the Print dialog (?date=), else the
   // date saved on first print, else the billing's own date.
   const dateParam = searchParams.get('date')
-  const letterDate = (/^d{4}-d{2}-d{2}$/.test(dateParam || '') && dateParam)
+  const letterDate = (/^\d{4}-\d{2}-\d{2}$/.test(dateParam || '') && dateParam)
     || targetBilling?.print_date || targetBilling?.billing_date
 
   if (!project || !targetBilling) {

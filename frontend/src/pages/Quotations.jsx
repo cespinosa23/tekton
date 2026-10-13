@@ -581,7 +581,7 @@ export default function Quotations() {
   const filteredQuotes = (listTab === 'pendingApproval' ? pendingApprovalQuotes : activeQuotes).filter(q => {
     // Every word typed must appear somewhere in the client, subject, quote
     // number or address (any order) — "ayala makati" finds "Ayala Ave…, Makati City".
-    const words = search.toLowerCase().split(/[s,]+/).filter(Boolean)
+    const words = search.toLowerCase().split(/[\s,]+/).filter(Boolean)
     const haystack = [
       q.addressee_name, q.subject, q.quote_number,
       formatAddress(addresseeAddress(q)), q.addressee_address,
