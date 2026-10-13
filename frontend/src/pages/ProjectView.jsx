@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
@@ -11,6 +11,8 @@ import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatNumberDisplay, normalizeNumberInput, sanitizeNumberInput } from '../utils/numberInput'
 import { formatBillingSerial } from '../utils/billingSerial'
+import MarkPaidDialog from '../components/MarkPaidDialog'
+import PrintBillingDialog from '../components/PrintBillingDialog'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
 import { useElementHeight } from '../hooks/useElementHeight'
@@ -54,7 +56,9 @@ export default function ProjectView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('transactions')
+  const location = useLocation()
+  // Other pages can open a specific tab, e.g. Transactions → "Open billing".
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'transactions')
   const [scopeNotes, setScopeNotes] = useState({})
   const [selectedTx, setSelectedTx] = useState(null)
   const emptyDpForm = {
@@ -65,7 +69,6 @@ export default function ProjectView() {
   const [progressForm, setProgressForm] = useState({ billing_date: '', current_percentage: '', amount: '', input_mode: 'percentage', notes: '' })
   const [billingError, setBillingError] = useState('')
   const [printPickerFor, setPrintPickerFor] = useState(null)
-  const [printCompanyId, setPrintCompanyId] = useState('')
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const { isAdmin, hasRole } = useAuth()
@@ -148,21 +151,23 @@ export default function ProjectView() {
     onError: (err) => setBillingError(err?.response?.data?.detail || 'Failed to save billing entry.'),
   })
 
+  const [markPaidFor, setMarkPaidFor] = useState(null) // billing awaiting a paid date
   const paidMutation = useMutation({
     mutationFn: setBillingPaid,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billings'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      setMarkPaidFor(null)
     },
+    onError: (err) => { setMarkPaidFor(null); setBillingError(err?.response?.data?.detail || 'Failed to update the billing.') },
   })
 
+  // Marking paid asks for the actual date paid first (MarkPaidDialog);
+  // marking unpaid goes straight through.
   const handleTogglePaid = (billing) => {
-    const nextPaid = !billing.is_paid
-    paidMutation.mutate({
-      id: billing.id,
-      is_paid: nextPaid,
-      paid_date: nextPaid ? new Date().toISOString().split('T')[0] : null,
-    })
+    setBillingError('')
+    if (billing.is_paid) paidMutation.mutate({ id: billing.id, is_paid: false, paid_date: null })
+    else setMarkPaidFor(billing)
   }
 
   const resetBillingMutation = useMutation({
@@ -681,7 +686,7 @@ export default function ProjectView() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button onClick={() => { setPrintPickerFor(b); setPrintCompanyId(companies[0]?.id ?? '') }}
+                            <button onClick={() => setPrintPickerFor(b)}
                               title="Print billing request"
                               className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                               <Printer size={14} />
@@ -924,47 +929,9 @@ export default function ProjectView() {
         </div>
       )}
 
-      {/* Print Company Picker */}
+      {/* Print: company profile + date on the letter */}
       {printPickerFor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setPrintPickerFor(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-900">Print Billing Request</h3>
-              <button onClick={() => setPrintPickerFor(null)} className="p-1 text-gray-400 hover:text-gray-700">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {companies.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No company profiles yet. Add one in <span className="font-medium">Settings → Company Settings</span> first.
-                </p>
-              ) : (
-                <>
-                  <label className="block text-xs text-gray-500 mb-1">Print using company profile</label>
-                  <select value={printCompanyId} onChange={e => setPrintCompanyId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>{c.company_name}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
-              <button onClick={() => setPrintPickerFor(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-              {companies.length > 0 && (
-                <button
-                  onClick={() => navigate(`/projects/${project.id}/billing/${printPickerFor.id}/print?company=${printCompanyId}`)}
-                  className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700">
-                  Continue
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <PrintBillingDialog billing={printPickerFor} companies={companies} onClose={() => setPrintPickerFor(null)} />
       )}
 
       {/* Transaction Detail Modal */}
@@ -1142,6 +1109,12 @@ export default function ProjectView() {
             </div>
           </div>
         </div>
+      )}
+      {markPaidFor && (
+        <MarkPaidDialog billing={markPaidFor} projectName={project.project_name}
+          loading={paidMutation.isPending}
+          onCancel={() => setMarkPaidFor(null)}
+          onConfirm={(date) => paidMutation.mutate({ id: markPaidFor.id, is_paid: true, paid_date: date })} />
       )}
     </Layout>
   )

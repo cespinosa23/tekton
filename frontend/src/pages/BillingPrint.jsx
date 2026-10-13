@@ -48,6 +48,11 @@ export default function BillingPrint() {
 
   const targetBilling = allProjectBillings.find(b => b.id === parseInt(billingId))
   const dpRow = allProjectBillings.find(b => b.billing_type === 'down_payment')
+  // Date on the letter: the one picked in the Print dialog (?date=), else the
+  // date saved on first print, else the billing's own date.
+  const dateParam = searchParams.get('date')
+  const letterDate = (/^d{4}-d{2}-d{2}$/.test(dateParam || '') && dateParam)
+    || targetBilling?.print_date || targetBilling?.billing_date
 
   if (!project || !targetBilling) {
     return (
@@ -122,7 +127,7 @@ export default function BillingPrint() {
             <DocumentLetterhead company={company} />
 
             {/* Date */}
-            <p className="mb-6">{format(new Date(), 'dd MMMM yyyy')}</p>
+            <p className="mb-6">{format(new Date(letterDate + 'T00:00:00'), 'dd MMMM yyyy')}</p>
 
             {/* Client */}
             <div className="mb-6">

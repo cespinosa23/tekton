@@ -35,9 +35,13 @@ class BillingRead(BaseModel):
     notes: Optional[str] = None
     is_paid: bool = False
     paid_date: Optional[date] = None
+    print_date: Optional[date] = None
     archived: bool = False
     archived_by: Optional[str] = None
     model_config = {"from_attributes": True}
+
+class BillingPrintDate(BaseModel):
+    print_date: date
 
 class BillingPaidUpdate(BaseModel):
     is_paid: bool

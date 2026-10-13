@@ -6,7 +6,7 @@ from app.core.deps import get_current_user, require_role
 from app.models.billing import Billing
 from app.models.project import Project
 from app.models.transaction import Transaction
-from app.schemas.billing import BillingCreate, BillingRead, BillingPaidUpdate
+from app.schemas.billing import BillingCreate, BillingRead, BillingPaidUpdate, BillingPrintDate
 
 # Project Managers have full billing access, same as Admin (Oct 2026).
 _write_auth = require_role(["Admin", "Project Manager"])
@@ -35,9 +35,8 @@ def _is_zero_amount(amount) -> bool:
 
 @router.get("/", response_model=list[BillingRead])
 def list_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    # Read scope (app/core/access.py): Admin and PC see every billing, a PM
-    # only their own projects', everyone else none — what the project
-    # pages' read-only Billing tab already implied. Writes stay Admin-only.
+    # Read scope (app/core/access.py): Admin, PC and PM see every billing,
+    # everyone else none. Writes are Admin and PM (_write_auth).
     q = db.query(Billing).filter(Billing.archived == False)
     scope = project_scope(db, current_user)
     if scope is not None:
@@ -60,6 +59,22 @@ def get_billing(item_id: int, db: Session = Depends(get_db), current_user=Depend
     # Out of scope reads as not found, so the API doesn't confirm it exists.
     if not billing or (scope is not None and billing.project_id not in scope):
         raise HTTPException(status_code=404, detail="Billing not found")
+    return billing
+
+
+@router.put("/{item_id}/print-date", response_model=BillingRead)
+def set_billing_print_date(item_id: int, payload: BillingPrintDate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Remember the date first used on this billing's printed letter, so later
+    prints default to it. Only the first date is kept; anyone who can see the
+    billing (and so print it) can set it."""
+    billing = db.query(Billing).filter(Billing.id == item_id).first()
+    scope = project_scope(db, current_user)
+    if not billing or (scope is not None and billing.project_id not in scope):
+        raise HTTPException(status_code=404, detail="Billing not found")
+    if billing.print_date is None:
+        billing.print_date = payload.print_date
+        db.commit()
+        db.refresh(billing)
     return billing
 
 
@@ -183,6 +198,10 @@ def set_billing_paid(item_id: int, payload: BillingPaidUpdate, db: Session = Dep
 
     if not payload.is_paid and _is_zero_amount(billing.amount):
         raise HTTPException(status_code=400, detail="A zero-amount billing is always considered paid")
+    # The paid date is chosen by the user (Mark as Paid dialog) and becomes
+    # the Payment transaction's date, which can't be empty.
+    if payload.is_paid and not payload.paid_date:
+        raise HTTPException(status_code=400, detail="Choose the date the billing was paid")
 
     billing.is_paid = payload.is_paid
     billing.paid_date = payload.paid_date if payload.is_paid else None

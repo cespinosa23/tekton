@@ -27,6 +27,10 @@ class Billing(Base):
 
     is_paid = Column(Boolean, default=False)
     paid_date = Column(Date, nullable=True)
+    # Date shown on the printed billing letter: the first date chosen in the
+    # Print dialog is kept here and pre-fills every later print (each print
+    # can still use a different date without changing this).
+    print_date = Column(Date, nullable=True)
 
     archived = Column(Boolean, default=False)
     archived_by = Column(String(255), nullable=True)

@@ -7,6 +7,7 @@ from app.models.transaction import Transaction
 from app.models.billing import Billing
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionRead
 from app.core.inventory import sync_inventory
+from app.api.crud_router import _changed_fields
 
 
 def _revert_linked_billing(db: Session, tx: Transaction):
@@ -110,7 +111,10 @@ def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db)
 
     return tx
 
-_BILLING_SENSITIVE_FIELDS = {"amount", "billing_id", "transaction_type", "transaction_date"}
+# Fields of a billing-generated payment that only the billing's mark-paid
+# flow may change. The date is not one of them: editing it moves the
+# billing's paid_date along with it (see update_transaction).
+_BILLING_SENSITIVE_FIELDS = {"amount", "billing_id", "transaction_type"}
 
 
 @router.put("/{item_id}", response_model=TransactionRead)
@@ -122,23 +126,31 @@ def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = D
     _block_if_commission_linked(tx, "change")
 
     updates = payload.model_dump(exclude_unset=True)
+    # The edit forms send every field, changed or not, so judge by what
+    # actually differs — otherwise any save of a billing payment trips the
+    # check below even when only its remarks changed.
+    changed = _changed_fields(tx, updates)
 
     if payload.billing_id is not None and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Only an Admin can link a transaction to a billing")
 
     # A transaction linked to a billing (existing or being newly linked here)
-    # is a system-managed payment record — the amount/date/type it was created
-    # with must match what billing.py's mark-paid flow set, or the billing's
-    # own is_paid/amount silently desyncs from the transaction that's supposed
-    # to represent it. Changing any of that has to go through unmark-paid /
-    # mark-paid-again instead, which already keeps both sides in sync.
+    # is a system-managed payment record — its amount/type must match what
+    # billing.py's mark-paid flow set, or the billing's own is_paid/amount
+    # silently desyncs from the transaction that represents it. Changing
+    # those has to go through unmark-paid / mark-paid-again instead.
     linked_billing_id = updates.get("billing_id", tx.billing_id)
-    if linked_billing_id and _BILLING_SENSITIVE_FIELDS.intersection(updates):
+    if linked_billing_id and _BILLING_SENSITIVE_FIELDS.intersection(changed):
         raise HTTPException(
             status_code=400,
-            detail="This transaction is linked to a billing — mark the billing unpaid and paid again "
-                   "instead of editing its amount, date, type, or billing link directly.",
+            detail="This payment was recorded from a billing — mark the billing unpaid and paid again "
+                   "to change its amount, type, or billing link.",
         )
+    # Its date can be corrected here; the billing's paid date follows it.
+    if tx.billing_id and "transaction_date" in changed and updates.get("transaction_date"):
+        billing = db.query(Billing).filter(Billing.id == tx.billing_id).first()
+        if billing and billing.is_paid:
+            billing.paid_date = updates["transaction_date"]
 
     # Get material IDs before and after update for full sync
     old_material_ids = get_material_ids(tx.materials or [])

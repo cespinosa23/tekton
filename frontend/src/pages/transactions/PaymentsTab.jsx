@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Banknote } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Eye, Pencil, Trash2, Archive, X, Banknote, Receipt, ArrowUpRight } from 'lucide-react'
 import { useSortable } from '../../hooks/useSortable'
 import { SortableHeader } from '../../components/SortableHeader'
 import { useElementHeight } from '../../hooks/useElementHeight'
@@ -12,6 +13,19 @@ import {
   getTransactions, getProjects, getSettings,
   createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
+
+// A payment with billing_id was created by marking a billing paid (billing.py);
+// its amount is owned by that billing, so it's labelled wherever it shows.
+function SourceBadge({ tx }) {
+  return tx.billing_id ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 whitespace-nowrap"
+      title="Recorded by marking a billing paid">
+      <Receipt size={12} /> From billing
+    </span>
+  ) : (
+    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500 whitespace-nowrap">Manual</span>
+  )
+}
 
 const emptyForm = {
   transaction_type: 'Payment',
@@ -32,6 +46,8 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
   const [viewTx, setViewTx] = useState(null)
   const [deleteTx, setDeleteTx] = useState(null)
   const [search, setSearch] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const navigate = useNavigate()
   const [formData, setFormData] = useState(emptyForm)
 
   const { data: allTransactions = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
@@ -42,13 +58,18 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
   const createMutation = useMutation({
     mutationFn: createTransaction,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); closeForm(); toast.success('Payment recorded') },
-    onError: () => toast.error('Failed to record payment'),
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to record payment'),
   })
 
   const updateMutation = useMutation({
     mutationFn: updateTransaction,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['transactions'] }); closeForm(); toast.success('Payment updated') },
-    onError: () => toast.error('Failed to update payment'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['billings'] }) // a billing payment's date moves its paid date
+      closeForm()
+      toast.success('Payment updated')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to update payment'),
   })
 
   const archiveMutation = useMutation({
@@ -91,9 +112,11 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
   }
 
   const filtered = transactions.filter(tx =>
-    tx.description?.toLowerCase().includes(search.toLowerCase()) ||
-    tx.project_name?.toLowerCase().includes(search.toLowerCase()) ||
-    tx.reference_number?.toLowerCase().includes(search.toLowerCase())
+    (sourceFilter === 'all' || (sourceFilter === 'billing') === !!tx.billing_id) && (
+      tx.description?.toLowerCase().includes(search.toLowerCase()) ||
+      tx.project_name?.toLowerCase().includes(search.toLowerCase()) ||
+      tx.reference_number?.toLowerCase().includes(search.toLowerCase())
+    )
   )
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'transaction_date', 'desc')
   const [toolbarRef, toolbarHeight] = useElementHeight()
@@ -109,6 +132,13 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
           <input className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             placeholder="Search payments..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
+          className="ml-3 border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
+          <option value="all">All sources</option>
+          <option value="billing">From billing</option>
+          <option value="manual">Manual</option>
+        </select>
+        <div className="flex-1" />
         <button onClick={() => { setEditingTx(null); setFormData(emptyForm); setFormOpen(true) }}
           className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 ml-3">
           <Plus size={15} /> New Payment
@@ -124,6 +154,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
               <SortableHeader label="Date" field="transaction_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Project / Office" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Reference #" field="reference_number" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Source</th>
               <SortableHeader label="Description" field="description" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Amount" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
@@ -131,15 +162,16 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">No payments found</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400">No payments found</td></tr>
             ) : sorted.map(tx => (
               <tr key={tx.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-gray-400 text-xs font-mono">{tx.id}</td>
                 <td className="px-4 py-3 text-gray-600">{tx.transaction_date ? format(new Date(tx.transaction_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}</td>
                 <td className="px-4 py-3 text-gray-600">{tx.is_office_expense ? <span className="italic text-gray-400">Office</span> : tx.project_name || '-'}</td>
                 <td className="px-4 py-3 text-gray-600">{tx.reference_number || '-'}</td>
+                <td className="px-4 py-3"><SourceBadge tx={tx} /></td>
                 <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{tx.description || '-'}</td>
                 <td className="px-4 py-3 text-right font-semibold text-green-600">+{fmt(tx.amount)}</td>
                 <td className="px-4 py-3">
@@ -163,6 +195,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
               <div className="flex items-center gap-2">
                 <Banknote size={18} className="text-green-600" />
                 <h2 className="text-lg font-semibold text-gray-900">{editingTx ? 'Edit Payment' : 'New Payment'}</h2>
+                {editingTx && <SourceBadge tx={editingTx} />}
               </div>
               <button onClick={closeForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
@@ -188,7 +221,11 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
                       if (/^0\d/.test(raw)) return;
                       setFormData(p => ({ ...p, amount: raw === '' ? 0 : parseFloat(raw) || 0 }));
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    disabled={!!editingTx?.billing_id}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500" />
+                  {editingTx?.billing_id && (
+                    <p className="text-xs text-gray-500 mt-1">Set by its billing. To change it, mark the billing unpaid and paid again.</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -249,6 +286,21 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
                 <div><p className="text-xs text-gray-400 mb-0.5">Project</p><p className="font-medium">{viewTx.is_office_expense ? 'Office Expense' : viewTx.project_name || '-'}</p></div>
                 <div><p className="text-xs text-gray-400 mb-0.5">Reference #</p><p className="font-medium">{viewTx.reference_number || '-'}</p></div>
               </div>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2">
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Source</p>
+                  <SourceBadge tx={viewTx} />
+                  {viewTx.billing_id && (
+                    <p className="text-xs text-gray-500 mt-1">Recorded by marking billing {viewTx.reference_number || ''} paid. Its amount follows the billing.</p>
+                  )}
+                </div>
+                {viewTx.billing_id && viewTx.project_id && (
+                  <button onClick={() => navigate(`/projects/${viewTx.project_id}`, { state: { tab: 'billing' } })}
+                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700">
+                    Open billing <ArrowUpRight size={13} />
+                  </button>
+                )}
+              </div>
               {viewTx.description && <div><p className="text-xs text-gray-400 mb-0.5">Description</p><p>{viewTx.description}</p></div>}
               {viewTx.remarks && <div><p className="text-xs text-gray-400 mb-0.5">Remarks</p><p>{viewTx.remarks}</p></div>}
             </div>
@@ -261,7 +313,14 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-sm m-4 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Archive Payment</h3>
-            <p className="text-sm text-gray-500 mb-6">Are you sure you want to archive this payment record?</p>
+            <p className="text-sm text-gray-500 mb-6">
+              Are you sure you want to archive this payment record?
+              {deleteTx.billing_id && (
+                <span className="block mt-2 text-amber-700">
+                  This payment came from billing {deleteTx.reference_number || ''}. Archiving it marks that billing <strong>unpaid</strong>.
+                </span>
+              )}
+            </p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteTx(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
               <button onClick={() => archiveMutation.mutate(deleteTx.id)}
