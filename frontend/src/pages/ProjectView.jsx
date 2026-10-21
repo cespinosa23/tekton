@@ -207,18 +207,17 @@ export default function ProjectView() {
 
   const handleCreateProgress = (e) => {
     e.preventDefault()
-    const previousPct = latestProgress ? parseFloat(latestProgress.current_percentage) || 0 : 0
-    // Amount mode is just a convenience for typing this billing's peso value
-    // instead of doing the percentage math by hand — it's converted to the same
-    // cumulative current_percentage the backend actually stores and validates.
-    const currentPercentage = progressForm.input_mode === 'amount'
-      ? Math.round((previousPct + (deductibleBase > 0 ? (parseFloat(progressForm.amount) || 0) / deductibleBase * 100 : 0)) * 100) / 100
-      : parseFloat(progressForm.current_percentage)
+    // Amount mode sends the peso amount itself, which the server keeps exactly
+    // and derives the percentage from. (Converting it to a rounded percentage
+    // here used to lose pesos: ₱250,000 became ₱249,975.)
+    const byAmount = progressForm.input_mode === 'amount'
     billingMutation.mutate({
       project_id: project.id,
       billing_type: 'progress',
       billing_date: progressForm.billing_date,
-      current_percentage: currentPercentage,
+      ...(byAmount
+        ? { amount: parseFloat(progressForm.amount) || 0 }
+        : { current_percentage: parseFloat(progressForm.current_percentage) }),
       notes: progressForm.notes || null,
     }, {
       onSuccess: () => setProgressForm({ billing_date: '', current_percentage: '', amount: '', input_mode: 'percentage', notes: '' }),

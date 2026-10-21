@@ -11,6 +11,9 @@ class BillingCreate(BaseModel):
     retention_amount: Optional[float] = 0
     scope_description: Optional[str] = None
     current_percentage: Optional[float] = None
+    # Progress billings: bill an exact peso amount instead of a percentage
+    # (the percentage is then derived from it).
+    amount: Optional[float] = None
     account_type: Optional[str] = None
     salutation: Optional[str] = None
     first_name: Optional[str] = None

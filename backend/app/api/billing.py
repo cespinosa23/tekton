@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
@@ -12,6 +14,8 @@ from app.schemas.billing import BillingCreate, BillingRead, BillingPaidUpdate, B
 _write_auth = require_role(["Admin", "Project Manager"])
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+
+_CENT = Decimal("0.01")
 
 _SERIAL_PREFIXES = {"down_payment": "DP", "progress": "PB", "retention_release": "RR"}
 
@@ -116,32 +120,59 @@ def create_billing(payload: BillingCreate, db: Session = Depends(get_db), _=Depe
     elif payload.billing_type == "progress":
         if not dp_row:
             raise HTTPException(status_code=400, detail="Record the down payment / retention setup first")
-        if payload.current_percentage is None:
-            raise HTTPException(status_code=400, detail="current_percentage is required for progress billings")
+        if payload.current_percentage is None and payload.amount is None:
+            raise HTTPException(status_code=400, detail="Enter a progress percentage or a billing amount")
 
-        last_progress = (
+        progress_rows = (
             _project_billings(db, project.id)
             .filter(Billing.billing_type == "progress")
-            .order_by(Billing.sequence_number.desc())
-            .first()
+            .order_by(Billing.sequence_number.asc())
+            .all()
         )
-        previous_percentage = float(last_progress.current_percentage) if last_progress else 0.0
+        previous_percentage = float(progress_rows[-1].current_percentage) if progress_rows else 0.0
 
-        if payload.current_percentage <= previous_percentage or payload.current_percentage > 100:
-            raise HTTPException(
-                status_code=400,
-                detail=f"current_percentage must be greater than {previous_percentage} and at most 100",
-            )
+        # Amounts are worked out from what has actually been billed so far,
+        # not from differences of rounded percentages (stored with 2
+        # decimals) — so they never drift, and 100% bills exactly the rest.
+        base = (Decimal(str(project.contract_cost or 0)) - Decimal(str(dp_row.dp_amount or 0))
+                - Decimal(str(dp_row.retention_amount or 0)))
+        billed = sum((Decimal(str(r.amount or 0)) for r in progress_rows), Decimal("0"))
+        remaining = base - billed
 
-        base = float(project.contract_cost or 0) - float(dp_row.dp_amount or 0) - float(dp_row.retention_amount or 0)
-        amount = (payload.current_percentage - previous_percentage) / 100 * base
+        if payload.amount is not None:
+            # Billed by amount: keep the amount exactly as entered; the
+            # percentage is derived from it for display.
+            amount = Decimal(str(payload.amount)).quantize(_CENT)
+            if amount <= 0:
+                raise HTTPException(status_code=400, detail="The billing amount must be more than zero")
+            if amount > remaining:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"The billing amount is more than the remaining unbilled balance (₱{remaining:,.2f})",
+                )
+            if amount == remaining:
+                current_percentage = 100.0
+            else:
+                # Never shows 100% while any balance is left unbilled.
+                current_percentage = min(round(float((billed + amount) / base * 100), 2), 99.99)
+        else:
+            current_percentage = payload.current_percentage
+            if current_percentage <= previous_percentage or current_percentage > 100:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"current_percentage must be greater than {previous_percentage} and at most 100",
+                )
+            if current_percentage == 100:
+                amount = remaining
+            else:
+                amount = (Decimal(str(current_percentage)) / 100 * base - billed).quantize(_CENT)
 
         billing = Billing(
             project_id=project.id,
             billing_type="progress",
             sequence_number=_next_sequence(db, project.id),
             billing_date=payload.billing_date,
-            current_percentage=payload.current_percentage,
+            current_percentage=current_percentage,
             previous_percentage=previous_percentage,
             amount=amount,
             notes=payload.notes,

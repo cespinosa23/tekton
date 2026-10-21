@@ -476,3 +476,78 @@ def test_restore_payment_of_unmarked_billing_still_works(client, admin_token):
     assert resp.status_code == 200, resp.text
     billing = next(b for b in client.get("/billing/", headers=headers).json() if b["id"] == billing_id)
     assert billing["is_paid"] is True and billing["paid_date"] == "2026-01-05"
+
+
+def _setup_dp(client, headers, contract, dp=0, retention=0):
+    project_id = _create_project(contract)
+    resp = client.post("/billing/", json={
+        "project_id": project_id, "billing_type": "down_payment",
+        "account_type": "Personal", "salutation": "Mr.", "first_name": "Test", "last_name": "Client",
+        "billing_date": "2026-01-01", "dp_amount": dp, "retention_amount": retention,
+    }, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return project_id
+
+
+def _progress(client, headers, project_id, **kw):
+    return client.post("/billing/", json={"project_id": project_id, "billing_type": "progress",
+                                          "billing_date": "2026-02-01", **kw}, headers=headers)
+
+
+def test_progress_billing_by_amount_keeps_the_exact_amount(client, admin_token):
+    """PB-000015: ₱250,000 on a ₱1,650,000 base used to be stored as ₱249,975
+    (sent as a rounded 15.15%). The amount is now kept exactly."""
+    headers = _auth(admin_token)
+    project_id = _setup_dp(client, headers, 1650000)
+
+    resp = _progress(client, headers, project_id, amount=250000)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["amount"] == 250000
+    assert resp.json()["current_percentage"] == 15.15
+
+    # A percentage billing after it bills against what was actually billed:
+    # 50% of 1,650,000 = 825,000, minus the 250,000 already billed.
+    resp = _progress(client, headers, project_id, current_percentage=50)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["amount"] == 575000
+
+    # More than the remaining balance (825,000) is refused.
+    resp = _progress(client, headers, project_id, amount=825000.01)
+    assert resp.status_code == 400
+
+    # Billing the exact remainder by amount reaches 100%.
+    resp = _progress(client, headers, project_id, amount=825000)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["current_percentage"] == 100
+    total = sum(b["amount"] for b in client.get("/billing/", headers=headers).json()
+                if b["project_id"] == project_id and b["billing_type"] == "progress")
+    assert total == 1650000
+
+
+def test_progress_by_amounts_then_100_percent_bills_the_exact_rest(client, admin_token):
+    """Amounts that don't land on round percentages never leave the total off:
+    the 100% billing takes exactly what's left."""
+    headers = _auth(admin_token)
+    project_id = _setup_dp(client, headers, 1000000, dp=300000, retention=100000)  # base 600,000
+
+    for amt in (123456.78, 98765.43):
+        resp = _progress(client, headers, project_id, amount=amt)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["amount"] == amt
+        assert resp.json()["current_percentage"] < 100
+
+    resp = _progress(client, headers, project_id, current_percentage=100)
+    assert resp.status_code == 201, resp.text
+    assert round(resp.json()["amount"], 2) == round(600000 - 123456.78 - 98765.43, 2)
+
+    resp = client.post("/billing/", json={"project_id": project_id, "billing_type": "retention_release",
+                                          "billing_date": "2026-03-01"}, headers=headers)
+    assert resp.status_code == 201, resp.text
+
+
+def test_progress_amount_must_be_positive(client, admin_token):
+    headers = _auth(admin_token)
+    project_id = _setup_dp(client, headers, 1000000)
+    assert _progress(client, headers, project_id, amount=0).status_code == 400
+    assert _progress(client, headers, project_id, amount=-5).status_code == 400
+    assert _progress(client, headers, project_id).status_code == 400

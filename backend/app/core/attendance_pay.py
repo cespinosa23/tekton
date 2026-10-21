@@ -39,9 +39,12 @@ def compute_pay(daily_salary, regular_hours, overtime_hours, overtime_multiplier
     regular = hourly * _dec(regular_hours)
     multiplier = _dec(overtime_multiplier) if overtime_multiplier is not None else Decimal("1.15")
     overtime = hourly * multiplier * _dec(overtime_hours)
-    total = regular + overtime + _dec(tip)
     q = lambda d: d.quantize(_CENT, rounding=ROUND_HALF_UP)
-    return q(regular), q(overtime), q(total)
+    regular, overtime = q(regular), q(overtime)
+    # The total is the sum of the rounded parts, so Regular + Overtime + Tip
+    # as shown always adds up to it exactly.
+    total = q(regular + overtime + _dec(tip))
+    return regular, overtime, total
 
 
 def strip_client_pay(data: dict, user) -> dict:
