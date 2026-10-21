@@ -551,3 +551,42 @@ def test_progress_amount_must_be_positive(client, admin_token):
     assert _progress(client, headers, project_id, amount=0).status_code == 400
     assert _progress(client, headers, project_id, amount=-5).status_code == 400
     assert _progress(client, headers, project_id).status_code == 400
+
+
+def test_remove_latest_billing_rules(client, admin_token, engineer_token):
+    """Only the latest billing can be removed, and only once it's unpaid; the
+    next progress billing then continues from the earlier percentage."""
+    headers = _auth(admin_token)
+    project_id = _setup_dp(client, headers, 1000000)  # base 1,000,000
+    first = _progress(client, headers, project_id, current_percentage=20).json()
+    second = _progress(client, headers, project_id, current_percentage=50).json()
+
+    # Not the latest -> refused
+    assert client.delete(f"/billing/{first['id']}", headers=headers).status_code == 400
+    # Paid -> refused until marked unpaid
+    client.put(f"/billing/{second['id']}/paid", json={"is_paid": True, "paid_date": "2026-02-10"}, headers=headers)
+    resp = client.delete(f"/billing/{second['id']}", headers=headers)
+    assert resp.status_code == 400 and "unpaid" in resp.json()["detail"]
+    # A role without billing write access can't remove it
+    client.put(f"/billing/{second['id']}/paid", json={"is_paid": False}, headers=headers)
+    assert client.delete(f"/billing/{second['id']}", headers=_auth(engineer_token)).status_code == 403
+
+    assert client.delete(f"/billing/{second['id']}", headers=headers).status_code == 204
+    live = [b for b in client.get("/billing/", headers=headers).json() if b["project_id"] == project_id]
+    assert second["id"] not in [b["id"] for b in live]
+    assert not any(t["billing_id"] == second["id"] for t in client.get("/transactions/", headers=headers).json())
+
+    # Re-entered billing continues from 20% and bills against what's left
+    redo = _progress(client, headers, project_id, current_percentage=45).json()
+    assert redo["previous_percentage"] == 20 and redo["amount"] == 250000
+    assert redo["id"] != second["id"]  # billing numbers aren't reused
+
+
+def test_remove_zero_amount_down_payment(client, admin_token):
+    """A zero-amount down payment counts as paid but has no payment, so it can
+    still be removed when it's the only entry."""
+    headers = _auth(admin_token)
+    project_id = _setup_dp(client, headers, 1000000)
+    dp = next(b for b in client.get("/billing/", headers=headers).json() if b["project_id"] == project_id)
+    assert dp["is_paid"] is True
+    assert client.delete(f"/billing/{dp['id']}", headers=headers).status_code == 204

@@ -277,6 +277,11 @@ def archive_billing(item_id: int, db: Session = Depends(get_db), current_user=De
     )
     if not latest or latest.id != billing.id:
         raise HTTPException(status_code=400, detail="Only the most recent billing entry can be removed")
+    # Removing a paid billing would silently take its payment out of the
+    # ledger; it has to be marked unpaid first (which archives that payment
+    # visibly). Zero-amount billings are always "paid" and have no payment.
+    if billing.is_paid and not _is_zero_amount(billing.amount):
+        raise HTTPException(status_code=400, detail="This billing is marked paid. Mark it unpaid first, then remove it.")
 
     billing.archived = True
     billing.archived_by = current_user.email

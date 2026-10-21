@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
 import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
-import { getBillings, createBilling, setBillingPaid, resetProjectBilling } from '../api/billing'
+import { getBillings, createBilling, setBillingPaid, resetProjectBilling, archiveBilling } from '../api/billing'
 import { getLaborTotals, laborFor } from '../api/labor'
 import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
@@ -20,7 +20,7 @@ import { formatAddress } from '../lib/address'
 import {
   ArrowLeft, MapPin, User, Calendar,
   Banknote, Receipt, Package, Users, CheckCircle, Clock, XCircle, X,
-  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle, Link2
+  Building2, Tag, FileText, Hash, TrendingUp, TrendingDown, Lock, Printer, AlertTriangle, Link2, Trash2
 } from 'lucide-react'
 import { apiErrorMessage } from '../utils/apiError'
 
@@ -112,6 +112,10 @@ export default function ProjectView() {
   const progressRows = projectBillings.filter(b => b.billing_type === 'progress')
   const retentionRow = projectBillings.find(b => b.billing_type === 'retention_release')
   const latestProgress = progressRows[progressRows.length - 1]
+  // Only the most recent entry can be removed (later billings are worked out
+  // from earlier ones), and only once it's unpaid — the API enforces both.
+  const latestBilling = projectBillings[projectBillings.length - 1]
+  const isPaidWithPayment = (b) => b.is_paid && parseFloat(b.amount) !== 0
   const deductibleBase = dpRow ? (parseFloat(project?.contract_cost) || 0) - (parseFloat(dpRow.dp_amount) || 0) - (parseFloat(dpRow.retention_amount) || 0) : 0
   const totalBilled = projectBillings.reduce((s, b) => s + (b.is_paid ? parseFloat(b.amount) || 0 : 0), 0)
   const allBilledPaid = dpRow?.is_paid && progressRows.every(b => b.is_paid)
@@ -170,6 +174,17 @@ export default function ProjectView() {
     if (billing.is_paid) paidMutation.mutate({ id: billing.id, is_paid: false, paid_date: null })
     else setMarkPaidFor(billing)
   }
+
+  const [removeBillingFor, setRemoveBillingFor] = useState(null) // latest billing awaiting confirmation
+  const removeBillingMutation = useMutation({
+    mutationFn: archiveBilling,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billings'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      setRemoveBillingFor(null)
+    },
+    onError: (err) => { setRemoveBillingFor(null); setBillingError(apiErrorMessage(err, 'Failed to remove the billing.')) },
+  })
 
   const resetBillingMutation = useMutation({
     mutationFn: resetProjectBilling,
@@ -691,6 +706,14 @@ export default function ProjectView() {
                               className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                               <Printer size={14} />
                             </button>
+                            {canBill && latestBilling?.id === b.id && (
+                              <button onClick={() => { setBillingError(''); setRemoveBillingFor(b) }}
+                                disabled={isPaidWithPayment(b) || removeBillingMutation.isPending}
+                                title={isPaidWithPayment(b) ? 'Mark this billing unpaid first, then remove it' : 'Remove this billing (latest entry only)'}
+                                className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1115,6 +1138,49 @@ export default function ProjectView() {
           loading={paidMutation.isPending}
           onCancel={() => setMarkPaidFor(null)}
           onConfirm={(date) => paidMutation.mutate({ id: markPaidFor.id, is_paid: true, paid_date: date })} />
+      )}
+
+      {/* Remove latest billing confirm */}
+      {removeBillingFor && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setRemoveBillingFor(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Remove {formatBillingSerial(removeBillingFor)}?</h3>
+            </div>
+            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm mb-4">
+              <div className="flex justify-between"><span className="text-gray-500">Billing date</span>
+                <span>{removeBillingFor.billing_date ? format(new Date(removeBillingFor.billing_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}</span></div>
+              {removeBillingFor.billing_type === 'progress' && (
+                <div className="flex justify-between"><span className="text-gray-500">Progress</span>
+                  <span>{removeBillingFor.previous_percentage}% → {removeBillingFor.current_percentage}%</span></div>
+              )}
+              <div className="flex justify-between"><span className="text-gray-500">Amount</span>
+                <span className="font-semibold">{fmt(removeBillingFor.amount)}</span></div>
+            </div>
+            <ul className="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
+              <li>Only this latest entry is removed; earlier billings stay as they are.</li>
+              {removeBillingFor.billing_type === 'progress' && (
+                <li>The next progress billing will start again from {removeBillingFor.previous_percentage}%.</li>
+              )}
+              {removeBillingFor.billing_type === 'down_payment' && (
+                <li>This is the down payment setup, so the project's billing starts over from scratch.</li>
+              )}
+              <li>Billing numbers aren't reused: a re-entered billing gets a new number, so any letter already printed for {formatBillingSerial(removeBillingFor)} should be discarded.</li>
+            </ul>
+            <p className="text-sm text-red-600 font-medium mb-5">This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setRemoveBillingFor(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button onClick={() => removeBillingMutation.mutate(removeBillingFor.id)} disabled={removeBillingMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
+                <Trash2 size={14} /> {removeBillingMutation.isPending ? 'Removing...' : 'Remove Billing'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   )
