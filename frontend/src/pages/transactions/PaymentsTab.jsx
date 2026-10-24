@@ -152,7 +152,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
           <thead className="bg-gray-50 border-b border-gray-200 sticky z-10" style={{ top: stickyOffset + toolbarHeight }}>
             <tr>
               <SortableHeader label="#" field="id" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-              <SortableHeader label="Date" field="transaction_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+              <SortableHeader label="Date Paid" field="transaction_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Project / Office" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <SortableHeader label="Reference #" field="reference_number" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Source</th>
@@ -203,9 +203,12 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
             <div className="px-6 py-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Date Paid *</label>
                   <input type="date" value={formData.transaction_date} onChange={set('transaction_date')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                  {editingTx?.billing_id && (
+                    <p className="text-xs text-gray-500 mt-1">Also updates the billing&apos;s paid date (not its billing date).</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Amount (₱) *</label>
@@ -285,7 +288,7 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
             </div>
             <div className="px-6 py-4 space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-xs text-gray-400 mb-0.5">Date</p><p className="font-medium">{viewTx.transaction_date ? format(new Date(viewTx.transaction_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}</p></div>
+                <div><p className="text-xs text-gray-400 mb-0.5">Date Paid</p><p className="font-medium">{viewTx.transaction_date ? format(new Date(viewTx.transaction_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}</p></div>
                 <div><p className="text-xs text-gray-400 mb-0.5">Amount</p><p className="text-xl font-bold text-green-600">{fmt(viewTx.amount)}</p></div>
                 <div><p className="text-xs text-gray-400 mb-0.5">Project</p><p className="font-medium">{viewTx.is_office_expense ? 'Office Expense' : viewTx.project_name || '-'}</p></div>
                 <div><p className="text-xs text-gray-400 mb-0.5">Reference #</p><p className="font-medium">{viewTx.reference_number || '-'}</p></div>

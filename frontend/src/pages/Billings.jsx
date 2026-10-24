@@ -128,7 +128,7 @@ export default function Billings() {
                   <SortableHeader label="Project" field="project_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                   <SortableHeader label="Client" field="owner_company_name" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                   <SortableHeader label="Type" field="type_label" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                  <SortableHeader label="Date" field="billing_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Billing Date" field="billing_date" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                   <SortableHeader label="Amount" field="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
                   <SortableHeader label="Paid" field="is_paid" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
                   <th className="px-4 py-3" />
@@ -154,6 +154,10 @@ export default function Billings() {
                         {b.is_paid ? <CheckCircle size={12} /> : <Clock size={12} />}
                         {b.is_paid ? 'Paid' : 'Unpaid'}
                       </button>
+                      {/* The paid date (what a payment's date edit in Transactions changes) — the Billing Date column is when it was issued. */}
+                      {b.is_paid && b.paid_date && (
+                        <div className="text-[11px] text-gray-500 mt-1 whitespace-nowrap">{format(new Date(b.paid_date + 'T00:00:00'), 'MMM d, yyyy')}</div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">

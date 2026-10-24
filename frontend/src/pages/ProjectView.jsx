@@ -661,7 +661,7 @@ export default function ProjectView() {
                         <SortableHeader label="#" field="sequence_number" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                         <SortableHeader label="Serial" field="serial" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                         <SortableHeader label="Type" field="type_label" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
-                        <SortableHeader label="Date" field="billing_date" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
+                        <SortableHeader label="Billing Date" field="billing_date" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                         <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Progress</th>
                         <SortableHeader label="Amount" field="amount" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
                         <SortableHeader label="Paid" field="is_paid" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
@@ -698,6 +698,10 @@ export default function ProjectView() {
                                 {b.is_paid ? <CheckCircle size={12} /> : <Clock size={12} />}
                                 {b.is_paid ? 'Paid' : 'Unpaid'}
                               </span>
+                            )}
+                            {/* The paid date (what a payment's date edit in Transactions changes) — the Billing Date column is when it was issued. */}
+                            {b.is_paid && b.paid_date && (
+                              <div className="text-[11px] text-gray-500 mt-1 whitespace-nowrap">{format(new Date(b.paid_date + 'T00:00:00'), 'MMM d, yyyy')}</div>
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
