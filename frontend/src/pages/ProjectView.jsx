@@ -665,6 +665,7 @@ export default function ProjectView() {
                         <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Progress</th>
                         <SortableHeader label="Amount" field="amount" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="right" />
                         <SortableHeader label="Paid" field="is_paid" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" align="center" />
+                        <SortableHeader label="Paid Date" field="paid_date" sortKey={billingSortKey} sortDir={billingSortDir} onSort={billingToggle} className="px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide" />
                         <th className="px-4 py-3" />
                       </tr>
                     </thead>
@@ -699,10 +700,10 @@ export default function ProjectView() {
                                 {b.is_paid ? 'Paid' : 'Unpaid'}
                               </span>
                             )}
-                            {/* The paid date (what a payment's date edit in Transactions changes) — the Billing Date column is when it was issued. */}
-                            {b.is_paid && b.paid_date && (
-                              <div className="text-[11px] text-gray-500 mt-1 whitespace-nowrap">{format(new Date(b.paid_date + 'T00:00:00'), 'MMM d, yyyy')}</div>
-                            )}
+                          </td>
+                          {/* When it was paid (what a payment's date edit in Transactions changes); Billing Date is when it was issued. */}
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            {b.is_paid && b.paid_date ? format(new Date(b.paid_date + 'T00:00:00'), 'MMM d, yyyy') : '-'}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => setPrintPickerFor(b)}
