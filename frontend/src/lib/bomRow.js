@@ -19,6 +19,10 @@ export const emptyBomRow = () => ({
   price_entry_date: null,
   is_canvass_price: false,
   zero_price_confirmed: false,
+  // A catalog material whose inventory has no price, priced by hand for this
+  // quotation only ("Enter price manually" in BOMEditor). Needs a Source,
+  // like a custom row; never written back to inventory.
+  price_overridden: false,
   // Set only by bulk import (see bomImport.js) on rows it couldn't match to
   // an existing catalog material — a distinct flag from zero_price_confirmed,
   // which means "confirmed genuinely free," so a reviewer can't clear this

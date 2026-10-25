@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Copy } from 'lucide-react'
 import BOMEditor, { bomValid, calcBomTotal } from './BOMEditor'
+import CopyBomDialog from './CopyBomDialog'
 
 // Every selected scope type gets a BOM tab — Costing (which comes after this
 // step) reads whichever of these end up with materials in them, so BOM can't
@@ -15,8 +17,11 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFract
 export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
   const bomTypes = scopeOfWorkItems
   const [activeTypeId, setActiveTypeId] = useState(bomTypes[0]?.sow_type_id ?? null)
+  const [copyOpen, setCopyOpen] = useState(false)
 
   const activeType = bomTypes.find(t => t.sow_type_id === activeTypeId) || bomTypes[0]
+  // Other scope types on this quotation that have something to copy.
+  const copySources = bomTypes.filter(t => t.sow_type_id !== activeType?.sow_type_id && (t.bom_items || []).length > 0)
 
   if (bomTypes.length === 0) {
     return (
@@ -47,7 +52,7 @@ export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materia
               }`}>
               {t.sow_type_name}
               <span className={`text-xs ${isActive ? 'text-gray-500' : 'text-gray-400'}`}>{fmt(typeTotal)}</span>
-              {invalid && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Missing required Source on a custom material, or a material with 0 price not yet confirmed" />}
+              {invalid && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Missing required Source on a custom or manually priced material, or a material with 0 price not yet confirmed" />}
             </button>
           )
         })}
@@ -62,6 +67,23 @@ export default function BOMTabsEditor({ scopeOfWorkItems = [], onChange, materia
           inventoryRecords={inventoryRecords}
           suppliers={suppliers}
           disabled={disabled}
+          scopeName={activeType.sow_type_name}
+          extraActions={copySources.length > 0 && (
+            <button onClick={() => setCopyOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
+              <Copy size={14} /> Copy from another scope
+            </button>
+          )}
+        />
+      )}
+
+      {copyOpen && activeType && !disabled && (
+        <CopyBomDialog
+          targetName={activeType.sow_type_name}
+          targetItems={activeType.bom_items || []}
+          sources={copySources}
+          onCopy={items => { onChange(activeType.sow_type_id, items); setCopyOpen(false) }}
+          onClose={() => setCopyOpen(false)}
         />
       )}
     </div>

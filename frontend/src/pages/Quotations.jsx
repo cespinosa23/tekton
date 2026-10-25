@@ -455,7 +455,7 @@ export default function Quotations() {
     }
     if (stepName === 'Costing' && !scopeCostValid) return 'Every checked Cost Type needs a Contract Cost'
     if (stepName === 'Costing' && discountTooLarge) return DISCOUNT_TOO_LARGE_MSG
-    if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)'
+    if (stepName === 'Bill of Materials' && !allBomValid(quoteData.scope_of_work_items)) return 'Every custom or manually priced material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)'
     if (stepName === 'Payment Terms' && !(quoteData.payment_term_items?.length > 0)) return 'Select a Payment Term'
     return null
   }
@@ -471,7 +471,7 @@ export default function Quotations() {
     if (!quoteData.subject?.trim()) errors.push('Subject is required')
     if (!scopeCostValid) errors.push('Every checked Cost Type needs a Contract Cost')
     if (discountTooLarge) errors.push(DISCOUNT_TOO_LARGE_MSG)
-    if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)')
+    if (!allBomValid(quoteData.scope_of_work_items)) errors.push('Every custom or manually priced material needs a Source, and every material needs a price greater than 0 (or confirm it’s really 0)')
     if (!(quoteData.payment_term_items?.length > 0)) errors.push('Select a Payment Term')
     return errors
   }

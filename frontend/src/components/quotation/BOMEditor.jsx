@@ -10,12 +10,14 @@ import { emptyBomRow, calcRow } from '../../lib/bomRow'
 
 export { emptyBomRow, calcRow }
 
-// A custom row needs a Source typed in manually (no DB material to derive it from).
-// A zero price is rejected unless the user has explicitly confirmed the material
-// really is free/zero-cost (e.g. supplied by the client, included elsewhere) via
+// A custom row needs a Source typed in manually (no DB material to derive it from),
+// and so does a catalog row priced by hand (price_overridden). A zero price is
+// rejected unless the user has explicitly confirmed the material really is
+// free/zero-cost (e.g. supplied by the client, included elsewhere) via
 // zero_price_confirmed.
+export const needsManualSource = (row) => row.is_custom || row.price_overridden
 export const bomValid = (items = []) => items.every(row =>
-  (!row.is_custom || row.source?.trim()) &&
+  (!needsManualSource(row) || row.source?.trim()) &&
   (Number(row.unit_price) > 0 || row.zero_price_confirmed)
 )
 
@@ -26,8 +28,12 @@ const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFract
 const inp = 'px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 w-full'
 const roInp = 'px-2 py-1.5 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500 w-full'
 
-export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false }) {
+// extraActions: optional buttons shown after Add Material / Import (e.g.
+// BOMTabsEditor's "Copy from another scope"). scopeName labels the Clear all
+// confirmation.
+export default function BOMEditor({ items = [], onChange, materials = [], materialTypes = [], inventoryRecords = [], suppliers = [], disabled = false, extraActions = null, scopeName = '' }) {
   const [importOpen, setImportOpen] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
   // While a Price field is focused, show the raw value so reformatting
   // doesn't fight the user mid-keystroke; once they click away, snap to a
   // clean, consistent 2-decimal comma format (matches Subtotal/fmt()) —
@@ -63,7 +69,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       is_custom: checked,
       material_type: '', material_id: null, material_name: '',
       unit: '', unit_price: 0, source: '', price_entry_date: null,
-      needs_review: false,
+      needs_review: false, price_overridden: false,
     })))
   }
 
@@ -72,6 +78,23 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       ...item,
       material_type: typeName,
       material_id: null, material_name: '', unit: '', unit_price: 0, source: '', price_entry_date: null,
+      price_overridden: false,
+    })))
+  }
+
+  // Catalog material with no inventory price: let the user type one for this
+  // quotation (on), or go back to whatever inventory has now (off).
+  const togglePriceOverride = (index, on) => {
+    const item = items[index]
+    const inv = on ? null : bestInventoryFor(item.material_id, inventoryRecords)
+    onChange(items.map((it, i) => i !== index ? it : calcRow({
+      ...it,
+      price_overridden: on,
+      zero_price_confirmed: false,
+      unit_price: inv ? Number(inv.latest_unit_cost) || 0 : 0,
+      source: inv?.latest_cost_supplier || '',
+      price_entry_date: inv?.latest_cost_date || null,
+      is_canvass_price: inv?.latest_cost_is_canvass || false,
     })))
   }
 
@@ -90,6 +113,8 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
       source: inv?.latest_cost_supplier || '',
       price_entry_date: inv?.latest_cost_date || null,
       is_canvass_price: inv?.latest_cost_is_canvass || false,
+      price_overridden: false,
+      zero_price_confirmed: false,
     }
     onChange(items.map((item, i) => i !== index ? item : calcRow(updated)))
   }
@@ -116,8 +141,12 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
               const filteredMaterials = row.material_type
                 ? materials.filter(m => m.material_type === row.material_type)
                 : materials
-              const sourceMissing = row.is_custom && !row.source?.trim()
+              const sourceMissing = needsManualSource(row) && !row.source?.trim()
               const zeroPriceUnconfirmed = Number(row.unit_price) === 0 && !row.zero_price_confirmed
+              const priceEditable = row.is_custom || row.price_overridden
+              // Offered on a catalog row only while inventory has no price for
+              // it (₱0), and kept visible once ticked so it can be undone.
+              const canOverridePrice = !row.is_custom && !!row.material_id && (row.price_overridden || Number(row.unit_price) === 0)
 
               return (
                 <tr key={i} className="bg-white align-top">
@@ -199,17 +228,31 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                               setFocusedPriceRow(prev => prev === i ? null : prev)
                               setPriceDrafts(p => { const next = { ...p }; delete next[i]; return next })
                             }}
-                            disabled={disabled || !row.is_custom} title={!row.is_custom ? 'Auto-priced from inventory (top procurement entry)' : undefined}
-                            className={row.is_custom && !disabled ? inp : roInp} />
+                            disabled={disabled || !priceEditable} title={!priceEditable ? 'Auto-priced from inventory (top procurement entry)' : undefined}
+                            className={priceEditable && !disabled ? inp : roInp} />
                         </div>
                       )
                     })()}
-                    {Number(row.unit_price) === 0 && (
+                    {row.price_overridden && (
+                      <span title="Priced by hand for this quotation — inventory had no price for this material"
+                        className="inline-block mt-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium whitespace-nowrap">
+                        Manual
+                      </span>
+                    )}
+                    {Number(row.unit_price) === 0 && !row.price_overridden && (
                       <label className="flex items-center gap-1 mt-1 text-[10px] text-gray-500 whitespace-nowrap cursor-pointer">
                         <input type="checkbox" checked={!!row.zero_price_confirmed}
                           onChange={e => update(i, 'zero_price_confirmed', e.target.checked)}
                           disabled={disabled} className="w-3 h-3 rounded accent-gray-800" />
                         Price is really 0
+                      </label>
+                    )}
+                    {canOverridePrice && !row.zero_price_confirmed && (
+                      <label className="flex items-center gap-1 mt-1 text-[10px] text-gray-500 whitespace-nowrap cursor-pointer">
+                        <input type="checkbox" checked={!!row.price_overridden}
+                          onChange={e => togglePriceOverride(i, e.target.checked)}
+                          disabled={disabled} className="w-3 h-3 rounded accent-gray-800" />
+                        Enter price manually
                       </label>
                     )}
                   </td>
@@ -232,7 +275,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   <td className="px-3 py-2.5 text-gray-900 font-semibold whitespace-nowrap">{fmt(row.adjusted_subtotal)}</td>
 
                   <td className="px-2 py-1.5 min-w-[160px]">
-                    {row.is_custom ? (
+                    {needsManualSource(row) ? (
                       <div className={sourceMissing ? 'rounded ring-1 ring-red-400' : ''}>
                         <SupplierCombobox value={row.source} onValueChange={val => update(i, 'source', val)} suppliers={suppliers} disabled={disabled} />
                       </div>
@@ -288,6 +331,37 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
           <button onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 text-gray-600">
             <FileSpreadsheet size={14} /> Import from Excel
           </button>
+          {extraActions}
+          {items.length > 0 && (
+            <button onClick={() => setClearOpen(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-md text-sm text-red-600 hover:bg-red-50">
+              <Trash2 size={14} /> Clear all
+            </button>
+          )}
+        </div>
+      )}
+
+      {clearOpen && !disabled && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setClearOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Clear all items{scopeName ? ` from ${scopeName}` : ''}?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              This removes all <strong>{items.length}</strong> item{items.length === 1 ? '' : 's'} ({fmt(calcBomTotal(items))}) from this scope&apos;s BOM.
+            </p>
+            <p className="text-sm text-gray-600 mb-5">Other scopes on this quotation are not affected.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setClearOpen(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { onChange([]); setClearOpen(false) }}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700">
+                <Trash2 size={14} /> Clear {items.length} item{items.length === 1 ? '' : 's'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
