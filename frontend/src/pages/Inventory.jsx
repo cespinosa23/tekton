@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
-import { getMaterials, getTransactions, getInventoryRecords, getMaterialTypes } from '../api/inventory'
+import { getMaterials, getInventoryRecords, getMaterialTypes } from '../api/inventory'
+import { getInventoryMovement } from '../api/reports'
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import { useSortable } from '../hooks/useSortable'
 import { SortableHeader } from '../components/SortableHeader'
@@ -16,7 +17,13 @@ export default function Inventory() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
 
   const { data: materials = [] } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
+  // Starting stock / in / out per material + brand for the selected month,
+  // added up on the server (api/reports.py) instead of downloading every
+  // transaction ever recorded.
+  const { data: movement = [] } = useQuery({
+    queryKey: ['inventoryMovement', selectedMonth],
+    queryFn: () => getInventoryMovement(selectedMonth),
+  })
   const { data: inventoryRecords = [] } = useQuery({
     queryKey: ['inventory'],
     queryFn: getInventoryRecords,
@@ -26,8 +33,6 @@ export default function Inventory() {
 
   const calculateInventory = () => {
     const inventory = {}
-    const startOfMonth = new Date(selectedMonth + '-01')
-    const endOfMonth = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 0)
 
     // Initialize from inventory records (per material+brand)
     inventoryRecords.forEach(rec => {
@@ -70,57 +75,32 @@ export default function Inventory() {
       }
     })
 
-    // Process transactions per material+brand
-    transactions.forEach(tx => {
-      if (!tx.materials || !tx.transaction_date) return
-      const txDate = new Date(tx.transaction_date + 'T00:00:00')
-
-      tx.materials.forEach(mat => {
-        if (!mat.material_id) return
-        const brand = mat.brand || ''
-        const key = `${mat.material_id}_${brand}`
-
-        if (!inventory[key]) {
-          const material = materials.find(m => m.id === mat.material_id)
-          inventory[key] = {
-            material_id: mat.material_id,
-            brand,
-            material_name: material?.rating_size || mat.material_name || 'Unknown',
-            material_type: material?.material_type || '',
-            unit: mat.unit || material?.unit || '',
-            min_stock: material?.min_stock ?? 0,
-            latest_unit_cost: 0,
-            starting_quantity: 0,
-            quantity_in: 0,
-            quantity_out: 0,
-            balance: 0,
-            total_value: 0,
-          }
+    // Movement per material+brand for the month (server rules: office
+    // procurement + incoming add, outgoing subtracts; project-direct
+    // procurement doesn't touch stock).
+    movement.forEach(mv => {
+      const brand = mv.brand || ''
+      const key = `${mv.material_id}_${brand}`
+      if (!inventory[key]) {
+        const material = materials.find(m => m.id === mv.material_id)
+        inventory[key] = {
+          material_id: mv.material_id,
+          brand,
+          material_name: material?.rating_size || material?.name || 'Unknown',
+          material_type: material?.material_type || '',
+          unit: material?.unit || '',
+          min_stock: material?.min_stock ?? 0,
+          latest_unit_cost: 0,
+          starting_quantity: 0,
+          quantity_in: 0,
+          quantity_out: 0,
+          balance: 0,
+          total_value: 0,
         }
-
-        const qty = parseFloat(mat.quantity) || 0
-
-        // Only office procurement affects stock
-        const affectsStock =
-          tx.transaction_type !== 'Materials Procurement' ||
-          tx.is_office_expense === true
-
-        if (!affectsStock) return
-
-        if (txDate < startOfMonth) {
-          if (['Materials Procurement', 'Incoming Materials'].includes(tx.transaction_type)) {
-            inventory[key].starting_quantity += qty
-          } else if (tx.transaction_type === 'Outgoing Materials') {
-            inventory[key].starting_quantity -= qty
-          }
-        } else if (txDate >= startOfMonth && txDate <= endOfMonth) {
-          if (['Materials Procurement', 'Incoming Materials'].includes(tx.transaction_type)) {
-            inventory[key].quantity_in += qty
-          } else if (tx.transaction_type === 'Outgoing Materials') {
-            inventory[key].quantity_out += qty
-          }
-        }
-      })
+      }
+      inventory[key].starting_quantity += mv.starting_quantity || 0
+      inventory[key].quantity_in += mv.quantity_in || 0
+      inventory[key].quantity_out += mv.quantity_out || 0
     })
 
     // Calculate balances and total value

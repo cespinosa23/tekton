@@ -17,6 +17,8 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
 import { formatCompanyAddress } from '../lib/company'
 import { formatAddress, addresseeAddress } from '../lib/address'
+import PeriodPicker from '../components/PeriodPicker'
+import { periodRange, periodLabel } from '../lib/period'
 import BOMTabsEditor, { allBomValid } from '../components/quotation/BOMTabsEditor'
 import { calcBomTotal } from '../components/quotation/BOMEditor'
 import SowEditor from '../components/quotation/SowEditor'
@@ -210,6 +212,10 @@ export default function Quotations() {
   const [downloadingListId, setDownloadingListId] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
   const [search, setSearch] = useState('')
+  // Which period the list shows (by quotation date; default this month). A
+  // view filter only: the full light list is still loaded, so search,
+  // quote numbering and project checks keep seeing every quotation.
+  const [period, setPeriod] = useState({ kind: 'month', anchor: new Date() })
   const [statusFilter, setStatusFilter] = useState('all')
   const [listTab, setListTab] = useState('all')
   const [sortBy, setSortBy] = useState('date_new')
@@ -656,17 +662,27 @@ export default function Quotations() {
     q.approval_status === 'pending' && (isAdmin() || q.approval_requested_to_id === user?.id)
   )
 
+  // The period applies only when browsing: a search looks through every
+  // quotation (any date), and Pending Approval always shows everything waiting.
+  const searchWords = search.toLowerCase().split(/[\s,]+/).filter(Boolean)
+  const searching = searchWords.length > 0
+  const periodApplies = !searching && listTab !== 'pendingApproval' && period.kind !== 'all'
+  const shownRange = periodRange(period.kind, period.anchor)
+  // quotation_date (what's printed on the quote); a quote without one falls back to when it was created
+  const quoteDay = (q) => q.quotation_date || (q.created_at ? String(q.created_at).slice(0, 10) : null)
+
   const filteredQuotes = (listTab === 'pendingApproval' ? pendingApprovalQuotes : activeQuotes).filter(q => {
     // Every word typed must appear somewhere in the client, subject, quote
     // number or address (any order) — "ayala makati" finds "Ayala Ave…, Makati City".
-    const words = search.toLowerCase().split(/[\s,]+/).filter(Boolean)
     const haystack = [
       q.addressee_name, q.subject, q.quote_number,
       formatAddress(addresseeAddress(q)), q.addressee_address,
     ].filter(Boolean).join(' ').toLowerCase()
-    const matchSearch = words.every(w => haystack.includes(w))
+    const matchSearch = searchWords.every(w => haystack.includes(w))
     const matchStatus = statusFilter === 'all' || q.status === statusFilter
-    return matchSearch && matchStatus
+    const day = quoteDay(q)
+    const matchPeriod = !periodApplies || (!!day && day >= shownRange.start && day <= shownRange.end)
+    return matchSearch && matchStatus && matchPeriod
   })
 
   const sortedQuotes = [...filteredQuotes].sort((a, b) => {
@@ -1054,7 +1070,7 @@ export default function Quotations() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by client, subject, quote number, or address…"
+              placeholder="Search by client, subject, quote number, or address (all dates)…"
               className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
           </div>
@@ -1079,6 +1095,16 @@ export default function Quotations() {
           </select>
         </div>
 
+        {/* Period (by quotation date) — browsing only; search covers all dates */}
+        {listTab !== 'pendingApproval' && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <PeriodPicker kind={period.kind} anchor={period.anchor} onChange={setPeriod} />
+            {searching && period.kind !== 'all' && (
+              <span className="text-xs text-gray-500 bg-gray-100 rounded px-2 py-1">Searching all dates</span>
+            )}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />)}
@@ -1092,7 +1118,10 @@ export default function Quotations() {
         ) : filteredQuotes.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <Search size={36} className="mx-auto mb-3 text-gray-300" />
-            <p className="text-sm font-medium text-gray-500">No quotations match your search</p>
+            <p className="text-sm font-medium text-gray-500">
+              {periodApplies ? `No quotations dated ${periodLabel(period.kind, period.anchor)}` : 'No quotations match your search'}
+            </p>
+            {periodApplies && <p className="text-xs mt-1">Use ◀ ▶ to see other periods, or search to look through all dates.</p>}
           </div>
         ) : (
           <div className="space-y-3">

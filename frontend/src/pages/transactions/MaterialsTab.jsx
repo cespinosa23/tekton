@@ -12,10 +12,12 @@ import MaterialCombobox from '../../components/MaterialCombobox'
 import SupplierCombobox from '../../components/SupplierCombobox'
 import EmployeeCombobox from '../../components/EmployeeCombobox'
 import {
-  getTransactions, getProjects, getMaterials, getSuppliers,
+  getProjects, getMaterials, getSuppliers,
   getInventory, getMaterialTypes, createTransaction, updateTransaction, archiveTransaction,
   downloadCanvassTemplate, importCanvass,
 } from '../../api/transactions'
+import { listTransactions } from '../../api/lists'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { getEmployees } from '../../api/employees'
 import { apiErrorMessage } from '../../utils/apiError'
 
@@ -37,7 +39,7 @@ const emptyForm = {
   adjustment_direction: 'add', // 'add' or 'deduct'
 }
 
-export default function MaterialsTab({ stickyOffset = 0 }) {
+export default function MaterialsTab({ stickyOffset = 0, range = {} }) {
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
@@ -51,7 +53,16 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
   const [canvassImportResult, setCanvassImportResult] = useState(null)
   const [downloadingCanvassTemplate, setDownloadingCanvassTemplate] = useState(false)
 
-  const { data: allTransactions = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
+  // Only this tab's types. Browsing: the selected period (transactions/index.jsx).
+  // Searching: every date — the search box always looks through everything.
+  const searchTerm = useDebouncedValue(search.trim(), 300)
+  const { data: allTransactions = [], isLoading } = useQuery({
+    queryKey: searchTerm ? ['transactions', 'materials', 'search', searchTerm] : ['transactions', 'materials', range.start, range.end],
+    queryFn: () => listTransactions(searchTerm
+      ? { q: searchTerm, transaction_type: MATERIAL_TX_TYPES }
+      : { start: range.start, end: range.end, transaction_type: MATERIAL_TX_TYPES }),
+    placeholderData: (prev) => prev, // keep the current rows on screen while the next set loads
+  })
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: materials = [] } = useQuery({ queryKey: ['materials'], queryFn: getMaterials })
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: getSuppliers })
@@ -301,8 +312,9 @@ export default function MaterialsTab({ stickyOffset = 0 }) {
           <div className="relative max-w-sm flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-              placeholder="Search materials transactions..." value={search} onChange={e => setSearch(e.target.value)} />
+              placeholder="Search materials transactions (all dates)..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          {searchTerm && <span className="self-center text-xs text-gray-500 bg-gray-100 rounded px-2 py-1 whitespace-nowrap">Searching all dates</span>}
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
             className="border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
             <option value="all">All Types</option>

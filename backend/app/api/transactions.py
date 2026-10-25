@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.core.access import project_scope
@@ -65,18 +69,43 @@ def get_material_ids(materials):
     return list(ids)
 
 @router.get("/", response_model=list[TransactionRead])
-def list_transactions(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    # Read scope (app/core/access.py): Admin and PC see everything, a PM
-    # only transactions on their own projects (not office expenses), everyone
-    # else none. An empty list rather than 403 so pages that load
+def list_transactions(
+    skip: int = 0, limit: int = 10000,
+    # Optional filters so screens fetch only what they show (all inclusive):
+    # a date range on transaction_date, one project, and/or some types.
+    start: Optional[date] = None, end: Optional[date] = None,
+    project_id: Optional[int] = None,
+    transaction_type: Optional[list[str]] = Query(None),
+    # Text search across all dates (the Transactions tabs' search box): any of
+    # description, project, reference no., supplier, category or remarks
+    # contains it, case-insensitive.
+    q: Optional[str] = None,
+    db: Session = Depends(get_db), current_user=Depends(get_current_user),
+):
+    # Read scope (app/core/access.py): Admin, PC and PM see everything,
+    # everyone else none. An empty list rather than 403 so pages that load
     # transactions for everyone (the Dashboard) keep working.
-    q = db.query(Transaction).filter(Transaction.archived == False)
+    query = db.query(Transaction).filter(Transaction.archived == False)
     scope = project_scope(db, current_user)
     if scope is not None:
         if not scope:
             return []
-        q = q.filter(Transaction.project_id.in_(scope))
-    return q.order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
+        query = query.filter(Transaction.project_id.in_(scope))
+    if start:
+        query = query.filter(Transaction.transaction_date >= start)
+    if end:
+        query = query.filter(Transaction.transaction_date <= end)
+    if project_id is not None:
+        query = query.filter(Transaction.project_id == project_id)
+    if transaction_type:
+        query = query.filter(Transaction.transaction_type.in_(transaction_type))
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(*(col.ilike(like) for col in (
+            Transaction.description, Transaction.project_name, Transaction.reference_number,
+            Transaction.supplier, Transaction.expenditure_category, Transaction.remarks,
+        ))))
+    return query.order_by(Transaction.id.asc()).offset(skip).limit(limit).all()
 
 # Must be before /{item_id} — otherwise "archived" is captured as the id
 @router.get("/archived", response_model=list[TransactionRead])

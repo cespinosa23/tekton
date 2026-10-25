@@ -10,9 +10,11 @@ import { useElementHeight } from '../../hooks/useElementHeight'
 import { TYPE_COLORS, fmt } from './constants'
 import ProjectCombobox from '../../components/ProjectCombobox'
 import {
-  getTransactions, getProjects, getSettings,
+  getProjects, getSettings,
   createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
+import { listTransactions } from '../../api/lists'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { apiErrorMessage } from '../../utils/apiError'
 
 // A payment with billing_id was created by marking a billing paid (billing.py);
@@ -40,7 +42,7 @@ const emptyForm = {
   remarks: '',
 }
 
-export default function PaymentsTab({ stickyOffset = 0 }) {
+export default function PaymentsTab({ stickyOffset = 0, range = {} }) {
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
@@ -51,7 +53,16 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
   const navigate = useNavigate()
   const [formData, setFormData] = useState(emptyForm)
 
-  const { data: allTransactions = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
+  // Only this tab's type. Browsing: the selected period (transactions/index.jsx).
+  // Searching: every date — the search box always looks through everything.
+  const searchTerm = useDebouncedValue(search.trim(), 300)
+  const { data: allTransactions = [], isLoading } = useQuery({
+    queryKey: searchTerm ? ['transactions', 'Payment', 'search', searchTerm] : ['transactions', 'Payment', range.start, range.end],
+    queryFn: () => listTransactions(searchTerm
+      ? { q: searchTerm, transaction_type: ['Payment'] }
+      : { start: range.start, end: range.end, transaction_type: ['Payment'] }),
+    placeholderData: (prev) => prev, // keep the current rows on screen while the next set loads
+  })
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
 
   const transactions = allTransactions.filter(t => t.transaction_type === 'Payment')
@@ -131,8 +142,9 @@ export default function PaymentsTab({ stickyOffset = 0 }) {
         <div className="relative max-w-sm flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-            placeholder="Search payments..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search payments (all dates)..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {searchTerm && <span className="ml-3 text-xs text-gray-500 bg-gray-100 rounded px-2 py-1 whitespace-nowrap">Searching all dates</span>}
         <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
           className="ml-3 border border-gray-300 rounded-md text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400">
           <option value="all">All sources</option>

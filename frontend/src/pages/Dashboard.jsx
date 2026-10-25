@@ -8,10 +8,12 @@ import {
 import Layout from '../components/Layout'
 import WeatherCard from '../components/WeatherCard'
 import {
-  getProjects, getTransactions, getEmployees, getAttendance,
+  getProjects, getEmployees,
   getCalendarDays, createCalendarDay, updateCalendarDay
 } from '../api/dashboard'
 import { getLaborTotals, laborSum } from '../api/labor'
+import { listTransactions } from '../api/lists'
+import { getProjectTotals, totalsFor } from '../api/reports'
 import { useAuth } from '../context/AuthContext'
 import { Calendar, FolderKanban, Banknote, Receipt, Users, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, TrendingDown, Clock, CheckCircle2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -42,10 +44,8 @@ export default function Dashboard() {
   const [phHolidays, setPhHolidays] = useState({}) // key: yyyy -> [{date, localName}]
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
   const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: calendarDays = [] } = useQuery({ queryKey: ['calendarDays'], queryFn: getCalendarDays })
-  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
 
   // Fetch PH holidays when year changes
   useEffect(() => {
@@ -75,6 +75,11 @@ export default function Dashboard() {
   const { data: laborTotals } = useQuery({
     queryKey: ['laborTotals', laborStart, laborEnd],
     queryFn: () => getLaborTotals({ start: laborStart, end: laborEnd }),
+  })
+  // Only the selected Week / Month / Year to date — not every transaction.
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions', 'range', laborStart, laborEnd],
+    queryFn: () => listTransactions({ start: laborStart, end: laborEnd }),
   })
 
   const filterByDateRange = (items, dateField) => {
@@ -128,6 +133,9 @@ export default function Dashboard() {
   const canSeeFinancials = isAdmin()
   const canSeeTotalExpenses = isAdmin() || hasRole('Project Coordinator') || hasRole('Project Manager')
 
+  // All-time per-project totals, added up on the server (Admin widgets only).
+  const { data: projectTotals } = useQuery({ queryKey: ['projectTotals'], queryFn: getProjectTotals, enabled: isAdmin() })
+
   // Admin-only tracking widgets
   const adminWidgets = (() => {
     if (!isAdmin()) return { arProjects: [], overrunProjects: [], staleProjects: [] }
@@ -135,33 +143,18 @@ export default function Dashboard() {
     const activeProjs = projects.filter(p => p.status === 'Active')
     const arList = [], overrunList = [], staleList = []
     activeProjs.forEach(project => {
-      const projectTx = transactions.filter(t => t.project_id === project.id)
-      const projectAtt = attendance.filter(a => a.project_id === project.id)
+      const { laborCost, materialsCost, othersCost, totalPaid, lastActivity } = totalsFor(projectTotals, project.id)
       const totalContract = parseFloat(project.contract_cost) || 0
-      const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
-      const materialsCost = projectTx
-        .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
-        .reduce((s, t) => {
-          const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
-          return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
-        }, 0)
-      const othersCost = projectTx
-        .filter(t => t.transaction_type === 'General Expenditure')
-        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
       const totalExpenses = laborCost + materialsCost + othersCost
-      const totalPaid = projectTx
-        .filter(t => t.transaction_type === 'Payment')
-        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
       const outstanding = totalContract - totalPaid
       if (outstanding > 0) arList.push({ ...project, outstanding, totalContract, totalPaid })
       if (totalContract > 0 && totalExpenses / totalContract >= 0.8) {
         overrunList.push({ ...project, overrunPct: totalExpenses / totalContract, totalExpenses, totalContract })
       }
-      const lastTxMs = projectTx.length ? Math.max(...projectTx.map(t => new Date(t.transaction_date || 0).getTime())) : 0
-      const lastAttMs = projectAtt.length ? Math.max(...projectAtt.map(a => new Date(a.date || 0).getTime())) : 0
-      const lastMs = Math.max(lastTxMs, lastAttMs)
-      if (!lastMs || new Date(lastMs) < cutoff) {
-        staleList.push({ ...project, lastActivity: lastMs ? new Date(lastMs) : null })
+      // Latest transaction or attendance date, as a local date
+      const last = lastActivity ? new Date(lastActivity + 'T00:00:00') : null
+      if (!last || last < cutoff) {
+        staleList.push({ ...project, lastActivity: last })
       }
     })
     arList.sort((a, b) => b.outstanding - a.outstanding)

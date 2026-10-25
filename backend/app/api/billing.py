@@ -38,15 +38,19 @@ def _is_zero_amount(amount) -> bool:
 
 
 @router.get("/", response_model=list[BillingRead])
-def list_billings(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def list_billings(skip: int = 0, limit: int = 10000, project_id: int | None = None,
+                  db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     # Read scope (app/core/access.py): Admin, PC and PM see every billing,
     # everyone else none. Writes are Admin and PM (_write_auth).
+    # ?project_id= limits it to one project (the project page).
     q = db.query(Billing).filter(Billing.archived == False)
     scope = project_scope(db, current_user)
     if scope is not None:
         if not scope:
             return []
         q = q.filter(Billing.project_id.in_(scope))
+    if project_id is not None:
+        q = q.filter(Billing.project_id == project_id)
     return q.order_by(Billing.id.asc()).offset(skip).limit(limit).all()
 
 

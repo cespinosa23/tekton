@@ -3,8 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import Layout from '../components/Layout'
-import { getProjects, getTransactions, getAttendance, updateProject } from '../api/projects'
-import { getBillings, createBilling, setBillingPaid, resetProjectBilling, archiveBilling } from '../api/billing'
+import { getProjects, updateProject } from '../api/projects'
+import { createBilling, setBillingPaid, resetProjectBilling, archiveBilling } from '../api/billing'
+import { listTransactions, listAttendance, listBillings } from '../api/lists'
 import { getLaborTotals, laborFor } from '../api/labor'
 import { getCompanies, getSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
@@ -81,9 +82,24 @@ export default function ProjectView() {
   const hidePayroll = !isAdmin()
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
-  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
-  const { data: billings = [] } = useQuery({ queryKey: ['billings'], queryFn: getBillings })
+  // Only this project's records — a project's history stays small however
+  // long the company runs, unlike the full tables.
+  const projectId = parseInt(id)
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions', 'project', projectId],
+    queryFn: () => listTransactions({ project_id: projectId }),
+    enabled: Number.isFinite(projectId),
+  })
+  const { data: attendance = [] } = useQuery({
+    queryKey: ['attendance', 'project', projectId],
+    queryFn: () => listAttendance({ project_id: projectId }),
+    enabled: Number.isFinite(projectId) && !hidePayroll, // only the Admin payroll tab lists them
+  })
+  const { data: billings = [] } = useQuery({
+    queryKey: ['billings', 'project', projectId],
+    queryFn: () => listBillings({ project_id: projectId }),
+    enabled: Number.isFinite(projectId),
+  })
   const { data: laborTotals } = useQuery({ queryKey: ['laborTotals'], queryFn: () => getLaborTotals() })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })

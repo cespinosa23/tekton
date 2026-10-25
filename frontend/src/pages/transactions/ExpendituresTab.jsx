@@ -9,9 +9,11 @@ import { useElementHeight } from '../../hooks/useElementHeight'
 import { fmt } from './constants'
 import ProjectCombobox from '../../components/ProjectCombobox'
 import {
-  getTransactions, getProjects, getSettings,
+  getProjects, getSettings,
   createTransaction, updateTransaction, archiveTransaction
 } from '../../api/transactions'
+import { listTransactions } from '../../api/lists'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { apiErrorMessage } from '../../utils/apiError'
 
 const emptyForm = {
@@ -27,7 +29,7 @@ const emptyForm = {
   remarks: '',
 }
 
-export default function ExpendituresTab({ stickyOffset = 0 }) {
+export default function ExpendituresTab({ stickyOffset = 0, range = {} }) {
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
@@ -36,7 +38,16 @@ export default function ExpendituresTab({ stickyOffset = 0 }) {
   const [search, setSearch] = useState('')
   const [formData, setFormData] = useState(emptyForm)
 
-  const { data: allTransactions = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
+  // Only this tab's type. Browsing: the selected period (transactions/index.jsx).
+  // Searching: every date — the search box always looks through everything.
+  const searchTerm = useDebouncedValue(search.trim(), 300)
+  const { data: allTransactions = [], isLoading } = useQuery({
+    queryKey: searchTerm ? ['transactions', 'General Expenditure', 'search', searchTerm] : ['transactions', 'General Expenditure', range.start, range.end],
+    queryFn: () => listTransactions(searchTerm
+      ? { q: searchTerm, transaction_type: ['General Expenditure'] }
+      : { start: range.start, end: range.end, transaction_type: ['General Expenditure'] }),
+    placeholderData: (prev) => prev, // keep the current rows on screen while the next set loads
+  })
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
   const { data: settings = [] } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
 
@@ -107,8 +118,10 @@ export default function ExpendituresTab({ stickyOffset = 0 }) {
         <div className="relative max-w-sm flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-            placeholder="Search expenditures..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search expenditures (all dates)..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {searchTerm && <span className="ml-3 text-xs text-gray-500 bg-gray-100 rounded px-2 py-1 whitespace-nowrap">Searching all dates</span>}
+        <div className="flex-1" />
         <button onClick={() => { setEditingTx(null); setFormData(emptyForm); setFormOpen(true) }}
           className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 ml-3">
           <Plus size={15} /> New Expenditure

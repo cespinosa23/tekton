@@ -2,7 +2,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { getProjects } from '../api/projects'
-import { getBillings } from '../api/billing'
+import { listBillings } from '../api/lists'
 import { getCompanies } from '../api/settings'
 import { formatBillingSerial } from '../utils/billingSerial'
 import DocumentLetterhead from '../components/DocumentLetterhead'
@@ -36,7 +36,11 @@ export default function BillingPrint() {
   const companyId = searchParams.get('company')
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
-  const { data: billings = [] } = useQuery({ queryKey: ['billings'], queryFn: getBillings })
+  // Just this project's billings (the letter lists its billing history).
+  const { data: billings = [] } = useQuery({
+    queryKey: ['billings', 'project', parseInt(id)],
+    queryFn: () => listBillings({ project_id: parseInt(id) }),
+  })
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: getCompanies })
 
   const project = projects.find(p => p.id === parseInt(id))

@@ -38,6 +38,7 @@ from app.api import transactions as transactions_router
 from app.api import billing as billing_router
 from app.api import commissions as commissions_router
 from app.api import labor as labor_router
+from app.api import reports as reports_router
 from app.api import project_delete as project_delete_router
 from app.core.project_purge import purge_project
 from app.api import quotations as quotations_router
@@ -75,6 +76,7 @@ app.include_router(make_crud_router(
     "/attendance", "attendance", Attendance, AttendanceCreate, AttendanceUpdate, AttendanceRead,
     write_roles=["Admin", "Project Coordinator", "Project Manager"],
     sanitize=attendance_pay.strip_client_pay, on_save=attendance_pay.apply_pay, read_transform=attendance_pay.mask_pay,
+    date_field="date",
 ))
 app.include_router(make_crud_router("/calendar-days", "calendar_days", CalendarDay, CalendarDayCreate, CalendarDayUpdate, CalendarDayRead, allow_archive=False, write_roles=["Admin"]))
 app.include_router(make_crud_router("/companies", "companies", Company, CompanyCreate, CompanyUpdate, CompanyRead, allow_archive=False, write_roles=["Admin"]))
@@ -87,6 +89,7 @@ app.include_router(transactions_router.router)
 app.include_router(billing_router.router)
 app.include_router(commissions_router.router)
 app.include_router(labor_router.router)
+app.include_router(reports_router.router)
 app.include_router(project_delete_router.router)
 app.include_router(quotations_router.router)
 app.include_router(make_crud_router("/settings", "settings", Setting, SettingCreate, SettingUpdate, SettingRead, write_roles=["Admin"]))

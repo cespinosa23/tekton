@@ -5,9 +5,10 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import ProjectCombobox from '../components/ProjectCombobox'
 import {
-  getAttendance, getEmployees, getProjects,
+  getEmployees, getProjects,
   createAttendance, updateAttendance, deleteAttendance
 } from '../api/attendance'
+import { listAttendance } from '../api/lists'
 import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, HandCoins, Pencil, Trash2, X, Clock, DollarSign, Users, CalendarCheck, Search, Split } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
@@ -100,7 +101,22 @@ export default function Attendance() {
   const [splitRecord, setSplitRecord] = useState(null)
   const [splitFormData, setSplitFormData] = useState(emptyForm)
 
-  const { data: attendance = [], isLoading } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance })
+  // Fetch only the day / week / month / year on screen — attendance grows by a
+  // row per worker per day, so the full table is never downloaded. Periods
+  // already visited stay cached; ◀ ▶ fetch the next one.
+  const visibleRange = (() => {
+    const ymd = (d) => format(d, 'yyyy-MM-dd')
+    switch (viewMode) {
+      case 'week': return { start: ymd(startOfWeek(selectedDate, { weekStartsOn: 1 })), end: ymd(endOfWeek(selectedDate, { weekStartsOn: 1 })) }
+      case 'month': return { start: ymd(startOfMonth(selectedDate)), end: ymd(endOfMonth(selectedDate)) }
+      case 'year': return { start: ymd(startOfYear(selectedDate)), end: ymd(endOfYear(selectedDate)) }
+      default: return { start: ymd(selectedDate), end: ymd(selectedDate) }
+    }
+  })()
+  const { data: attendance = [], isLoading } = useQuery({
+    queryKey: ['attendance', 'range', visibleRange.start, visibleRange.end],
+    queryFn: () => listAttendance(visibleRange),
+  })
   const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees })
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects })
 
@@ -330,9 +346,14 @@ export default function Attendance() {
   const { sortKey, sortDir, toggle, sorted } = useSortable(filtered, 'date', 'desc')
   const [toolbarRef, toolbarHeight] = useElementHeight()
 
-  const loggedOnDate = new Set(
-    attendance.filter(a => a.date === formData.date).map(a => a.employee_id)
-  )
+  // Who's already logged on the form's date — fetched for that one date,
+  // since it can be outside the period on screen.
+  const { data: attendanceOnFormDate = [] } = useQuery({
+    queryKey: ['attendance', 'range', formData.date, formData.date],
+    queryFn: () => listAttendance({ start: formData.date, end: formData.date }),
+    enabled: formOpen && !!formData.date,
+  })
+  const loggedOnDate = new Set(attendanceOnFormDate.map(a => a.employee_id))
 
   const summaryRegularHours = filtered.reduce((s, a) => s + (parseFloat(a.regular_hours) || 0), 0)
   const summaryOTHours = filtered.reduce((s, a) => s + (parseFloat(a.overtime_hours) || 0), 0)

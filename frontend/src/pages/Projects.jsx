@@ -6,10 +6,10 @@ import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
   getProjects, createProject, updateProject, archiveProject,
-  getTransactions, getSettings
+  getSettings
 } from '../api/projects'
 import { getEmployees } from '../api/employees'
-import { getLaborTotals, laborFor } from '../api/labor'
+import { getProjectTotals, totalsFor } from '../api/reports'
 import {
   Plus, Search, Eye, Pencil, Trash2, Archive,
   MapPin, User, Calendar, X, Filter, Link2
@@ -167,10 +167,10 @@ function ProjectCard({ project, onEdit, onDelete, onScopeClick }) {
 
 // --- PaymentsView ---
 function PaymentsView({ projects }) {
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions })
-  // Labor comes from server totals: per-person pay is Admin-only, but the
-  // PM's chart still shows each project's labor segment.
-  const { data: laborTotals } = useQuery({ queryKey: ['laborTotals'], queryFn: () => getLaborTotals() })
+  // Every project's all-time totals, added up on the server — labor (Direct
+  // Hire excluded; per-person pay stays Admin-only), materials, other costs
+  // and payments — instead of downloading every transaction.
+  const { data: projectTotals } = useQuery({ queryKey: ['projectTotals'], queryFn: getProjectTotals })
 
   if (projects.length === 0) return (
     <div className="text-center py-16 text-gray-400">No projects to display.</div>
@@ -179,27 +179,12 @@ function PaymentsView({ projects }) {
   return (
     <div className="space-y-4">
       {projects.map(project => {
-        const projectTx = transactions.filter(t => t.project_id === project.id)
-
         const totalContract = parseFloat(project.contract_cost) || 0
         const encumbrance = parseFloat(project.encumbrance) || 0
         const contractCost = totalContract - encumbrance // pure scope cost, excluding encumbrance, for the chart segment below
 
-        // Direct Hire attendance is paid by the client directly, not a company cost.
-        const laborCost = laborFor(laborTotals, project.id)
-        const materialsCost = projectTx
-          .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
-          .reduce((s, t) => {
-            const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
-            return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
-          }, 0)
-        const othersCost = projectTx
-          .filter(t => t.transaction_type === 'General Expenditure')
-          .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+        const { laborCost, materialsCost, othersCost, totalPaid: totalPayments } = totalsFor(projectTotals, project.id)
         const totalExpenses = laborCost + materialsCost + othersCost
-        const totalPayments = projectTx
-          .filter(t => t.transaction_type === 'Payment')
-          .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
 
         const maxVal = Math.max(totalContract, totalExpenses, totalPayments, 1)
 

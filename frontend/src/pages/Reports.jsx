@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { Navigate } from 'react-router-dom'
 import Layout from '../components/Layout'
-import { getProjects, getTransactions, getEmployees, getAttendance } from '../api/dashboard'
+import { getProjects, getEmployees } from '../api/dashboard'
+import { listAttendance } from '../api/lists'
+import { getProjectTotals, getMonthlyTrend, totalsFor } from '../api/reports'
 import { useAuth } from '../context/AuthContext'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -52,9 +54,25 @@ export default function Reports() {
   // 'attendance' here, so after visiting Reports, Dashboard/Projects/Attendance
   // briefly showed the employee list as attendance records (and vice versa).
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects, enabled: admin })
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: getTransactions, enabled: admin })
   const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees, enabled: admin })
-  const { data: attendance = [] } = useQuery({ queryKey: ['attendance'], queryFn: getAttendance, enabled: admin })
+  // Totals are added up on the server (api/reports.py, same formulas this
+  // page used to run over every transaction and attendance record).
+  const { data: projectTotals } = useQuery({ queryKey: ['projectTotals'], queryFn: getProjectTotals, enabled: admin })
+  const trendEndMonth = format(new Date(), 'yyyy-MM') // the browser's month, not the server's
+  const { data: monthlyTrend = [] } = useQuery({
+    queryKey: ['monthlyTrend', trendEndMonth, 6],
+    queryFn: () => getMonthlyTrend({ endMonth: trendEndMonth, months: 6 }),
+    enabled: admin,
+  })
+  // Manpower utilization needs only this month's attendance.
+  const monthStart = startOfMonth(new Date())
+  const monthEnd = endOfMonth(new Date())
+  const thisMonthRange = { start: format(monthStart, 'yyyy-MM-dd'), end: format(monthEnd, 'yyyy-MM-dd') }
+  const { data: thisMonthAtt = [] } = useQuery({
+    queryKey: ['attendance', 'range', thisMonthRange.start, thisMonthRange.end],
+    queryFn: () => listAttendance(thisMonthRange),
+    enabled: admin,
+  })
 
   const [profitSort, setProfitSort] = useState({ field: 'margin', dir: 'asc' })
   const [statusFilter, setStatusFilter] = useState('all')
@@ -63,26 +81,12 @@ export default function Reports() {
 
   // ── Per-project financials ─────────────────────────────────────────────────
   const projectData = projects.map(project => {
-    const projectTx = transactions.filter(t => t.project_id === project.id)
-    const projectAtt = attendance.filter(a => a.project_id === project.id)
-
     const totalContract = parseFloat(project.contract_cost) || 0
 
-    // Direct Hire attendance is paid by the client directly, not a company cost.
-    const laborCost = projectAtt.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
-    const materialsCost = projectTx
-      .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
-      .reduce((s, t) => {
-        const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
-        return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
-      }, 0)
-    const othersCost = projectTx
-      .filter(t => t.transaction_type === 'General Expenditure')
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+    // Server totals: labor (Direct Hire excluded), materials (line costs,
+    // returns netted), other costs, payments.
+    const { laborCost, materialsCost, othersCost, totalPaid } = totalsFor(projectTotals, project.id)
     const totalExpenses = laborCost + materialsCost + othersCost
-    const totalPaid = projectTx
-      .filter(t => t.transaction_type === 'Payment')
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
     const outstanding = totalContract - totalPaid
     const margin = totalContract > 0 ? ((totalPaid - totalExpenses) / totalContract) * 100 : 0
 
@@ -110,48 +114,23 @@ export default function Reports() {
   })
 
   // ── 6-month revenue vs expense trend ──────────────────────────────────────
-  const monthlyData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - (5 - i))
-    const yr = d.getFullYear()
-    const mo = d.getMonth()
-    // T00:00:00 forces local-time parsing of the plain 'YYYY-MM-DD' date
-    // strings these records store — otherwise a browser west of UTC reads a
-    // date one day earlier and can attribute it to the wrong month.
-    const inMonth = (dateStr) => {
-      if (!dateStr) return false
-      const dd = new Date(dateStr + 'T00:00:00')
-      return dd.getFullYear() === yr && dd.getMonth() === mo
-    }
-    const revenue = transactions
-      .filter(t => t.transaction_type === 'Payment' && inMonth(t.transaction_date))
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
-    const labor = attendance.filter(a => inMonth(a.date) && !a.is_direct_hire).reduce((s, a) => s + (parseFloat(a.total_salary) || 0), 0)
-    // Nets Incoming Materials (returns) against Procurement/Outgoing — matches
-    // the materials-cost calc used everywhere else. Previously this only
-    // counted 'Materials Procurement', understating this month's expenses.
-    const materials = transactions
-      .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type) && inMonth(t.transaction_date))
-      .reduce((s, t) => {
-        const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
-        return s + sign * (parseFloat(t.amount) || 0)
-      }, 0)
-    const general = transactions
-      .filter(t => t.transaction_type === 'General Expenditure' && inMonth(t.transaction_date))
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
-    return { month: format(d, 'MMM yy'), revenue, expenses: labor + materials + general, net: revenue - labor - materials - general }
+  // Server-side per month (revenue, labor, materials netted by amount, general).
+  const monthlyData = monthlyTrend.map(m => {
+    const revenue = parseFloat(m.revenue) || 0
+    const expenses = (parseFloat(m.labor) || 0) + (parseFloat(m.materials) || 0) + (parseFloat(m.general) || 0)
+    return { month: format(new Date(m.month + '-01T00:00:00'), 'MMM yy'), revenue, expenses, net: revenue - expenses }
   })
 
   // ── Top clients by payments received ──────────────────────────────────────
+  // Payments per project (server totals) grouped by client; payments with no
+  // project (or a project no longer listed) count as "Unknown", as before.
   const clientMap = {}
-  transactions
-    .filter(t => t.transaction_type === 'Payment')
-    .forEach(t => {
-      const proj = projects.find(p => p.id === t.project_id)
-      const client = proj?.owner_company_name || 'Unknown'
-      clientMap[client] = (clientMap[client] || 0) + (parseFloat(t.amount) || 0)
-    })
+  const addClient = (client, amount) => { if (amount) clientMap[client] = (clientMap[client] || 0) + amount }
+  Object.entries(projectTotals?.projects || {}).forEach(([pid, t]) => {
+    const proj = projects.find(p => p.id === parseInt(pid))
+    addClient(proj?.owner_company_name || 'Unknown', parseFloat(t.total_paid) || 0)
+  })
+  addClient('Unknown', parseFloat(projectTotals?.unassigned?.total_paid) || 0)
   const topClients = Object.entries(clientMap)
     .map(([name, revenue]) => ({ name, revenue }))
     .sort((a, b) => b.revenue - a.revenue)
@@ -159,21 +138,14 @@ export default function Reports() {
   const maxClientRevenue = topClients[0]?.revenue || 1
 
   // ── Expense category breakdown ─────────────────────────────────────────────
-  // Direct Hire attendance is paid by the client directly, not a company cost.
-  const totalLabor = attendance.reduce((s, a) => s + (a.is_direct_hire ? 0 : parseFloat(a.total_salary) || 0), 0)
-  // Nets Incoming Materials (returns) against Procurement/Outgoing — matches
-  // projectData's materialsCost above. Previously this dropped Incoming
-  // Materials entirely instead of netting them, so this KPI/pie chart could
-  // disagree with the Project Profitability table on the very same page.
-  const totalMaterials = transactions
-    .filter(t => ['Materials Procurement', 'Outgoing Materials', 'Incoming Materials'].includes(t.transaction_type))
-    .reduce((s, t) => {
-      const sign = t.transaction_type === 'Incoming Materials' ? -1 : 1
-      return s + sign * (t.materials?.reduce((ms, m) => ms + (parseFloat(m.total_cost) || 0), 0) || 0)
-    }, 0)
-  const totalGeneral = transactions
-    .filter(t => t.transaction_type === 'General Expenditure')
-    .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+  // All-time totals: every project plus records with no project (office),
+  // same as summing every record. Direct Hire labor excluded; materials by
+  // line cost with returns netted (matches the profitability table above).
+  const allBuckets = [...Object.values(projectTotals?.projects || {}), ...(projectTotals?.unassigned ? [projectTotals.unassigned] : [])]
+  const sumField = (f) => allBuckets.reduce((s, t) => s + (parseFloat(t[f]) || 0), 0)
+  const totalLabor = sumField('labor_cost')
+  const totalMaterials = sumField('materials_cost')
+  const totalGeneral = sumField('others_cost')
   const expensePie = [
     { name: 'Labor', value: totalLabor },
     { name: 'Materials', value: totalMaterials },
@@ -182,14 +154,7 @@ export default function Reports() {
   const totalAllExpenses = totalLabor + totalMaterials + totalGeneral
 
   // ── Manpower utilization this month ───────────────────────────────────────
-  const now = new Date()
-  const monthStart = startOfMonth(now)
-  const monthEnd = endOfMonth(now)
-  const thisMonthAtt = attendance.filter(a => {
-    if (!a.date) return false
-    const d = new Date(a.date + 'T00:00:00')
-    return d >= monthStart && d <= monthEnd
-  })
+  // thisMonthAtt is fetched for this month only (see the queries above).
   const activeEmployeeCount = employees.filter(e => e.status === 'Active').length
   const deployedIds = new Set(thisMonthAtt.map(a => a.employee_id))
   const deployedCount = deployedIds.size
@@ -296,7 +261,7 @@ export default function Reports() {
         </div>
 
         {/* Manpower utilization */}
-        <Section icon={Users} title={`Manpower Utilization — ${format(now, 'MMMM yyyy')}`}>
+        <Section icon={Users} title={`Manpower Utilization — ${format(monthStart, 'MMMM yyyy')}`}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <div className="flex items-center gap-4">
               <div className="relative w-24 h-24">

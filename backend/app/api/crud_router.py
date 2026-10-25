@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import date
 from decimal import Decimal
 from typing import Any, Callable, Optional
 from app.db.database import get_db
@@ -41,6 +42,10 @@ def make_crud_router(
     # /{id}/permanent and commits itself — for a resource whose dependents
     # have to go with it (e.g. a project's billings and transactions).
     permanent_delete_with: Optional[Callable[[Session, Any], None]] = None,
+    # Optional name of a date column: the list then accepts ?start=&end=
+    # (inclusive) so screens fetch only the period they show, instead of a
+    # table that grows every day (e.g. attendance).
+    date_field: Optional[str] = None,
 ):
     router = APIRouter(prefix=prefix, tags=[tag])
     write_auth = Depends(require_role(write_roles)) if write_roles else Depends(get_current_user)
@@ -51,10 +56,26 @@ def make_crud_router(
         return read_transform(ReadSchema.model_validate(item, from_attributes=True), user)
 
     @router.get("/", response_model=list[ReadSchema])
-    def list_items(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    def list_items(
+        skip: int = 0, limit: int = 10000,
+        # All optional; without them the full list is returned as before.
+        start: Optional[date] = None, end: Optional[date] = None,
+        project_id: Optional[int] = None, employee_id: Optional[int] = None,
+        db: Session = Depends(get_db), current_user=Depends(get_current_user),
+    ):
         q = db.query(Model).order_by(Model.id.asc())
         if allow_archive and hasattr(Model, "archived"):
             q = q.filter(Model.archived == False)
+        if date_field:
+            col = getattr(Model, date_field)
+            if start:
+                q = q.filter(col >= start)
+            if end:
+                q = q.filter(col <= end)
+        if project_id is not None and hasattr(Model, "project_id"):
+            q = q.filter(Model.project_id == project_id)
+        if employee_id is not None and hasattr(Model, "employee_id"):
+            q = q.filter(Model.employee_id == employee_id)
         return [out(i, current_user) for i in q.offset(skip).limit(limit).all()]
 
     # Must be registered BEFORE /{item_id} — otherwise "archived" is captured as the id
