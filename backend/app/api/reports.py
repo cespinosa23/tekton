@@ -159,10 +159,12 @@ def monthly_trend(
 
 @router.get("/inventory-movement")
 def inventory_movement(month: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Stock movement per material + brand for one month (YYYY-MM), with the
-    Inventory page's rules: project-direct Materials Procurement doesn't touch
-    stock; Procurement + Incoming add, Outgoing subtracts; other types
-    (Canvass, Adjustment) aren't counted here.
+    """Stock movement per material + brand for one month (YYYY-MM), matching
+    the stored stock levels (app/core/inventory.py sync_inventory):
+    project-direct Materials Procurement doesn't touch stock; office
+    Procurement + Incoming add, Outgoing subtracts; Adjustments add or
+    subtract per adjustment_direction ('add' = in, anything else = out);
+    Canvass never counts.
     [{material_id, brand, starting_quantity, quantity_in, quantity_out}]"""
     start, end_excl = _month_bounds(month)
     scope = project_scope(db, current_user)
@@ -173,12 +175,15 @@ def inventory_movement(month: str, db: Session = Depends(get_db), current_user=D
     q = db.query(Transaction).filter(
         Transaction.archived == False,
         Transaction.transaction_date < end_excl,
-        Transaction.transaction_type.in_(["Materials Procurement", "Incoming Materials", "Outgoing Materials"]),
+        Transaction.transaction_type.in_(["Materials Procurement", "Incoming Materials", "Outgoing Materials", "Adjustment"]),
     )
     for tx in q:
         if tx.transaction_type == "Materials Procurement" and tx.is_office_expense is not True:
             continue
-        adds = tx.transaction_type != "Outgoing Materials"
+        if tx.transaction_type == "Adjustment":
+            adds = tx.adjustment_direction == "add"
+        else:
+            adds = tx.transaction_type != "Outgoing Materials"
         before = tx.transaction_date < start
         for m in tx.materials or []:
             if not isinstance(m, dict) or not m.get("material_id"):

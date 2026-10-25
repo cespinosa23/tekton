@@ -212,10 +212,10 @@ export default function Quotations() {
   const [downloadingListId, setDownloadingListId] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
   const [search, setSearch] = useState('')
-  // Which period the list shows (by quotation date; default this month). A
+  // Which period the list shows (by quotation date; default this year). A
   // view filter only: the full light list is still loaded, so search,
   // quote numbering and project checks keep seeing every quotation.
-  const [period, setPeriod] = useState({ kind: 'month', anchor: new Date() })
+  const [period, setPeriod] = useState({ kind: 'year', anchor: new Date() })
   const [statusFilter, setStatusFilter] = useState('all')
   const [listTab, setListTab] = useState('all')
   const [sortBy, setSortBy] = useState('date_new')

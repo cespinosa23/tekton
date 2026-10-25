@@ -43,6 +43,26 @@ def test_transaction_filters_and_search_all_dates(client, admin_token):
     assert len(ids({})) == 3                                     # no filters: everything, as before
 
 
+def test_inventory_page_counts_adjustments_like_stock(client, admin_token):
+    """The Inventory page's monthly In/Out/Balance and the stored stock level
+    agree, adjustments included (they used to be left off the page)."""
+    h = _auth(admin_token)
+    mid = client.post("/materials/", json={"rating_size": "THHN 2.0", "material_type": "Wire", "unit": "m"}, headers=h).json()["id"]
+    line = lambda q: [{"material_id": mid, "quantity": q, "unit_cost": 10, "total_cost": q * 10, "brand": "Phelps"}]
+    _tx(client, h, transaction_type="Materials Procurement", transaction_date="2026-09-20", materials=line(100), amount=1000)
+    _tx(client, h, transaction_type="Adjustment", transaction_date="2026-10-03", materials=line(10),
+        adjustment_direction="deduct", project_name="Adjustment")   # 10 m damaged
+    _tx(client, h, transaction_type="Adjustment", transaction_date="2026-10-04", materials=line(5),
+        adjustment_direction="add", project_name="Adjustment")      # 5 m found
+    _tx(client, h, transaction_type="Canvass", transaction_date="2026-10-05", materials=line(999), project_name="Canvass")  # never stock
+
+    mv = next(m for m in client.get("/reports/inventory-movement", params={"month": "2026-10"}, headers=h).json()
+              if m["material_id"] == mid)
+    assert (mv["starting_quantity"], mv["quantity_in"], mv["quantity_out"]) == (100, 5, 10)
+    stock = next(i for i in client.get("/inventory/", headers=h).json() if i["material_id"] == mid)
+    assert float(stock["quantity"]) == 95 == mv["starting_quantity"] + mv["quantity_in"] - mv["quantity_out"]
+
+
 def test_project_totals_and_monthly(client, admin_token):
     h = _auth(admin_token)
     pid = _project("Totals", 50000)

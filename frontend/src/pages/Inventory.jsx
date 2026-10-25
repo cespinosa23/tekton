@@ -75,9 +75,10 @@ export default function Inventory() {
       }
     })
 
-    // Movement per material+brand for the month (server rules: office
-    // procurement + incoming add, outgoing subtracts; project-direct
-    // procurement doesn't touch stock).
+    // Movement per material+brand for the month — same rules as the stored
+    // stock levels: office procurement + incoming add, outgoing subtracts,
+    // adjustments add or remove; project-direct procurement and canvass
+    // don't touch stock.
     movement.forEach(mv => {
       const brand = mv.brand || ''
       const key = `${mv.material_id}_${brand}`
