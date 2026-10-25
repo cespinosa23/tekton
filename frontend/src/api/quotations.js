@@ -5,6 +5,14 @@ export const getQuotations = async () => {
   return data
 }
 
+// One quotation in full. The list above leaves out the logo and signature
+// images (they're ~95% of a quotation's size); this is how the page gets them
+// when it needs to preview, print, download or clone.
+export const getQuotation = async (id) => {
+  const { data } = await client.get(`/quotations/${id}`)
+  return data
+}
+
 export const createQuotation = async (payload) => {
   const { data } = await client.post('/quotations/', payload)
   return data

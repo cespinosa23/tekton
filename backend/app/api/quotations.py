@@ -52,7 +52,13 @@ def _can_act_on_approval(item: Quotation, current_user: User) -> bool:
     return _is_admin(current_user) or item.approval_requested_to_id == current_user.id
 
 
-@router.get("/", response_model=list[QuotationRead])
+# The list leaves out the two image snapshots (base64 logo + signature, ~95%
+# of a quotation's size): the list never shows them, and the frontend fetches
+# them from GET /{id} only to preview, print, download or clone a quotation.
+_LIST_EXCLUDE = {"company_logo_url", "signatory_signature_url"}
+
+
+@router.get("/", response_model=list[QuotationRead], response_model_exclude={"__all__": _LIST_EXCLUDE})
 def list_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(Quotation).filter(Quotation.archived == False).order_by(Quotation.id.asc())
     q = _scope_visible(q, current_user)
@@ -60,7 +66,7 @@ def list_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get
 
 
 # Must be registered BEFORE /{item_id} — otherwise "archived" is captured as the id
-@router.get("/archived", response_model=list[QuotationRead])
+@router.get("/archived", response_model=list[QuotationRead], response_model_exclude={"__all__": _LIST_EXCLUDE})
 def list_archived_quotations(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db), current_user: User = Depends(require_role(["Admin"]))):
     # Archived records are Admin-only, matching the Admin-only Archive page.
     return db.query(Quotation).filter(Quotation.archived == True).order_by(Quotation.id.asc()).offset(skip).limit(limit).all()

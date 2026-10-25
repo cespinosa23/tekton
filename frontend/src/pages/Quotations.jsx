@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
 import {
-  getQuotations, createQuotation, updateQuotation, archiveQuotation,
+  getQuotations, getQuotation, createQuotation, updateQuotation, archiveQuotation,
   requestQuotationApproval, approveQuotation, rejectQuotation,
   markQuotationClientRejected, reverseQuotationClientRejected,
 } from '../api/quotations'
@@ -250,8 +250,70 @@ export default function Quotations() {
   })
   const updateMutation = useMutation({
     mutationFn: updateQuotation,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotations'] }),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      queryClient.invalidateQueries({ queryKey: ['quotationImages', id] })
+    },
   })
+
+  // ── Logo / signature images ──────────────────────────────────
+  // The list response leaves them out (they're ~95% of a quotation's size).
+  // A saved quotation's images are fetched from GET /quotations/{id} only
+  // when something needs them — preview, print, download, clone — and cached.
+  // `imagesRef.known` tracks, per image, whether quoteData holds the real
+  // value: until it does, saves leave that field out (the server keeps what
+  // it has), so opening and saving a quotation can never blank its logo.
+  const imagesRef = useRef({ quoteId: null, known: { logo: true, signature: true } })
+
+  const fetchQuoteImages = (id) => queryClient.fetchQuery({
+    queryKey: ['quotationImages', id],
+    queryFn: async () => {
+      const full = await getQuotation(id)
+      return { company_logo_url: full.company_logo_url || '', signatory_signature_url: full.signatory_signature_url || '' }
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // quote with its real images filled in (fetched if not already known)
+  const withImages = async (quote) => {
+    if (!quote?.id) return quote
+    const { quoteId, known } = imagesRef.current
+    if (quoteId === quote.id && known.logo && known.signature) return quote
+    const imgs = await fetchQuoteImages(quote.id)
+    const sameQuote = quoteId === quote.id
+    return {
+      ...quote,
+      ...(sameQuote && known.logo ? {} : { company_logo_url: imgs.company_logo_url }),
+      ...(sameQuote && known.signature ? {} : { signatory_signature_url: imgs.signatory_signature_url }),
+    }
+  }
+
+  // Called whenever quoteData is set from a saved quotation: start loading its
+  // images in the background and merge them in when they arrive.
+  const startImageLoad = (id) => {
+    imagesRef.current = { quoteId: id, known: { logo: false, signature: false } }
+    fetchQuoteImages(id).then(imgs => {
+      const cur = imagesRef.current
+      if (cur.quoteId !== id) return
+      setQuoteData(prev => ({
+        ...prev,
+        ...(cur.known.logo ? {} : { company_logo_url: imgs.company_logo_url }),
+        ...(cur.known.signature ? {} : { signatory_signature_url: imgs.signatory_signature_url }),
+      }))
+      imagesRef.current = { quoteId: id, known: { logo: true, signature: true } }
+    }).catch(() => {}) // a failed fetch just leaves them unknown, so saves still skip them
+  }
+
+  const markImagesKnown = () => { imagesRef.current = { quoteId: null, known: { logo: true, signature: true } } }
+
+  // Save payload for an existing quotation: drop any image not yet loaded.
+  const withoutUnknownImages = (data) => {
+    const { known } = imagesRef.current
+    const out = { ...data }
+    if (!known.logo) delete out.company_logo_url
+    if (!known.signature) delete out.signatory_signature_url
+    return out
+  }
   const archiveMutation = useMutation({
     mutationFn: archiveQuotation,
     onSuccess: () => {
@@ -361,14 +423,26 @@ export default function Quotations() {
   const openBuilder = (quote = null) => {
     const base = quote ? withDiscountField({ ...EMPTY_QUOTE, ...quote }) : { ...EMPTY_QUOTE, quote_number: generateQuoteNumber() }
     setQuoteData(base)
+    if (quote) startImageLoad(quote.id)
+    else markImagesKnown()
     setEditingQuote(quote)
     setStep(0)
     setView('builder')
   }
 
-  const handleClone = (quote) => {
+  const handleClone = async (quote) => {
+    // The clone is a new quotation, so it needs the original's real logo and
+    // signature (the list row doesn't carry them).
+    let source = quote
+    try {
+      source = await withImages(quote)
+    } catch {
+      toast.error("Couldn't load the quotation's logo and signature. Try again.")
+      return
+    }
+    markImagesKnown()
     // eslint-disable-next-line no-unused-vars
-    const { id, created_at, updated_at, ...rest } = quote
+    const { id, created_at, updated_at, ...rest } = source
     setQuoteData(withDiscountField({
       ...EMPTY_QUOTE,
       ...rest,
@@ -399,6 +473,11 @@ export default function Quotations() {
   const applyCompany = (companyId) => {
     const c = companies.find(co => String(co.id) === String(companyId))
     if (!c) return
+    // A company's own logo/signature replace the quotation's on purpose, so
+    // they're now known (and will be saved). If the company has none, the
+    // quotation keeps its existing image, still loading or not.
+    if (c.logo_url) imagesRef.current.known.logo = true
+    if (c.signature_url) imagesRef.current.known.signature = true
     setQuoteData(prev => ({
       ...prev,
       company_name: c.company_name || prev.company_name,
@@ -421,7 +500,7 @@ export default function Quotations() {
   const handleSaveDraft = async () => {
     const data = { ...quoteData, ...quoteFinancials(), status: 'Draft' }
     if (editingQuote) {
-      await updateMutation.mutateAsync({ id: editingQuote.id, data })
+      await updateMutation.mutateAsync({ id: editingQuote.id, data: withoutUnknownImages(data) })
       toast.success('Draft saved')
     } else {
       const created = await createMutation.mutateAsync(data)
@@ -502,7 +581,7 @@ export default function Quotations() {
     }
     const data = { ...quoteData, ...quoteFinancials(), status: 'Finalized' }
     if (editingQuote) {
-      await updateMutation.mutateAsync({ id: editingQuote.id, data })
+      await updateMutation.mutateAsync({ id: editingQuote.id, data: withoutUnknownImages(data) })
     } else {
       await createMutation.mutateAsync(data)
     }
@@ -521,7 +600,7 @@ export default function Quotations() {
     const data = { ...quoteData, ...quoteFinancials() }
     let quote
     if (editingQuote) {
-      quote = await updateMutation.mutateAsync({ id: editingQuote.id, data })
+      quote = await updateMutation.mutateAsync({ id: editingQuote.id, data: withoutUnknownImages(data) })
     } else {
       quote = await createMutation.mutateAsync(data)
       setEditingQuote(quote)
@@ -541,7 +620,7 @@ export default function Quotations() {
   const handleDownload = async (fmt) => {
     setDownloading(true)
     try {
-      const ir = buildQuotationIR(quoteData)
+      const ir = buildQuotationIR(await withImages(quoteData))
       const fileName = buildDocFileName('Quotation', quoteData.addressee_name)
       if (fmt === 'pdf') await downloadAsPdf(ir, `${fileName}.pdf`)
       else await downloadAsDocx(ir, `${fileName}.docx`)
@@ -553,14 +632,12 @@ export default function Quotations() {
   }
 
   // Quick-download straight from the list row — no need to open the builder
-  // first. list_quotations returns the same full QuotationRead shape as the
-  // detail endpoint (the existing Preview button already relies on this, via
-  // the same {...EMPTY_QUOTE, ...q} merge), so this can build the PDF
-  // directly off the row's own data.
+  // first. The row has everything except the logo and signature images,
+  // which withImages fetches for this one quotation.
   const handleListDownload = async (q) => {
     setDownloadingListId(q.id)
     try {
-      const full = { ...EMPTY_QUOTE, ...q }
+      const full = await withImages({ ...EMPTY_QUOTE, ...q })
       const ir = buildQuotationIR(full)
       const fileName = buildDocFileName('Quotation', full.addressee_name)
       await downloadAsPdf(ir, `${fileName}.pdf`)
@@ -1112,7 +1189,7 @@ export default function Quotations() {
                     </button>
                   )}
                   <button
-                    onClick={() => { setQuoteData({ ...EMPTY_QUOTE, ...q }); setView('preview') }}
+                    onClick={() => { setQuoteData({ ...EMPTY_QUOTE, ...q }); startImageLoad(q.id); setView('preview') }}
                     className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Preview">
                     <Eye size={15} />
                   </button>
@@ -1223,7 +1300,7 @@ export default function Quotations() {
           )}
           {canDownloadQuote && (
           <button
-            onClick={() => printPdf(buildQuotationIR(quoteData)).catch(() => toast.error('Print failed — check your popup blocker'))}
+            onClick={() => withImages(quoteData).then(q => printPdf(buildQuotationIR(q))).catch(() => toast.error('Print failed — check your popup blocker'))}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
             <Printer size={15} /> Print
           </button>
@@ -1232,9 +1309,14 @@ export default function Quotations() {
           <button
             onClick={async () => {
               setDownloading(true)
-              const ir = buildQuotationIR(quoteData)
-              await downloadAsDocx(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.docx`)
-              setDownloading(false)
+              try {
+                const ir = buildQuotationIR(await withImages(quoteData))
+                await downloadAsDocx(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.docx`)
+              } catch {
+                toast.error('Download failed')
+              } finally {
+                setDownloading(false)
+              }
             }}
             disabled={downloading}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
@@ -1245,9 +1327,14 @@ export default function Quotations() {
           <button
             onClick={async () => {
               setDownloading(true)
-              const ir = buildQuotationIR(quoteData)
-              await downloadAsPdf(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.pdf`)
-              setDownloading(false)
+              try {
+                const ir = buildQuotationIR(await withImages(quoteData))
+                await downloadAsPdf(ir, `${buildDocFileName('Quotation', quoteData.addressee_name)}.pdf`)
+              } catch {
+                toast.error('Download failed')
+              } finally {
+                setDownloading(false)
+              }
             }}
             disabled={downloading}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
