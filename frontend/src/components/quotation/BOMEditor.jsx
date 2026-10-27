@@ -5,6 +5,7 @@ import MaterialCombobox from '../MaterialCombobox'
 import MaterialTypeCombobox from '../MaterialTypeCombobox'
 import SupplierCombobox from '../SupplierCombobox'
 import BomImportModal from './BomImportModal'
+import QuantityInput from '../QuantityInput'
 import { bestInventoryFor } from '../../lib/inventoryPricing'
 import { emptyBomRow, calcRow } from '../../lib/bomRow'
 
@@ -185,13 +186,7 @@ export default function BOMEditor({ items = [], onChange, materials = [], materi
                   </td>
 
                   <td className="px-2 py-1.5 w-20">
-                    <input type="text" value={row.quantity === 0 ? '' : row.quantity} placeholder="0"
-                      onChange={e => {
-                        const raw = e.target.value.trim()
-                        if (!/^\d*\.?\d*$/.test(raw)) return
-                        if (/^0\d/.test(raw)) return
-                        update(i, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0)
-                      }}
+                    <QuantityInput value={row.quantity} onChange={n => update(i, 'quantity', n)}
                       disabled={disabled} className={disabled ? roInp : inp} />
                   </td>
 

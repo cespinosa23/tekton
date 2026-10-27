@@ -17,6 +17,14 @@ export const WRITE_ROLES = {
   billing:      ['Project Manager'],
 }
 
+// TEMPORARY (decided Oct 27, 2026; to be restricted again later): everyone
+// with Quotations access (PC, PM, Engineer, Admin) can see and edit ANY
+// quotation, not only their own. Approval is unchanged (Admin or the assigned
+// PM approve/reject; Admin/PM finalize directly). Set to false — together
+// with QUOTATIONS_OPEN_TO_ALL in backend/app/api/quotations.py — to bring
+// back "own quotations only".
+export const QUOTATIONS_OPEN_TO_ALL = true
+
 // Nav paths visible only to the listed roles (plus Admin).
 // Paths not listed here are visible to all authenticated users.
 export const NAV_ROLES = {

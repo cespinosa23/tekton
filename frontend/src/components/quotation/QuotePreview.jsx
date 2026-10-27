@@ -4,6 +4,7 @@ import { calcBomTotal } from './BOMEditor'
 import DocumentLetterhead from '../DocumentLetterhead'
 import DocumentFooter from '../DocumentFooter'
 import { addresseeAddress, formatAddressLines } from '../../lib/address'
+import { formatBomQuantity } from '../../lib/quantity'
 
 const fmt = (n) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -188,7 +189,7 @@ export default function QuotePreview({ quote }) {
                   <tbody>
                     {t.bom_items.map((row, i) => (
                       <tr key={i}>
-                        <td className="border border-gray-800 px-3 py-2 text-center">{row.quantity}</td>
+                        <td className="border border-gray-800 px-3 py-2 text-center">{formatBomQuantity(row.quantity, row.unit)}</td>
                         <td className="border border-gray-800 px-3 py-2 text-center">{row.unit}</td>
                         <td className="border border-gray-800 px-3 py-2">{bomDescription(row)}</td>
                       </tr>

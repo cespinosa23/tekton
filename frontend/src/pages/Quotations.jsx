@@ -14,6 +14,7 @@ import { getMaterials, getMaterialTypes } from '../api/materials'
 import { getInventoryRecords } from '../api/inventory'
 import { getProjects } from '../api/projects'
 import { usePermissions } from '../hooks/usePermissions'
+import { QUOTATIONS_OPEN_TO_ALL } from '../config/permissions'
 import { useAuth } from '../context/AuthContext'
 import { formatCompanyAddress } from '../lib/company'
 import { formatAddress, addresseeAddress } from '../lib/address'
@@ -393,10 +394,11 @@ export default function Quotations() {
   // Downloads are only for the finished document — everyone, regardless of
   // role, has to wait until the quote is actually Finalized.
   const canDownloadQuote = quoteData.status === 'Finalized'
-  // Matches the backend's _can_edit: owner or Admin only — a quote visible
-  // only because it's pending someone's approval doesn't make them the
-  // owner, and a quote with no recorded owner is Admin's alone to manage.
-  const isOwner = (q) => isAdmin() || q.created_by_user_id === user?.id
+  // Matches the backend's _can_edit: Admin or the quote's creator — and,
+  // while QUOTATIONS_OPEN_TO_ALL is on (temporary), anyone with Quotations
+  // write access. A quote visible only because it's pending someone's
+  // approval doesn't otherwise make them the owner.
+  const isOwner = (q) => isAdmin() || (QUOTATIONS_OPEN_TO_ALL && canWrite('quotations')) || q.created_by_user_id === user?.id
 
   const set = (field, value) => setQuoteData(prev => ({ ...prev, [field]: value }))
 

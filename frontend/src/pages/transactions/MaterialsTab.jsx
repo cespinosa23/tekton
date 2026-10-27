@@ -17,6 +17,7 @@ import {
   downloadCanvassTemplate, importCanvass,
 } from '../../api/transactions'
 import { listTransactions } from '../../api/lists'
+import QuantityInput from '../../components/QuantityInput'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { getEmployees } from '../../api/employees'
 import { apiErrorMessage } from '../../utils/apiError'
@@ -588,14 +589,9 @@ export default function MaterialsTab({ stickyOffset = 0, range = {} }) {
                                   ) : (
                                     <>
                                       <td className="px-2 py-2">
-                                        <input type="text" value={line.quantity === 0 ? '' : Number(line.quantity).toLocaleString('en-US')}
-                                          placeholder="0"
-                                          onChange={e => {
-                                            const raw = e.target.value.replace(/,/g, '');
-                                            if (!/^\d*\.?\d*$/.test(raw)) return;
-                                            if (/^0\d/.test(raw)) return;
-                                            updateMaterialLine(idx, 'quantity', raw === '' ? 0 : parseFloat(raw) || 0);
-                                          }}
+                                        <QuantityInput value={line.quantity}
+                                          onChange={n => updateMaterialLine(idx, 'quantity', n)}
+                                          format={n => n.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
                                       </td>
                                       <td className="px-2 py-2">

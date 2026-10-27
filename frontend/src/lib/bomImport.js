@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { calcRow, emptyBomRow } from './bomRow'
 import { bestInventoryFor } from './inventoryPricing'
+import { roundQty } from './quantity'
 
 export const IMPORT_HEADERS = ['Material Type', 'Material Name', 'Unit', 'Qty']
 
@@ -135,7 +136,8 @@ export async function parseBomImportFile(file) {
     // Negative values shouldn't reach the BOM at all — the manual Qty input
     // already blocks typing a '-', so an imported row is held to the same
     // floor rather than silently producing a negative subtotal.
-    const quantity = Math.max(parseFloat(cellText(row.getCell(4).value)) || 0, 0)
+    // Same rule as typing a quantity: decimals, up to 2 places.
+    const quantity = roundQty(Math.max(parseFloat(cellText(row.getCell(4).value)) || 0, 0))
     // A row with every text column blank and a quantity of 0 (not just
     // literally empty — a stray formula or pasted 0 lands here too) has
     // nothing in it to import; skip it rather than adding a blank BOM row.

@@ -21,7 +21,16 @@ def _display_name(user: User) -> str:
     return user.email
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
-_write_auth = require_role(["Admin", "Project Coordinator", "Project Manager", "Engineer"])
+_QUOTATION_ROLES = ["Admin", "Project Coordinator", "Project Manager", "Engineer"]
+_write_auth = require_role(_QUOTATION_ROLES)
+
+# TEMPORARY (decided Oct 27, 2026; to be restricted again later): every
+# quotation role (Admin, PC, PM, Engineer) can see and edit ANY quotation,
+# not only the ones they created. Approval is unchanged — only Admin or the
+# PM a quotation was sent to can approve/reject, and only Admin/PM can
+# finalize directly. Set to False to bring back "own quotations only"
+# (frontend: QUOTATIONS_OPEN_TO_ALL in src/config/permissions.js).
+QUOTATIONS_OPEN_TO_ALL = True
 
 
 def _is_admin(user: User) -> bool:
@@ -32,11 +41,17 @@ def _has_role(user: User, role_name: str) -> bool:
     return any(ur.role.name == role_name for ur in user.roles)
 
 
+def _sees_all(user: User) -> bool:
+    """Admin always; any quotation role while QUOTATIONS_OPEN_TO_ALL is on."""
+    return _is_admin(user) or (QUOTATIONS_OPEN_TO_ALL and any(_has_role(user, r) for r in _QUOTATION_ROLES))
+
+
 def _scope_visible(query, current_user: User):
-    """Admin sees everything. Everyone else sees only quotes they created or
-    quotes currently awaiting their approval. A quote with no recorded owner
-    is visible to Admin only — never grandfathered open to everyone."""
-    if _is_admin(current_user):
+    """Admin sees everything (and, while QUOTATIONS_OPEN_TO_ALL is on, so do
+    PC, PM and Engineer). Otherwise users see only quotes they created or
+    quotes awaiting their approval. A quote with no recorded owner is visible
+    to Admin only — never grandfathered open to everyone."""
+    if _sees_all(current_user):
         return query
     return query.filter(or_(
         Quotation.created_by_user_id == current_user.id,
@@ -45,7 +60,13 @@ def _scope_visible(query, current_user: User):
 
 
 def _can_edit(item: Quotation, current_user: User) -> bool:
-    return _is_admin(current_user) or item.created_by_user_id == current_user.id
+    return _sees_all(current_user) or item.created_by_user_id == current_user.id
+
+
+def _can_finalize_directly(user: User) -> bool:
+    # Finalizing without the approval flow is itself an approval: Admin and
+    # PM only (the screen already limited the button; now the server does too).
+    return _is_admin(user) or _has_role(user, "Project Manager")
 
 
 def _can_act_on_approval(item: Quotation, current_user: User) -> bool:
@@ -77,7 +98,7 @@ def get_quotation(item_id: int, db: Session = Depends(get_db), current_user: Use
     item = db.query(Quotation).filter(Quotation.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Quotation not found")
-    visible = _is_admin(current_user) or item.created_by_user_id == current_user.id or item.approval_requested_to_id == current_user.id
+    visible = _sees_all(current_user) or item.created_by_user_id == current_user.id or item.approval_requested_to_id == current_user.id
     if not visible:
         raise HTTPException(status_code=404, detail="Quotation not found")
     return item
@@ -85,6 +106,8 @@ def get_quotation(item_id: int, db: Session = Depends(get_db), current_user: Use
 
 @router.post("/", response_model=QuotationRead, status_code=status.HTTP_201_CREATED)
 def create_quotation(payload: QuotationCreate, db: Session = Depends(get_db), current_user: User = Depends(_write_auth)):
+    if payload.status == "Finalized" and not _can_finalize_directly(current_user):
+        raise HTTPException(status_code=403, detail="Only an Admin or Project Manager can finalize a quotation directly — request approval instead")
     item = Quotation(**payload.model_dump(), created_by_user_id=current_user.id)
     db.add(item)
     db.commit()
@@ -115,6 +138,8 @@ def update_quotation(item_id: int, payload: QuotationUpdate, db: Session = Depen
     # stays locked out so the approver's decision can't end up applying to
     # content they never actually saw.
     payload_fields = payload.model_dump(exclude_unset=True)
+    if payload_fields.get("status") == "Finalized" and not _can_finalize_directly(current_user):
+        raise HTTPException(status_code=403, detail="Only an Admin or Project Manager can finalize a quotation directly — request approval instead")
     can_edit_while_pending = _is_admin(current_user) or is_assigned_pending_approver
     if item.approval_status == "pending" and not can_edit_while_pending and payload_fields.get("status") != "Finalized":
         raise HTTPException(status_code=400, detail="This quotation has a pending approval request — it can't be edited until the approver responds")

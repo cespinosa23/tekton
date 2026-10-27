@@ -2,6 +2,7 @@ import { format } from 'date-fns'
 import { calcScopeCostTotal, calcQuoteDiscount, calcQuoteDirectCost, calcQuoteVat, calcQuoteGrandTotal, VAT_RATE } from '../../components/quotation/CostTypeEditor'
 import { calcBomTotal } from '../../components/quotation/BOMEditor'
 import { addresseeAddress, formatAddressBlock } from '../address'
+import { formatBomQuantity } from '../quantity'
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
 
@@ -131,7 +132,7 @@ export function buildQuotationIR(quote) {
           heading: (t.sow_type_name || '').toUpperCase(),
           table: {
             columns: [{ header: 'QUANTITY', width: 22 }, { header: 'UNIT', width: 22 }, { header: 'DESCRIPTION', width: 56 }],
-            rows: t.bom_items.map(item => [String(item.quantity ?? ''), item.unit || '', bomDescription(item)]),
+            rows: t.bom_items.map(item => [formatBomQuantity(item.quantity, item.unit), item.unit || '', bomDescription(item)]),
           },
         })),
       },
