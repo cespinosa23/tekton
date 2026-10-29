@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import Layout from '../components/Layout'
@@ -23,6 +24,8 @@ import { useSortable } from '../hooks/useSortable'
 import { scrollContentToTop } from '../utils/scroll'
 import { SortableHeader } from '../components/SortableHeader'
 import { apiErrorMessage } from '../utils/apiError'
+import { isHiddenHere } from '../utils/environment'
+import CommissionDefaults from '../components/settings/CommissionDefaults'
 
 const CATEGORIES = [
   { key: 'Brand', label: 'Brand', icon: Tag, description: 'Master list of material brands' },
@@ -38,7 +41,11 @@ export default function Settings() {
   const queryClient = useQueryClient()
   const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('Referred By')
-  const [mainTab, setMainTab] = useState('dropdown')
+  const location = useLocation()
+  // Other pages can open a tab directly (Commissions → "Defaults").
+  const [mainTab, setMainTab] = useState(
+    location.state?.tab === 'commissions' && !isHiddenHere('/commissions') ? 'commissions' : 'dropdown'
+  )
   const [quotationSubTab, setQuotationSubTab] = useState('sow_types')
   const [newValue, setNewValue] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -290,7 +297,10 @@ export default function Settings() {
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-gray-200">
-          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['quotation_settings', 'Quotation Settings'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'], ['users', 'User Management']].map(([val, label]) => (
+          {[['dropdown', 'Dropdown Options'], ['material_types', 'Material Types'], ['quotation_settings', 'Quotation Settings'], ['suppliers', 'Suppliers'], ['companies', 'Company Settings'],
+            // Follows the Commissions page: hidden wherever that page is.
+            ...(isHiddenHere('/commissions') ? [] : [['commissions', 'Commission Defaults']]),
+            ['users', 'User Management']].map(([val, label]) => (
             <button key={val} onClick={() => { setMainTab(val); scrollContentToTop() }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === val ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -869,6 +879,8 @@ export default function Settings() {
             )}
           </div>
         )}
+
+        {mainTab === 'commissions' && <CommissionDefaults />}
 
         {/* User Management Tab */}
         {mainTab === 'users' && (

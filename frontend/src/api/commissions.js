@@ -5,14 +5,23 @@ export const getCommissions = async () => {
   return data
 }
 
-// Rates are percentages here (5 = 5%), both ways.
+// Default terms (managed in Settings). Rates are percentages here (5 = 5%),
+// both ways: { electrical_plan, project_management, project_management_margin,
+// project_management_method }.
 export const getCommissionRates = async () => {
   const { data } = await client.get('/commissions/rates')
   return data
 }
 
-export const updateCommissionRates = async ({ electrical_plan, project_management }) => {
-  const { data } = await client.put('/commissions/rates', { electrical_plan, project_management })
+export const updateCommissionRates = async (defaults) => {
+  const { data } = await client.put('/commissions/rates', defaults)
+  return data
+}
+
+// One commission's own terms (percentages). method/rate/margin_rate all null
+// puts it back on the defaults.
+export const setCommissionTerms = async ({ project_id, commission_type, method, rate, margin_rate }) => {
+  const { data } = await client.put('/commissions/terms', { project_id, commission_type, method, rate, margin_rate })
   return data
 }
 

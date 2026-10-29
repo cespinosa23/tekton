@@ -23,10 +23,20 @@ class Commission(Base):
     # the employee is later renamed or deleted.
     payee_name = Column(String(255), nullable=True)
 
+    # Per-record terms, editable until release. NULL = follow the current
+    # default for this type (commission_rates), so a default change still
+    # reaches every commission nobody has set by hand.
+    #   method: 'assumed_margin' | 'actual' (Project Management only)
+    method = Column(String(20), nullable=True)
+    rate = Column(Numeric(6, 4), nullable=True)
+    margin_rate = Column(Numeric(6, 4), nullable=True)
+
     is_released = Column(Boolean, default=False, nullable=False)
-    # The rate in effect at release (a fraction, e.g. 0.0500) — rates are
-    # editable, so a released commission keeps the one it was paid at.
+    # The terms in effect at release (rates as fractions, e.g. 0.0500) — a
+    # released commission keeps what it was paid at.
     released_rate = Column(Numeric(6, 4), nullable=True)
+    released_method = Column(String(20), nullable=True)
+    released_margin_rate = Column(Numeric(6, 4), nullable=True)
     released_base = Column(Numeric(12, 2), nullable=True)
     released_amount = Column(Numeric(12, 2), nullable=True)
     released_date = Column(Date, nullable=True)
@@ -34,11 +44,14 @@ class Commission(Base):
 
 
 class CommissionRate(Base):
-    """Current rate per commission type (a fraction, e.g. 0.0700 for 7%).
-    Applies to every unreleased commission immediately; released ones keep
-    their own released_rate. Seeded with 5% / 7% by the migration."""
+    """Default terms per commission type, managed in Settings: rate (a
+    fraction, e.g. 0.0700 for 7%), and for Project Management also the
+    default method and margin. Applies to every unreleased commission that
+    hasn't been given its own terms. Seeded 5% / 7%, assumed margin 20%."""
     __tablename__ = "commission_rates"
 
     commission_type = Column(String(30), primary_key=True)
     rate = Column(Numeric(6, 4), nullable=False)
+    margin_rate = Column(Numeric(6, 4), nullable=True)
+    method = Column(String(20), nullable=True)
     updated_by = Column(String(255), nullable=True)
