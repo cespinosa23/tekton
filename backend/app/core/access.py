@@ -5,19 +5,30 @@ returned every record to any logged-in user. These helpers are the server-side
 rules (decided Oct 7, 2026; PM opened to all projects Oct 8, 2026):
 
   Salaries (employee daily salary, attendance pay) .... Admin only
+  Commission transactions (see below) ................. Admin only
   Per-project labor totals ............................ Admin, PC, PM (all projects)
   Billings (read) ..................................... Admin, PC, PM (all projects)
   Transactions (read) ................................. Admin, PC, PM (all projects)
   Archived records .................................... Admin only
 
+Commission transactions (client decision, Oct 30, 2026: "anything an employee
+receives is Admin-only"): a released commission's expense (commission_id set)
+and any expense whose category mentions "commission" (the manual "Commission
+(Internal)" / "Commission (External)" entries). Hidden from every non-Admin
+list, total and lookup, and non-Admins can't record one.
+
 Billing writes (create, mark paid, archive, reset) are Admin and PM — see
 app/api/billing.py. is_project_manager is still used by Commissions to check
 that a PM commission's payee matches the project's project_manager name.
 """
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee
+from app.models.transaction import Transaction
 from app.models.user import User
+
+COMMISSION_KEYWORD = "commission"
 
 
 def role_names(user: User) -> set[str]:
@@ -64,3 +75,22 @@ def project_scope(db: Session, user: User) -> set[int] | None:
     if roles & {"Admin", "Project Coordinator", "Project Manager"}:
         return None
     return set()
+
+
+def is_commission_category(category: str | None) -> bool:
+    return COMMISSION_KEYWORD in (category or "").lower()
+
+
+def is_commission_tx(tx: Transaction) -> bool:
+    return bool(tx.commission_id) or is_commission_category(tx.expenditure_category)
+
+
+def hide_commissions(query, user: User):
+    """Drop commission transactions from a Transaction query for non-Admins."""
+    if is_admin(user):
+        return query
+    return query.filter(
+        Transaction.commission_id.is_(None),
+        or_(Transaction.expenditure_category.is_(None),
+            ~func.lower(Transaction.expenditure_category).like(f"%{COMMISSION_KEYWORD}%")),
+    )

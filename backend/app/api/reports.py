@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.access import project_scope
+from app.core.access import project_scope, hide_commissions
 from app.core.deps import get_current_user, require_role
 from app.db.database import get_db
 from app.models.attendance import Attendance
@@ -66,7 +66,8 @@ def project_totals(db: Session = Depends(get_db), current_user=Depends(get_curre
         if d and (t["last_activity"] is None or d > t["last_activity"]):
             t["last_activity"] = d
 
-    tq = db.query(Transaction).filter(Transaction.archived == False)
+    # Commission payouts are Admin-only, so non-Admins' other costs leave them out.
+    tq = hide_commissions(db.query(Transaction).filter(Transaction.archived == False), current_user)
     if scope is not None:
         tq = tq.filter(Transaction.project_id.in_(scope))
     for tx in tq:

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.core.access import project_scope
+from app.core.access import project_scope, hide_commissions, is_commission_tx, is_commission_category
 from app.core.deps import get_current_user, require_role
 from app.models.transaction import Transaction
 from app.models.billing import Billing
@@ -54,6 +54,24 @@ def _is_admin(user) -> bool:
     return any(ur.role.name == "Admin" for ur in user.roles)
 
 
+def _visible_or_404(tx: Transaction | None, db: Session, user) -> Transaction:
+    """The transaction if this user may see it — same rules as the list
+    (project scope, commissions Admin-only); otherwise 404, so a hidden
+    record can't be read, edited or archived by id either."""
+    scope = project_scope(db, user)
+    if (not tx or (scope is not None and tx.project_id not in scope)
+            or (not _is_admin(user) and is_commission_tx(tx))):
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return tx
+
+
+def _block_commission_category(category: str | None, user):
+    # Commission payouts are Admin-only; a non-Admin's entry would also
+    # vanish from their own list the moment it's saved.
+    if is_commission_category(category) and not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only an Admin can record commission expenses.")
+
+
 _write_auth = require_role(["Admin", "Project Coordinator"])
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -82,10 +100,11 @@ def list_transactions(
     q: Optional[str] = None,
     db: Session = Depends(get_db), current_user=Depends(get_current_user),
 ):
-    # Read scope (app/core/access.py): Admin, PC and PM see everything,
-    # everyone else none. An empty list rather than 403 so pages that load
-    # transactions for everyone (the Dashboard) keep working.
-    query = db.query(Transaction).filter(Transaction.archived == False)
+    # Read scope (app/core/access.py): Admin, PC and PM see everything except
+    # commission transactions (Admin only), everyone else none. An empty list
+    # rather than 403 so pages that load transactions for everyone (the
+    # Dashboard) keep working.
+    query = hide_commissions(db.query(Transaction).filter(Transaction.archived == False), current_user)
     scope = project_scope(db, current_user)
     if scope is not None:
         if not scope:
@@ -114,11 +133,7 @@ def list_archived_transactions(skip: int = 0, limit: int = 10000, db: Session = 
 
 @router.get("/{item_id}", response_model=TransactionRead)
 def get_transaction(item_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    tx = db.query(Transaction).filter(Transaction.id == item_id).first()
-    scope = project_scope(db, current_user)
-    if not tx or (scope is not None and tx.project_id not in scope):
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return tx
+    return _visible_or_404(db.query(Transaction).filter(Transaction.id == item_id).first(), db, current_user)
 
 @router.post("/", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
@@ -128,6 +143,7 @@ def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db)
     # appears linked to (and reportable against) a billing it never touched.
     if payload.billing_id is not None and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Only an Admin can link a transaction to a billing")
+    _block_commission_category(payload.expenditure_category, current_user)
 
     tx = Transaction(**payload.model_dump())
     db.add(tx)
@@ -148,13 +164,13 @@ _BILLING_SENSITIVE_FIELDS = {"amount", "billing_id", "transaction_type"}
 
 @router.put("/{item_id}", response_model=TransactionRead)
 def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
-    tx = db.query(Transaction).filter(Transaction.id == item_id).first()
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx = _visible_or_404(db.query(Transaction).filter(Transaction.id == item_id).first(), db, current_user)
 
     _block_if_commission_linked(tx, "change")
 
     updates = payload.model_dump(exclude_unset=True)
+    if "expenditure_category" in updates:
+        _block_commission_category(updates["expenditure_category"], current_user)
     # The edit forms send every field, changed or not, so judge by what
     # actually differs — otherwise any save of a billing payment trips the
     # check below even when only its remarks changed.
@@ -199,9 +215,7 @@ def update_transaction(item_id: int, payload: TransactionUpdate, db: Session = D
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def archive_transaction(item_id: int, db: Session = Depends(get_db), current_user=Depends(_write_auth)):
-    tx = db.query(Transaction).filter(Transaction.id == item_id).first()
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx = _visible_or_404(db.query(Transaction).filter(Transaction.id == item_id).first(), db, current_user)
 
     _block_if_commission_linked(tx, "reverse")
 

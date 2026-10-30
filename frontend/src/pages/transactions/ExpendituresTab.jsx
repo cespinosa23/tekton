@@ -15,6 +15,11 @@ import {
 import { listTransactions } from '../../api/lists'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { apiErrorMessage } from '../../utils/apiError'
+import { useAuth } from '../../context/AuthContext'
+
+// Commission payouts are Admin-only (the server hides them from everyone
+// else and refuses non-Admin entries) — same keyword rule as app/core/access.py.
+const isCommissionCategory = (value) => (value || '').toLowerCase().includes('commission')
 
 const emptyForm = {
   transaction_type: 'General Expenditure',
@@ -31,6 +36,7 @@ const emptyForm = {
 
 export default function ExpendituresTab({ stickyOffset = 0, range = {} }) {
   const queryClient = useQueryClient()
+  const { isAdmin } = useAuth()
   const [formOpen, setFormOpen] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
   const [viewTx, setViewTx] = useState(null)
@@ -237,7 +243,9 @@ export default function ExpendituresTab({ stickyOffset = 0, range = {} }) {
                 <select value={formData.expenditure_category} onChange={set('expenditure_category')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
                   <option value="">Select category...</option>
-                  {getOptions('Expenditure Category').map(o => <option key={o.id} value={o.value}>{o.value}</option>)}
+                  {getOptions('Expenditure Category')
+                    .filter(o => isAdmin() || !isCommissionCategory(o.value))
+                    .map(o => <option key={o.id} value={o.value}>{o.value}</option>)}
                 </select>
               </div>
               <div>
