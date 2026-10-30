@@ -12,6 +12,7 @@ export const isProduction = () => getEnvironment() === 'production'
 
 // Pages still being tested on staging — hidden on production (nav link and
 // route) until they're ready to go live. Remove a path here to release it.
-export const HIDDEN_ON_PRODUCTION = ['/commissions']
+// Commissions released to production Oct 30, 2026.
+export const HIDDEN_ON_PRODUCTION = []
 
 export const isHiddenHere = (path) => isProduction() && HIDDEN_ON_PRODUCTION.includes(path)
